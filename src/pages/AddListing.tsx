@@ -5,6 +5,7 @@ import { toaster } from '@/components/ui/toast'
 import { useAuth } from '@/context/AuthContext'
 import { useLogs } from '@/context/LogsContext'
 import { cn } from '@/lib/utils'
+import { phLgusSorted, getProvinceByCity } from '@/data/philippines'
 import type { PropertyType, ListingType } from '@/types/property'
 
 const propertyTypes: { value: PropertyType; label: string }[] = [
@@ -16,8 +17,6 @@ const propertyTypes: { value: PropertyType; label: string }[] = [
   { value: 'warehouse',     label: 'Warehouse' },
   { value: 'farm_lot',      label: 'Farm Lot' },
 ]
-
-const cebuCities = ['Cebu City', 'Mandaue City', 'Lapu-Lapu City', 'Talisay City', 'Liloan', 'Consolacion', 'Minglanilla', 'Danao City', 'Bogo City', 'Naga City', 'Carcar City', 'Argao', 'Other']
 
 const commonFeatures = [
   'Swimming Pool', 'Gym', 'Balcony', 'Home Office', 'Smart Home', 'Solar Panels', 'CCTV',
@@ -42,8 +41,8 @@ export function AddListing() {
     price: '',
     address: '',
     barangay: '',
-    city: 'Cebu City',
-    province: 'Cebu',
+    city: '',
+    province: '',
     floorArea: '',
     lotArea: '',
     bedrooms: '',
@@ -101,6 +100,7 @@ export function AddListing() {
     if (!form.price)          e.price   = 'Price is required.'
     if (form.price && Number(form.price) <= 0) e.price = 'Price must be greater than 0.'
     if (!form.address.trim()) e.address = 'Street address is required.'
+    if (!form.city.trim()) e.city = 'City / Municipality is required.'
     if (!form.ownerName.trim())  e.ownerName  = "Owner's name is required."
     if (!form.contactPerson.trim()) e.contactPerson = 'Contact person is required.'
     if (!form.contactEmail.trim()) {
@@ -361,23 +361,38 @@ export function AddListing() {
                 />
               </div>
               <div>
-                <label className={labelClass} style={labelStyle}>City <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <select value={form.city} onChange={e => update('city', e.target.value)}
-                    className={cn(inputClass, 'appearance-none cursor-pointer pr-8')} style={inputStyle}>
-                    {cebuCities.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
-                </div>
+                <label className={labelClass} style={labelStyle}>
+                  City / Municipality <span className="text-red-500">*</span>
+                </label>
+                <input
+                  list="ph-cities-list"
+                  value={form.city}
+                  onChange={e => {
+                    update('city', e.target.value)
+                    const prov = getProvinceByCity(e.target.value)
+                    if (prov) update('province', prov)
+                  }}
+                  placeholder="Type to search city or municipality…"
+                  autoComplete="off"
+                  className={inputClass} style={errors.city ? inputError : inputStyle}
+                  onFocus={e => (e.currentTarget.style.borderColor = errors.city ? '#ef4444' : 'var(--primary)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = errors.city ? '#ef4444' : 'var(--border)')}
+                />
+                <datalist id="ph-cities-list">
+                  {phLgusSorted.map(l => (
+                    <option key={`${l.name}-${l.province}`} value={l.name}>{l.name} — {l.province}</option>
+                  ))}
+                </datalist>
+                <Err field="city" />
               </div>
               <div>
                 <label className={labelClass} style={labelStyle}>Province</label>
                 <input
                   value={form.province}
-                  onChange={e => update('province', e.target.value)}
-                  className={inputClass} style={inputStyle}
-                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
-                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                  readOnly
+                  placeholder="Auto-filled from city"
+                  className={inputClass}
+                  style={{ ...inputStyle, backgroundColor: 'var(--accent)', cursor: 'default' }}
                 />
               </div>
             </div>
