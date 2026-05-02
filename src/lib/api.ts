@@ -1,0 +1,50 @@
+const BASE = import.meta.env.VITE_API_URL ?? ''
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('nesw_access_token')
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`)
+  }
+  if (res.status === 204) return undefined as T
+  return res.json()
+}
+
+export const api = {
+  // Properties
+  getProperties:     ()           => request<unknown[]>('/api/properties'),
+  getProperty:       (id: string) => request<unknown>(`/api/properties/${id}`),
+  createProperty:    (body: unknown) => request<unknown>('/api/properties', { method: 'POST', body: JSON.stringify(body) }),
+  updateProperty:    (id: string, body: unknown) => request<unknown>(`/api/properties/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteProperty:    (id: string) => request<void>(`/api/properties/${id}`, { method: 'DELETE' }),
+
+  // Agents
+  getAgents: () => request<unknown[]>('/api/agents'),
+
+  // Activity logs
+  getLogs:    ()           => request<unknown[]>('/api/logs'),
+  createLog:  (body: unknown) => request<unknown>('/api/logs', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Login history
+  getLoginHistory: (agentId?: string) =>
+    request<unknown[]>(`/api/logs/login${agentId ? `?agentId=${agentId}` : ''}`),
+  recordLogin: (body: unknown) =>
+    request<unknown>('/api/logs/login', { method: 'POST', body: JSON.stringify(body) }),
+
+  // File upload — returns presigned S3 URL
+  presign: (body: { fileName: string; fileType: string; propertyId?: string }) =>
+    request<{ url: string; key: string; publicUrl: string }>('/api/upload/presign', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+
+  // Health
+  health: () => request<{ status: string; stage: string; ts: string }>('/api/health'),
+}

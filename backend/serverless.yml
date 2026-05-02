@@ -1,0 +1,144 @@
+service: nesw-portal-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-southeast-1
+  stage: ${opt:stage, 'staging'}
+  environment:
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID, ''}
+    COGNITO_CLIENT_ID: ${env:COGNITO_CLIENT_ID, ''}
+    FRONTEND_URL: ${env:FRONTEND_URL, 'https://staging-portal.neswcorp.com'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/nesw-*
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+          Resource: arn:aws:s3:::nesw-portal-files-${self:provider.stage}/*
+
+plugins:
+  - serverless-plugin-typescript
+
+functions:
+  api:
+    handler: src/handler.handler
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: /api/{proxy+}
+          method: ANY
+          cors:
+            origin: ${env:FRONTEND_URL, 'https://staging-portal.neswcorp.com'}
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Requested-With
+            allowCredentials: true
+      - http:
+          path: /api
+          method: ANY
+          cors: true
+
+resources:
+  Resources:
+
+    PropertiesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-properties-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: status
+            AttributeType: S
+          - AttributeName: agentId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ByStatus
+            KeySchema:
+              - AttributeName: status
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: ByAgent
+            KeySchema:
+              - AttributeName: agentId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    AgentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-agents-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+
+    ActivityLogsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-activity-logs-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+
+    LoginHistoryTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-login-history-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: agentId
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: S
+        KeySchema:
+          - AttributeName: agentId
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+
+    FilesBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: nesw-portal-files-${self:provider.stage}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders: ['*']
+              AllowedMethods: [GET, PUT, POST, DELETE]
+              AllowedOrigins: ['https://staging-portal.neswcorp.com']
+              MaxAge: 3600
