@@ -46,13 +46,61 @@ jobs:
           COGNITO_CLIENT_ID:    ${{ secrets.COGNITO_CLIENT_ID }}
           FRONTEND_URL:         https://staging-portal.neswcorp.com
 
-  # ── Frontend type-check ──────────────────────────────────────────────────
-  typecheck-frontend:
+  # ── Frontend ─────────────────────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend (S3 + CloudFront)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static export
+        env:
+          VITE_API_URL: https://k7swililhf.execute-api.ap-southeast-1.amazonaws.com/staging
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Sync static assets (long-cache, immutable)
+        run: |
+          aws s3 sync dist/ s3://${{ secrets.NESW_PORTAL_S3_BUCKET }} \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html" \
+            --exclude "*.txt"
+
+      - name: Sync HTML + text files (no-cache)
+        run: |
+          aws s3 sync dist/ s3://${{ secrets.NESW_PORTAL_S3_BUCKET }} \
+            --exclude "*" \
+            --include "*.html" \
+            --include "*.txt" \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.NESW_PORTAL_CF_DIST_ID }} \
+            --paths "/*"
+
+  # ── Type-check ───────────────────────────────────────────────────────────
+  typecheck:
     name: Typecheck Frontend
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
 
     steps:
       - uses: actions/checkout@v4

@@ -63,7 +63,7 @@ export function Approvals() {
           { label: 'Pending Review', count: pending.length, color: '#f59e0b', bg: 'bg-amber-50', text: 'text-amber-700' },
           { label: 'Approved',       count: approved.length, color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700' },
           { label: 'Rejected',       count: rejected.length, color: '#ef4444', bg: 'bg-red-50',     text: 'text-red-700'     },
-        ].map(({ label, count, color, bg, text }) => (
+        ].map(({ label, count, bg, text }) => (
           <div key={label} className="rounded-[var(--radius)] border p-4"
             style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
             <p className="text-xs font-semibold mb-2" style={{ color: 'var(--muted-foreground)' }}>{label}</p>

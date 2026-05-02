@@ -159,7 +159,7 @@ export function Dashboard() {
               </Pie>
               <Tooltip
                 contentStyle={{ backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: 12 }}
-                formatter={(value: number) => [value, 'listings']} />
+                formatter={(value) => [Number(value), 'listings']} />
             </PieChart>
             <div className="space-y-2">
               {pieData.map(d => (

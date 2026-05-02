@@ -246,7 +246,6 @@ export function Users() {
 
   const totalLogins = loginHistory.length
   const ssoLogins   = loginHistory.filter(r => r.method === 'microsoft_sso').length
-  const activeCount = agents.filter(a => a.id === user?.id).length
 
   return (
     <div className="space-y-5">
