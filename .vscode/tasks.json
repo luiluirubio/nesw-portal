@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Initialize Real Estate Portal",
+			"type": "shell",
+			"command": "cd c:\\Users\\lui_r\\NESW\\nesw-portal && npm create vite@latest . -- --template react-ts && npm install",
+			"group": "build"
+		}
+	]
+}

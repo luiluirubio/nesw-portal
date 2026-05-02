@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+:root {
+  --card: #f7f8f8;
+  --ring: #1A6B3C;
+  --input: #f7f9fa;
+  --muted: #E5E5E6;
+  --accent: #EAF4EE;
+  --border: #dce8e1;
+  --radius: 1.3rem;
+  --chart-1: #1A6B3C;
+  --chart-2: #C9973A;
+  --chart-3: #f7b928;
+  --chart-4: #3b82f6;
+  --chart-5: #ef4444;
+  --popover: #ffffff;
+  --primary: #1A6B3C;
+  --sidebar: #f7f8f8;
+  --font-mono: Menlo, monospace;
+  --font-sans: Open Sans, sans-serif;
+  --secondary: #0f1419;
+  --background: #ffffff;
+  --font-serif: Georgia, serif;
+  --foreground: #0f1419;
+  --destructive: #ef4444;
+  --shadow-blur: 0px;
+  --shadow-color: rgba(26,107,60,0.15);
+  --sidebar-ring: #1A6B3C;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0;
+  --sidebar-accent: #EAF4EE;
+  --sidebar-border: #dce8e1;
+  --card-foreground: #0f1419;
+  --shadow-offset-x: 0px;
+  --shadow-offset-y: 2px;
+  --sidebar-primary: #1A6B3C;
+  --muted-foreground: #536471;
+  --accent-foreground: #1A6B3C;
+  --popover-foreground: #0f1419;
+  --primary-foreground: #ffffff;
+  --sidebar-foreground: #0f1419;
+  --secondary-foreground: #ffffff;
+  --destructive-foreground: #ffffff;
+  --sidebar-accent-foreground: #1A6B3C;
+  --sidebar-primary-foreground: #ffffff;
+
+  /* NESW brand gold */
+  --gold: #C9973A;
+  --gold-light: #F5E9D0;
+  --gold-hover: #B5851F;
+}
+
+.dark {
+  --card: #17181c;
+  --ring: #1A6B3C;
+  --input: #1e2d23;
+  --muted: #181818;
+  --accent: #0e2218;
+  --border: #1e2d23;
+  --chart-1: #2a9d5c;
+  --chart-2: #C9973A;
+  --chart-3: #f7b928;
+  --chart-4: #3b82f6;
+  --chart-5: #ef4444;
+  --popover: #000000;
+  --primary: #2a9d5c;
+  --sidebar: #17181c;
+  --secondary: #f0f3f4;
+  --background: #000000;
+  --foreground: #e7e9ea;
+  --destructive: #ef4444;
+  --shadow-color: rgba(26,107,60,0.25);
+  --sidebar-ring: #2a9d5c;
+  --sidebar-accent: #0e2218;
+  --sidebar-border: #1e2d23;
+  --card-foreground: #d9d9d9;
+  --sidebar-primary: #2a9d5c;
+  --muted-foreground: #72767a;
+  --accent-foreground: #2a9d5c;
+  --popover-foreground: #e7e9ea;
+  --primary-foreground: #ffffff;
+  --sidebar-foreground: #d9d9d9;
+  --secondary-foreground: #0f1419;
+  --destructive-foreground: #ffffff;
+  --sidebar-accent-foreground: #2a9d5c;
+  --sidebar-primary-foreground: #ffffff;
+}
+
+@theme inline {
+  --color-card: var(--card);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-sidebar: var(--sidebar);
+  --color-secondary: var(--secondary);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-card-foreground: var(--card-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Open Sans', system-ui, -apple-system, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { width: 100%; min-height: 100vh; }
