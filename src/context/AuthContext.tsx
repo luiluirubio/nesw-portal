@@ -1,83 +1,122 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import type { AccountInfo } from '@azure/msal-browser'
+import { getAccount, getAccessToken, loginRedirect, logoutRedirect } from '@/lib/auth'
 import { agents } from '@/data/agents'
 import type { Agent } from '@/types/agent'
 import type { LoginRecord, LoginMethod } from '@/types/loginHistory'
 
-export type AuthUser = Agent
+export type AuthUser = Agent & { msAccount?: AccountInfo }
 
 interface AuthContextValue {
   user: AuthUser | null
-  login: (agentId: string, method?: LoginMethod) => void
-  logout: () => void
+  msAccount: AccountInfo | null
   isAuthenticated: boolean
+  isLoading: boolean
+  login: () => void
+  logout: () => void
   loginHistory: LoginRecord[]
   clearHistory: (agentId?: string) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const USER_KEY    = 'nesw_user_id'
 const HISTORY_KEY = 'nesw_login_history'
-const SESSION_KEY = 'nesw_session_id'
+const SESSION_LOGGED = 'nesw_session_logged'
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10).toUpperCase()
 }
 
 function getStoredHistory(): LoginRecord[] {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')
-  } catch {
-    return []
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]') } catch { return [] }
+}
+
+function agentFromMsAccount(account: AccountInfo): AuthUser {
+  const email = account.username?.toLowerCase() ?? ''
+  const matched = agents.find(a => a.email.toLowerCase() === email)
+  if (matched) return matched
+
+  // fallback: create a transient agent from the MS profile
+  return {
+    id:          account.localAccountId,
+    name:        account.name ?? account.username,
+    role:        'Agent',
+    branch:      'Headquarters',
+    email:       account.username,
+    phone:       '',
+    licenseNo:   '',
+    dateJoined:  new Date().toISOString().slice(0, 10),
+    status:      'active',
+    msAccount:   account,
   }
 }
 
-function appendHistory(record: LoginRecord) {
-  const existing = getStoredHistory()
-  // keep last 200 records
-  const updated = [record, ...existing].slice(0, 200)
+async function recordLogin(agentId: string, method: LoginMethod) {
+  if (sessionStorage.getItem(SESSION_LOGGED)) return
+  sessionStorage.setItem(SESSION_LOGGED, '1')
+
+  const record: LoginRecord = {
+    id:         generateId(),
+    agentId,
+    timestamp:  new Date().toISOString(),
+    method,
+    sessionId:  generateId(),
+    ipAddress:  'via Microsoft 365',
+    userAgent:  navigator.userAgent.slice(0, 80),
+  }
+  const updated = [record, ...getStoredHistory()].slice(0, 200)
   localStorage.setItem(HISTORY_KEY, JSON.stringify(updated))
+
+  // also post to backend API (fire-and-forget)
+  const apiBase = import.meta.env.VITE_API_URL
+  if (apiBase) {
+    const token = await getAccessToken()
+    fetch(`${apiBase}/api/logs/login`, {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        agentId,
+        method,
+        sessionId:  record.sessionId,
+        ipAddress:  record.ipAddress,
+        userAgent:  record.userAgent,
+      }),
+    }).catch(() => {})
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const saved = localStorage.getItem(USER_KEY)
-    return saved ? (agents.find(a => a.id === saved) ?? null) : null
-  })
-
+  const [user, setUser]           = useState<AuthUser | null>(null)
+  const [msAccount, setMsAccount] = useState<AccountInfo | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [loginHistory, setLoginHistory] = useState<LoginRecord[]>(getStoredHistory)
 
   useEffect(() => {
-    if (user) localStorage.setItem(USER_KEY, user.id)
-    else localStorage.removeItem(USER_KEY)
-  }, [user])
+    getAccount()
+      .then(acc => {
+        if (acc) {
+          const agent = agentFromMsAccount(acc)
+          setUser(agent)
+          setMsAccount(acc)
+          recordLogin(agent.id, 'microsoft_sso').then(() => {
+            setLoginHistory(getStoredHistory())
+          })
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false))
+  }, [])
 
-  function login(agentId: string, method: LoginMethod = 'manual') {
-    const agent = agents.find(a => a.id === agentId)
-    if (!agent) return
-
-    const sessionId = generateId()
-    localStorage.setItem(SESSION_KEY, sessionId)
-
-    const record: LoginRecord = {
-      id:         generateId(),
-      agentId:    agent.id,
-      timestamp:  new Date().toISOString(),
-      method,
-      sessionId,
-      // simulated values since we have no real network info
-      ipAddress:  '192.168.1.' + Math.floor(Math.random() * 254 + 1),
-      userAgent:  navigator.userAgent.slice(0, 80),
-    }
-
-    appendHistory(record)
-    setLoginHistory(getStoredHistory())
-    setUser(agent)
-  }
+  function login() { loginRedirect() }
 
   function logout() {
-    localStorage.removeItem(SESSION_KEY)
+    sessionStorage.removeItem(SESSION_LOGGED)
     setUser(null)
+    setMsAccount(null)
+    logoutRedirect()
   }
 
   function clearHistory(agentId?: string) {
@@ -89,7 +128,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loginHistory, clearHistory }}>
+    <AuthContext.Provider value={{
+      user, msAccount,
+      isAuthenticated: !!user,
+      isLoading,
+      login, logout,
+      loginHistory, clearHistory,
+    }}>
       {children}
     </AuthContext.Provider>
   )

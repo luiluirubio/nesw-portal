@@ -6,8 +6,19 @@ import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
   const { collapsed } = useSidebar()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--background)' }}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-6 h-6 border-2 border-[var(--primary)]/20 border-t-[var(--primary)] rounded-full animate-spin" />
+          <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Loading…</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
 

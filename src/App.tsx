@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppToaster } from '@/components/ui/toast'
-import { AuthProvider, useAuth } from '@/context/AuthContext'
+import { AuthProvider } from '@/context/AuthContext'
 import { AppProvider } from '@/context/AppContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { SidebarProvider } from '@/context/SidebarContext'
@@ -10,11 +10,6 @@ import { Login } from '@/pages/Login'
 import { Listings } from '@/pages/Listings'
 import { Users } from '@/pages/Users'
 import { Logs } from '@/pages/Logs'
-
-function LoginGuard() {
-  const { isAuthenticated } = useAuth()
-  return isAuthenticated ? <Navigate to="/listings" replace /> : <Login />
-}
 
 export default function App() {
   return (
@@ -26,7 +21,7 @@ export default function App() {
           <LogsProvider>
             <AppToaster />
             <Routes>
-              <Route path="/login" element={<LoginGuard />} />
+              <Route path="/login" element={<Login />} />
               <Route path="/*" element={
                 <Layout>
                   <Routes>
