@@ -2,7 +2,7 @@ import { PublicClientApplication, type Configuration, type AccountInfo } from '@
 
 const msalConfig: Configuration = {
   auth: {
-    clientId:    'd1cb545a-0d6b-48fe-851d-7ba31c75fa06',
+    clientId:    '36aa1fcc-c93f-4637-8bd1-14b92e79a5fb',
     authority:   'https://login.microsoftonline.com/982ea7d9-d08d-49b3-a11e-2344474c6ae4',
     redirectUri: typeof window !== 'undefined' ? window.location.origin : '/',
   },
