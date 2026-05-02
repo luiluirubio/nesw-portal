@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Upload, X, FileText, Image, ChevronDown, CheckCircle,
   ArrowLeft, ArrowRight, ClipboardList, MapPin, Ruler,
@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP } from '@/lib/utils'
 import { phLgusSorted, getProvinceByCity } from '@/data/philippines'
+import { saveDraft, deleteDraft, getDraft, generateDraftId } from '@/lib/drafts'
 import type { PropertyType, ListingType } from '@/types/property'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -90,12 +91,15 @@ export function AddListing() {
   const { user } = useAuth()
   const { addLog } = useLogs()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const photoInputRef = useRef<HTMLInputElement>(null)
   const docInputRef   = useRef<HTMLInputElement>(null)
 
-  const [step, setStep] = useState(1)
+  // ── Draft ID — stable for this session ───────────────────────────────
+  const draftIdRef = useRef<string>(searchParams.get('draft') ?? generateDraftId())
+  const draftId    = draftIdRef.current
 
-  const [form, setForm] = useState({
+  const blankForm = {
     title: '', type: 'house_and_lot' as PropertyType, listingType: 'for_sale' as ListingType,
     price: '', commission: '3',
     ownerName: '', nameInTitle: '', taxDeclarationNo: '',
@@ -103,15 +107,53 @@ export function AddListing() {
     floorArea: '', lotArea: '', bedrooms: '', bathrooms: '', parking: '',
     description: '',
     contactPerson: '', contactEmail: '', contactPhone: '',
-  })
+  }
 
+  // Load existing draft if ?draft=xxx is in the URL
+  const existing = getDraft(draftId)
+
+  const [step, setStep] = useState(existing?.lastStep ?? 1)
+  const [form, setForm] = useState(existing?.form ?? blankForm)
   const [errors, setErrors]           = useState<Record<string, string>>({})
-  const [selectedFeatures, setFeatures] = useState<string[]>([])
-  const [uploadedPhotos, setPhotos]   = useState<UploadedFile[]>([])
-  const [uploadedDocs, setDocs]       = useState<UploadedFile[]>([])
+  const [selectedFeatures, setFeatures] = useState<string[]>(existing?.features ?? [])
+  const [uploadedPhotos, setPhotos]   = useState<UploadedFile[]>(
+    (existing?.photos ?? []).map(f => ({ ...f, type: 'photo'    as const }))
+  )
+  const [uploadedDocs, setDocs]       = useState<UploadedFile[]>(
+    (existing?.docs   ?? []).map(f => ({ ...f, type: 'document' as const }))
+  )
   const [photoDrag, setPhotoDrag]     = useState(false)
   const [docDrag, setDocDrag]         = useState(false)
   const [submitted, setSubmitted]     = useState(false)
+
+  // ── Auto-save draft ────────────────────────────────────────────────────
+  const autoSave = useCallback(() => {
+    if (!user) return
+    saveDraft({
+      id:        draftId,
+      agentId:   user.id,
+      agentName: user.name,
+      lastStep:  step,
+      savedAt:   new Date().toISOString(),
+      form,
+      features:  selectedFeatures,
+      photos:    uploadedPhotos,
+      docs:      uploadedDocs,
+    })
+  }, [draftId, user, step, form, selectedFeatures, uploadedPhotos, uploadedDocs])
+
+  // Debounced auto-save on any state change
+  useEffect(() => {
+    if (submitted) return
+    const t = setTimeout(autoSave, 800)
+    return () => clearTimeout(t)
+  }, [autoSave, submitted])
+
+  // Save immediately when changing steps
+  useEffect(() => {
+    if (!submitted) autoSave()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
 
   // ── Helpers ───────────────────────────────────────────────────────────
   function update(field: string, value: string) {
@@ -202,6 +244,7 @@ export function AddListing() {
   }
 
   function handleSubmit() {
+    deleteDraft(draftId)
     const newId = 'PROP-' + String(Date.now()).slice(-5)
     addLog({
       action: 'created', propertyId: newId, propertyTitle: form.title,
@@ -265,8 +308,20 @@ export function AddListing() {
           <ArrowLeft size={18} />
         </button>
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Add Property Listing</h1>
-          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>Step {step} of {STEPS.length} — {STEPS[step-1].label}</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>
+              {existing ? 'Resume Listing' : 'Add Property Listing'}
+            </h1>
+            {existing && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+                Draft
+              </span>
+            )}
+          </div>
+          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+            Step {step} of {STEPS.length} — {STEPS[step-1].label}
+            {!existing && <span className="ml-2 opacity-60">· Auto-saved</span>}
+          </p>
         </div>
       </div>
 

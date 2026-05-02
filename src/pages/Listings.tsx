@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Search, X, Eye, MapPin, Home, Calendar, Maximize2,
   Upload, ChevronDown, Paperclip, Pencil, Check, ArrowLeft,
-  Phone, Mail, User,
+  Phone, Mail, User, PenLine, Trash2,
 } from 'lucide-react'
 import { properties } from '@/data/properties'
 import { getAgent } from '@/data/agents'
@@ -10,6 +10,8 @@ import { useAuth } from '@/context/AuthContext'
 import { useApp } from '@/context/AppContext'
 import { useLogs } from '@/context/LogsContext'
 import { formatPHP, daysSince, cn } from '@/lib/utils'
+import { getDraftsByAgent, deleteDraft } from '@/lib/drafts'
+import type { ListingDraft } from '@/types/draft'
 
 function pricePerSqm(price: number, floorArea: number, lotArea: number): string {
   const area = floorArea > 0 ? floorArea : lotArea
@@ -485,6 +487,16 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const [filterStatus, setFilterStatus] = useState<PropertyStatus | 'all'>('all')
   const [filterType, setFilterType] = useState<PropertyType | 'all'>('all')
   const [filterListing, setFilterListing] = useState<'all' | 'for_sale' | 'for_rent'>('all')
+  const [drafts, setDrafts] = useState<ListingDraft[]>([])
+
+  useEffect(() => {
+    if (user) setDrafts(getDraftsByAgent(user.id))
+  }, [user])
+
+  function removeDraft(id: string) {
+    deleteDraft(id)
+    setDrafts(d => d.filter(x => x.id !== id))
+  }
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
   // local overrides so edits reflect immediately in the table
   const [localOverrides, setLocalOverrides] = useState<Record<string, Property>>({})
@@ -545,6 +557,69 @@ export function Listings({ myOnly = false }: ListingsProps) {
           Add Listing
         </button>
       </div>
+
+      {/* Draft Listings Banner */}
+      {drafts.length > 0 && (
+        <div className="rounded-[var(--radius)] border overflow-hidden"
+          style={{ borderColor: '#f59e0b', backgroundColor: '#fffbeb' }}>
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: '#fde68a', backgroundColor: '#fef3c7' }}>
+            <PenLine size={14} style={{ color: '#b45309' }} />
+            <p className="text-xs font-bold" style={{ color: '#b45309' }}>
+              {drafts.length} Incomplete Listing{drafts.length > 1 ? 's' : ''} — Draft
+            </p>
+            <span className="text-xs" style={{ color: '#92400e' }}>
+              · Auto-saved. Continue where you left off.
+            </span>
+          </div>
+          <div className="divide-y" style={{ borderColor: '#fde68a' }}>
+            {drafts.map(d => {
+              const stepLabel = ['Listing Details','Ownership','Location','Specifications','Contact & Media','Review'][d.lastStep - 1] ?? `Step ${d.lastStep}`
+              const savedAgo  = (() => {
+                const diff = Date.now() - new Date(d.savedAt).getTime()
+                const mins = Math.floor(diff / 60000)
+                const hrs  = Math.floor(mins / 60)
+                const days = Math.floor(hrs / 24)
+                if (mins < 1)   return 'just now'
+                if (mins < 60)  return `${mins}m ago`
+                if (hrs  < 24)  return `${hrs}h ago`
+                return `${days}d ago`
+              })()
+              return (
+                <div key={d.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: '#92400e' }}>
+                      {d.form.title || 'Untitled Listing'}
+                    </p>
+                    <p className="text-xs" style={{ color: '#b45309' }}>
+                      Stopped at <strong>{stepLabel}</strong> · Saved {savedAgo}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-800">
+                      Step {d.lastStep}/6
+                    </span>
+                    <button
+                      onClick={() => navigate(`/add-listing?draft=${d.id}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-bold text-white transition-all hover:opacity-90"
+                      style={{ backgroundColor: '#b45309' }}>
+                      <PenLine size={12} />Continue
+                    </button>
+                    <button
+                      onClick={() => removeDraft(d.id)}
+                      title="Discard draft"
+                      className="p-1.5 rounded-[var(--radius-sm)] transition-colors"
+                      style={{ color: '#b45309' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fde68a')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Status Summary Cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
