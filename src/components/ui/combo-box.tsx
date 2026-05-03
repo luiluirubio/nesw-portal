@@ -17,6 +17,8 @@ interface ComboBoxProps {
   error?: boolean
   /** Allow user to type a free-text value and add it as a new option */
   creatable?: boolean
+  /** Include the sublabel in search matching (default: false — label only) */
+  searchSublabel?: boolean
   className?: string
 }
 
@@ -29,6 +31,7 @@ export function ComboBox({
   placeholder = 'Search…',
   error = false,
   creatable = false,
+  searchSublabel = false,
   className,
 }: ComboBoxProps) {
   const [isOpen, setIsOpen]     = useState(false)
@@ -51,10 +54,11 @@ export function ComboBox({
   // Filter: when input is empty show top VISIBLE_LIMIT; otherwise filter all
   const filtered = (
     inputValue.trim()
-      ? options.filter(o =>
-          o.label.toLowerCase().includes(inputValue.toLowerCase()) ||
-          (o.sublabel?.toLowerCase().includes(inputValue.toLowerCase()) ?? false)
-        )
+      ? options.filter(o => {
+          const q = inputValue.toLowerCase()
+          return o.label.toLowerCase().includes(q) ||
+            (searchSublabel && (o.sublabel?.toLowerCase().includes(q) ?? false))
+        })
       : options
   ).slice(0, VISIBLE_LIMIT)
 
