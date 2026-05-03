@@ -13,13 +13,17 @@ export function setApiAgent(id: string, email: string) {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('nesw_token')
+
+  // Only send X-Agent-Id when there is no JWT token (M365 SSO path only)
+  const agentHeaders: Record<string, string> = (!token && _agentId)
+    ? { 'X-Agent-Id': _agentId, ...(_agentEmail ? { 'X-Agent-Email': _agentEmail } : {}) }
+    : {}
+
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(token        ? { Authorization:   `Bearer ${token}` } : {}),
-      ...(_agentId     ? { 'X-Agent-Id':    _agentId           } : {}),
-      ...(_agentEmail  ? { 'X-Agent-Email': _agentEmail        } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : agentHeaders),
       ...init?.headers,
     },
   })

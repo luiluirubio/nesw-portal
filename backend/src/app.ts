@@ -17,6 +17,7 @@ app.use(cors({
     'http://localhost:5174',
   ],
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Agent-Id', 'X-Agent-Email'],
 }))
 
 app.use(express.json({ limit: '1mb' }))
