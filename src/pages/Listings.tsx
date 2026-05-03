@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Search, X, Eye, MapPin, Home, Calendar, Maximize2,
   Upload, ChevronDown, Paperclip, Pencil, Check, ArrowLeft,
@@ -535,6 +535,8 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
 }
 
 // ── Main Page ────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 20
+
 interface ListingsProps { myOnly?: boolean }
 
 export function Listings({ myOnly = false }: ListingsProps) {
@@ -550,6 +552,8 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const [filterCity, setFilterCity] = useState('all')
   const [filterAgent, setFilterAgent] = useState('all')
   const [drafts, setDrafts] = useState<ListingDraft[]>([])
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (user) fetchDrafts().then(setDrafts).catch(() => {})
@@ -596,6 +600,13 @@ export function Listings({ myOnly = false }: ListingsProps) {
     return true
   })
 
+  // Sort newest-first
+  const filteredSorted = [...filtered].sort(
+    (a, b) => new Date(b.dateListed).getTime() - new Date(a.dateListed).getTime()
+  )
+  const filteredVisible = filteredSorted.slice(0, visibleCount)
+  const hasMore = visibleCount < filteredSorted.length
+
   const summaryCards = [
     { key: 'available' as PropertyStatus,      label: 'Available',      count: counts.available,      bar: '#10b981' },
     { key: 'reserved' as PropertyStatus,       label: 'Reserved',       count: counts.reserved,       bar: '#f59e0b' },
@@ -605,6 +616,23 @@ export function Listings({ myOnly = false }: ListingsProps) {
 
   const total = scoped.length
 
+  // Reset to first page whenever any filter/search changes
+  useEffect(() => { setVisibleCount(PAGE_SIZE) },
+    [search, filterStatus, filterType, filterListing, filterCity, filterAgent]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Infinite scroll: load next page when sentinel enters the viewport
+  const onSentinel = useCallback((entries: IntersectionObserverEntry[]) => {
+    if (entries[0].isIntersecting) setVisibleCount(c => c + PAGE_SIZE)
+  }, [])
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const obs = new IntersectionObserver(onSentinel, { rootMargin: '200px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [hasMore, onSentinel])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -613,7 +641,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
             {myOnly ? 'My Listings' : 'All Listings'}
           </h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-            {filtered.length} of {total} properties shown
+            {filteredSorted.length} of {total} properties · newest first
           </p>
         </div>
         <button
@@ -808,7 +836,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => {
+              {filteredVisible.map(p => {
                 const agent = getAgent(p.agentId)
                 const sc    = statusConfig[p.status] ?? statusConfig['available']
                 return (
@@ -884,13 +912,29 @@ export function Listings({ myOnly = false }: ListingsProps) {
               })}
             </tbody>
           </table>
-          {filtered.length === 0 && (
+          {filteredSorted.length === 0 && (
             <div className="py-16 text-center text-sm" style={{ color: 'var(--muted-foreground)' }}>
               No properties match your filters.
             </div>
           )}
         </div>
       </div>
+
+      {/* Infinite-scroll sentinel */}
+      {hasMore && (
+        <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-6">
+          <div className="w-4 h-4 border-2 border-t-[var(--primary)] border-[var(--muted)] rounded-full animate-spin" />
+          <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+            Loading more listings…
+          </span>
+        </div>
+      )}
+
+      {!hasMore && filteredSorted.length > PAGE_SIZE && (
+        <p className="text-center text-xs py-4" style={{ color: 'var(--muted-foreground)' }}>
+          All {filteredSorted.length} listings loaded
+        </p>
+      )}
 
       {selectedProperty && (
         <PropertyDetailPanel
