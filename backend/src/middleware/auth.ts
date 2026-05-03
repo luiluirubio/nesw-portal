@@ -15,9 +15,12 @@ export interface AuthRequest extends Request {
 }
 
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  // In development (no Cognito configured) allow all requests
+  // No Cognito configured — use X-Agent-Id header (set by MSAL frontend)
   if (!verifier) {
-    req.userId = req.headers['x-dev-user-id'] as string ?? 'AGT-001'
+    req.userId    = (req.headers['x-agent-id'] as string)
+                 ?? (req.headers['x-dev-user-id'] as string)
+                 ?? 'AGT-001'
+    req.userEmail = req.headers['x-agent-email'] as string | undefined
     return next()
   }
 

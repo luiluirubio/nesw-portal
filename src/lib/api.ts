@@ -1,4 +1,15 @@
+import type { ListingDraft } from '@/types/draft'
+
 const BASE = import.meta.env.VITE_API_URL ?? ''
+
+// Agent context set once after MSAL login
+let _agentId    = ''
+let _agentEmail = ''
+
+export function setApiAgent(id: string, email: string) {
+  _agentId    = id
+  _agentEmail = email
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('nesw_access_token')
@@ -6,7 +17,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token        ? { Authorization:   `Bearer ${token}` } : {}),
+      ...(_agentId     ? { 'X-Agent-Id':    _agentId           } : {}),
+      ...(_agentEmail  ? { 'X-Agent-Email': _agentEmail        } : {}),
       ...init?.headers,
     },
   })
@@ -20,18 +33,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   // Properties
-  getProperties:     ()           => request<unknown[]>('/api/properties'),
-  getProperty:       (id: string) => request<unknown>(`/api/properties/${id}`),
-  createProperty:    (body: unknown) => request<unknown>('/api/properties', { method: 'POST', body: JSON.stringify(body) }),
-  updateProperty:    (id: string, body: unknown) => request<unknown>(`/api/properties/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteProperty:    (id: string) => request<void>(`/api/properties/${id}`, { method: 'DELETE' }),
+  getProperties:  ()                  => request<unknown[]>('/api/properties'),
+  getProperty:    (id: string)        => request<unknown>(`/api/properties/${id}`),
+  createProperty: (body: unknown)     => request<unknown>('/api/properties', { method: 'POST', body: JSON.stringify(body) }),
+  updateProperty: (id: string, body: unknown) => request<unknown>(`/api/properties/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteProperty: (id: string)        => request<void>(`/api/properties/${id}`, { method: 'DELETE' }),
 
   // Agents
   getAgents: () => request<unknown[]>('/api/agents'),
 
   // Activity logs
-  getLogs:    ()           => request<unknown[]>('/api/logs'),
-  createLog:  (body: unknown) => request<unknown>('/api/logs', { method: 'POST', body: JSON.stringify(body) }),
+  getLogs:   ()           => request<unknown[]>('/api/logs'),
+  createLog: (body: unknown) => request<unknown>('/api/logs', { method: 'POST', body: JSON.stringify(body) }),
 
   // Login history
   getLoginHistory: (agentId?: string) =>
@@ -39,7 +52,13 @@ export const api = {
   recordLogin: (body: unknown) =>
     request<unknown>('/api/logs/login', { method: 'POST', body: JSON.stringify(body) }),
 
-  // File upload — returns presigned S3 URL
+  // Drafts
+  getDrafts:   ()                     => request<ListingDraft[]>('/api/drafts'),
+  getDraft:    (id: string)           => request<ListingDraft>(`/api/drafts/${id}`),
+  saveDraft:   (body: Partial<ListingDraft>) => request<ListingDraft>('/api/drafts', { method: 'POST', body: JSON.stringify(body) }),
+  deleteDraft: (id: string)           => request<void>(`/api/drafts/${id}`, { method: 'DELETE' }),
+
+  // File upload
   presign: (body: { fileName: string; fileType: string; propertyId?: string }) =>
     request<{ url: string; key: string; publicUrl: string }>('/api/upload/presign', {
       method: 'POST', body: JSON.stringify(body),

@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP } from '@/lib/utils'
 import { phLgusSorted, getProvinceByCity } from '@/data/philippines'
-import { saveDraft, deleteDraft, getDraft, generateDraftId } from '@/lib/drafts'
+import { saveDraftCloud, deleteDraftCloud, fetchDraft, generateDraftId } from '@/lib/drafts'
 import type { PropertyType, ListingType } from '@/types/property'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -109,27 +109,38 @@ export function AddListing() {
     contactPerson: '', contactEmail: '', contactPhone: '',
   }
 
-  // Load existing draft if ?draft=xxx is in the URL
-  const existing = getDraft(draftId)
+  const isResuming = !!searchParams.get('draft')
 
-  const [step, setStep] = useState(existing?.lastStep ?? 1)
-  const [form, setForm] = useState(existing?.form ?? blankForm)
+  const [step, setStep]               = useState(1)
+  const [form, setForm]               = useState(blankForm)
   const [errors, setErrors]           = useState<Record<string, string>>({})
-  const [selectedFeatures, setFeatures] = useState<string[]>(existing?.features ?? [])
-  const [uploadedPhotos, setPhotos]   = useState<UploadedFile[]>(
-    (existing?.photos ?? []).map(f => ({ ...f, type: 'photo'    as const }))
-  )
-  const [uploadedDocs, setDocs]       = useState<UploadedFile[]>(
-    (existing?.docs   ?? []).map(f => ({ ...f, type: 'document' as const }))
-  )
+  const [selectedFeatures, setFeatures] = useState<string[]>([])
+  const [uploadedPhotos, setPhotos]   = useState<UploadedFile[]>([])
+  const [uploadedDocs, setDocs]       = useState<UploadedFile[]>([])
   const [photoDrag, setPhotoDrag]     = useState(false)
   const [docDrag, setDocDrag]         = useState(false)
   const [submitted, setSubmitted]     = useState(false)
+  const [loadingDraft, setLoadingDraft] = useState(!!searchParams.get('draft'))
 
-  // ── Auto-save draft ────────────────────────────────────────────────────
+  // ── Load existing draft from cloud on mount ────────────────────────────
+  useEffect(() => {
+    const id = searchParams.get('draft')
+    if (!id) return
+    fetchDraft(id).then(d => {
+      if (d) {
+        setStep(d.lastStep)
+        setForm(d.form)
+        setFeatures(d.features)
+        setPhotos(d.photos.map(f => ({ ...f, type: 'photo'    as const })))
+        setDocs(d.docs.map(f   => ({ ...f, type: 'document' as const })))
+      }
+    }).finally(() => setLoadingDraft(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-save to cloud ─────────────────────────────────────────────────
   const autoSave = useCallback(() => {
-    if (!user) return
-    saveDraft({
+    if (!user || submitted || loadingDraft) return
+    saveDraftCloud({
       id:        draftId,
       agentId:   user.id,
       agentName: user.name,
@@ -137,21 +148,21 @@ export function AddListing() {
       savedAt:   new Date().toISOString(),
       form,
       features:  selectedFeatures,
-      photos:    uploadedPhotos,
-      docs:      uploadedDocs,
+      photos:    uploadedPhotos.map(f => ({ name: f.name, size: f.size })),
+      docs:      uploadedDocs.map(f   => ({ name: f.name, size: f.size })),
     })
-  }, [draftId, user, step, form, selectedFeatures, uploadedPhotos, uploadedDocs])
+  }, [draftId, user, step, form, selectedFeatures, uploadedPhotos, uploadedDocs, submitted, loadingDraft])
 
-  // Debounced auto-save on any state change
+  // Debounced auto-save on any field change
   useEffect(() => {
-    if (submitted) return
+    if (submitted || loadingDraft) return
     const t = setTimeout(autoSave, 800)
     return () => clearTimeout(t)
-  }, [autoSave, submitted])
+  }, [autoSave, submitted, loadingDraft])
 
-  // Save immediately when changing steps
+  // Immediate save on step change
   useEffect(() => {
-    if (!submitted) autoSave()
+    if (!submitted && !loadingDraft) autoSave()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step])
 
@@ -244,7 +255,7 @@ export function AddListing() {
   }
 
   function handleSubmit() {
-    deleteDraft(draftId)
+    deleteDraftCloud(draftId)
     const newId = 'PROP-' + String(Date.now()).slice(-5)
     addLog({
       action: 'created', propertyId: newId, propertyTitle: form.title,
@@ -296,6 +307,17 @@ export function AddListing() {
   )
 
   // ── Render ────────────────────────────────────────────────────────────
+  if (loadingDraft) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-6 h-6 border-2 border-t-[var(--primary)] border-[var(--muted)] rounded-full animate-spin" />
+          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>Loading draft…</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto">
       {/* Header */}
@@ -310,9 +332,9 @@ export function AddListing() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>
-              {existing ? 'Resume Listing' : 'Add Property Listing'}
+              {isResuming ? 'Resume Listing' : 'Add Property Listing'}
             </h1>
-            {existing && (
+            {isResuming && (
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
                 Draft
               </span>
@@ -320,7 +342,7 @@ export function AddListing() {
           </div>
           <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
             Step {step} of {STEPS.length} — {STEPS[step-1].label}
-            {!existing && <span className="ml-2 opacity-60">· Auto-saved</span>}
+            {!submitted && <span className="ml-2 opacity-60">· Auto-saved</span>}
           </p>
         </div>
       </div>

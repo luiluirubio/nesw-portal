@@ -25,6 +25,7 @@ provider:
             - dynamodb:Scan
           Resource:
             - arn:aws:dynamodb:${self:provider.region}:*:table/nesw-*
+            - arn:aws:dynamodb:${self:provider.region}:*:table/nesw-*/index/*
         - Effect: Allow
           Action:
             - s3:GetObject
@@ -130,6 +131,22 @@ resources:
           - AttributeName: agentId
             KeyType: HASH
           - AttributeName: timestamp
+            KeyType: RANGE
+
+    DraftsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-drafts-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: agentId
+            AttributeType: S
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: agentId
+            KeyType: HASH
+          - AttributeName: id
             KeyType: RANGE
 
     FilesBucket:

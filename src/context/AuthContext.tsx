@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import type { AccountInfo } from '@azure/msal-browser'
 import { getAccount, getAccessToken, loginRedirect, logoutRedirect } from '@/lib/auth'
+import { setApiAgent } from '@/lib/api'
 import { agents } from '@/data/agents'
 import type { Agent } from '@/types/agent'
 import type { LoginRecord, LoginMethod } from '@/types/loginHistory'
@@ -101,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const agent = agentFromMsAccount(acc)
           setUser(agent)
           setMsAccount(acc)
+          setApiAgent(agent.id, acc.username)
           recordLogin(agent.id, 'microsoft_sso').then(() => {
             setLoginHistory(getStoredHistory())
           })

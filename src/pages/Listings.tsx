@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useApp } from '@/context/AppContext'
 import { useLogs } from '@/context/LogsContext'
 import { formatPHP, daysSince, cn } from '@/lib/utils'
-import { getDraftsByAgent, deleteDraft } from '@/lib/drafts'
+import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
 import type { ListingDraft } from '@/types/draft'
 
 function pricePerSqm(price: number, floorArea: number, lotArea: number): string {
@@ -490,11 +490,11 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const [drafts, setDrafts] = useState<ListingDraft[]>([])
 
   useEffect(() => {
-    if (user) setDrafts(getDraftsByAgent(user.id))
+    if (user) fetchDrafts().then(setDrafts).catch(() => {})
   }, [user])
 
   function removeDraft(id: string) {
-    deleteDraft(id)
+    deleteDraftCloud(id)
     setDrafts(d => d.filter(x => x.id !== id))
   }
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)

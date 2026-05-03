@@ -13,6 +13,7 @@ export const Tables = {
   agents:       `nesw-agents-${stage}`,
   activityLogs: `nesw-activity-logs-${stage}`,
   loginHistory: `nesw-login-history-${stage}`,
+  drafts:       `nesw-drafts-${stage}`,
 }
 
 export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand, QueryCommand }
