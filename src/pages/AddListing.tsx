@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Upload, X, FileText, Image, ChevronDown, CheckCircle,
@@ -6,12 +6,18 @@ import {
   User, FileImage, Eye,
 } from 'lucide-react'
 import { toaster } from '@/components/ui/toast'
+import { SelectMenu } from '@/components/ui/select-menu'
 import { useAuth } from '@/context/AuthContext'
 import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP } from '@/lib/utils'
 import { phLgusSorted, getProvinceByCity } from '@/data/philippines'
 import { saveDraftCloud, deleteDraftCloud, fetchDraft, generateDraftId } from '@/lib/drafts'
 import type { PropertyType, ListingType } from '@/types/property'
+
+const EMAIL_DOMAINS = ['gmail.com','yahoo.com','outlook.com','hotmail.com','neswcorp.com','icloud.com','live.com','yahoo.com.ph']
+
+const MAX_FILE_MB = 20
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const propertyTypes: { value: PropertyType; label: string }[] = [
@@ -106,7 +112,7 @@ export function AddListing() {
     address: '', barangay: '', city: '', province: '',
     floorArea: '', lotArea: '', bedrooms: '', bathrooms: '', parking: '',
     description: '',
-    contactPerson: '', contactEmail: '', contactPhone: '',
+    contactPerson: '', contactEmail: '', contactPhone: '', contactTelephone: '',
     subdivision: '' as string,
   }
 
@@ -122,6 +128,8 @@ export function AddListing() {
   const [docDrag, setDocDrag]         = useState(false)
   const [submitted, setSubmitted]     = useState(false)
   const [loadingDraft, setLoadingDraft] = useState(!!searchParams.get('draft'))
+  const [subdivisionOptions, setSubdivisionOptions] = useState<string[]>([])
+  const [emailSuggestions, setEmailSuggestions]     = useState<string[]>([])
 
   // ── Load existing draft from cloud on mount ────────────────────────────
   useEffect(() => {
@@ -130,7 +138,7 @@ export function AddListing() {
     fetchDraft(id).then(d => {
       if (d) {
         setStep(d.lastStep)
-        setForm({ ...d.form, subdivision: d.form.subdivision ?? '' })
+        setForm({ ...d.form, subdivision: d.form.subdivision ?? '', contactTelephone: d.form.contactTelephone ?? '' })
         setFeatures(d.features)
         setPhotos(d.photos.map(f => ({ ...f, type: 'photo'    as const })))
         setDocs(d.docs.map(f   => ({ ...f, type: 'document' as const })))
@@ -167,6 +175,13 @@ export function AddListing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step])
 
+  // ── City options (memoised — large list) ──────────────────────────────
+  const cityOptions = useMemo(
+    () => phLgusSorted.map((l, i) => ({ value: `${i}::${l.name}`, label: l.name, sublabel: l.province })),
+    []
+  )
+  const citySelectValue = cityOptions.find(o => o.label === form.city)?.value ?? ''
+
   // ── Helpers ───────────────────────────────────────────────────────────
   function update(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -201,12 +216,20 @@ export function AddListing() {
 
   function handlePhotos(files: FileList | null) {
     if (!files) return
-    setPhotos(p => [...p, ...Array.from(files).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'photo' as const }))])
+    const oversized = Array.from(files).filter(f => f.size > MAX_FILE_BYTES)
+    if (oversized.length > 0) {
+      toaster.create({ type: 'error', title: 'File too large', description: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length === 1 ? 's' : ''} ${MAX_FILE_MB}MB limit.` })
+    }
+    setPhotos(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'photo' as const }))])
   }
 
   function handleDocs(files: FileList | null) {
     if (!files) return
-    setDocs(p => [...p, ...Array.from(files).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'document' as const }))])
+    const oversized = Array.from(files).filter(f => f.size > MAX_FILE_BYTES)
+    if (oversized.length > 0) {
+      toaster.create({ type: 'error', title: 'File too large', description: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length === 1 ? 's' : ''} ${MAX_FILE_MB}MB limit.` })
+    }
+    setDocs(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'document' as const }))])
   }
 
   // ── Per-step validation ────────────────────────────────────────────────
@@ -226,16 +249,14 @@ export function AddListing() {
     }
     if (s === 5) {
       if (!form.contactPerson.trim()) e.contactPerson = 'Contact person is required.'
-      if (!form.contactEmail.trim()) {
-        e.contactEmail = 'Email is required.'
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
+      if (form.contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
         e.contactEmail = 'Enter a valid email address.'
       }
       if (!form.contactPhone.trim()) {
-        e.contactPhone = 'Phone number is required.'
+        e.contactPhone = 'Mobile number is required.'
       } else {
         const digits = form.contactPhone.replace(/\D/g, '')
-        if (!/^(0\d{10}|63\d{10})$/.test(digits)) e.contactPhone = 'Enter a valid PH number (09XX-XXX-XXXX).'
+        if (!/^(0\d{10}|63\d{10})$/.test(digits)) e.contactPhone = 'Enter a valid PH mobile number (09XX-XXX-XXXX).'
       }
     }
     return e
@@ -497,34 +518,31 @@ export function AddListing() {
 
             <div>
               <label className={lbl} style={lblS}>Subdivision / Village</label>
-              <input value={form.subdivision} onChange={e => update('subdivision', e.target.value)}
-                placeholder="e.g. Banilad Heights Subd. (optional)"
-                className={inputClass} style={inputStyle}
-                onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
-                onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+              <SelectMenu
+                value={form.subdivision}
+                onChange={val => update('subdivision', val)}
+                options={subdivisionOptions.map(s => ({ value: s, label: s }))}
+                placeholder="Search or type to add… (optional)"
+                creatable
+              />
+              <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>Type a new name and press Enter or click "Add" to save it.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={lbl} style={lblS}>City / Municipality <span className="text-red-500">*</span></label>
-                <input
-                  list="ph-cities-list"
-                  value={form.city}
-                  onChange={e => {
-                    update('city', e.target.value)
-                    const prov = getProvinceByCity(e.target.value)
+                <SelectMenu
+                  value={citySelectValue}
+                  onChange={val => {
+                    const city = val.split('::')[1] ?? val
+                    update('city', city)
+                    const prov = getProvinceByCity(city)
                     if (prov) update('province', prov)
                   }}
-                  placeholder="Type to search…"
-                  autoComplete="off"
-                  className={inputClass} style={errors.city ? inputErr : inputStyle}
-                  onFocus={e => (e.currentTarget.style.borderColor = errors.city ? '#ef4444' : 'var(--primary)')}
-                  onBlur={e => (e.currentTarget.style.borderColor = errors.city ? '#ef4444' : 'var(--border)')} />
-                <datalist id="ph-cities-list">
-                  {phLgusSorted.map(l => (
-                    <option key={`${l.name}-${l.province}`} value={l.name}>{l.name} — {l.province}</option>
-                  ))}
-                </datalist>
+                  options={cityOptions}
+                  placeholder="Search city or municipality…"
+                  error={!!errors.city}
+                />
                 <Err field="city" />
               </div>
               <div>
@@ -651,7 +669,9 @@ export function AddListing() {
             {/* Contact */}
             <div className="space-y-4">
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Contact Person</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+              {/* Row 1: Contact Name + Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={lbl} style={lblS}>Contact Person <span className="text-red-500">*</span></label>
                   <input value={form.contactPerson} onChange={e => update('contactPerson', e.target.value)}
@@ -661,21 +681,63 @@ export function AddListing() {
                     onBlur={e => (e.currentTarget.style.borderColor = errors.contactPerson ? '#ef4444' : 'var(--border)')} />
                   <Err field="contactPerson" />
                 </div>
-                <div>
-                  <label className={lbl} style={lblS}>Email Address <span className="text-red-500">*</span></label>
-                  <input type="email" value={form.contactEmail} onChange={e => update('contactEmail', e.target.value)}
-                    placeholder="e.g. juan@email.com"
+                <div className="relative">
+                  <label className={lbl} style={lblS}>Email Address</label>
+                  <input
+                    type="text"
+                    value={form.contactEmail}
+                    onChange={e => {
+                      update('contactEmail', e.target.value)
+                      const atIdx = e.target.value.lastIndexOf('@')
+                      if (atIdx !== -1) {
+                        const typed = e.target.value.slice(atIdx + 1).toLowerCase()
+                        setEmailSuggestions(EMAIL_DOMAINS.filter(d => d.startsWith(typed) && d !== typed))
+                      } else {
+                        setEmailSuggestions([])
+                      }
+                    }}
+                    placeholder="e.g. juan@gmail.com"
+                    autoComplete="off"
                     className={inputClass} style={errors.contactEmail ? inputErr : inputStyle}
                     onFocus={e => (e.currentTarget.style.borderColor = errors.contactEmail ? '#ef4444' : 'var(--primary)')}
                     onBlur={e => {
                       e.currentTarget.style.borderColor = errors.contactEmail ? '#ef4444' : 'var(--border)'
                       if (form.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail))
                         setErrors(er => ({ ...er, contactEmail: 'Enter a valid email address.' }))
-                    }} />
+                      setTimeout(() => setEmailSuggestions([]), 200)
+                    }}
+                  />
+                  {emailSuggestions.length > 0 && (
+                    <div className="absolute z-20 left-0 right-0 mt-1 rounded-[var(--radius-sm)] border shadow-lg overflow-hidden"
+                      style={{ top: '100%', backgroundColor: 'var(--popover)', borderColor: 'var(--border)' }}>
+                      {emailSuggestions.map(domain => {
+                        const atIdx = form.contactEmail.lastIndexOf('@')
+                        const prefix = atIdx !== -1 ? form.contactEmail.slice(0, atIdx + 1) : form.contactEmail + '@'
+                        return (
+                          <button key={domain} type="button"
+                            onMouseDown={e => {
+                              e.preventDefault()
+                              update('contactEmail', prefix + domain)
+                              setEmailSuggestions([])
+                            }}
+                            className="block w-full px-3 py-1.5 text-xs text-left transition-colors"
+                            style={{ color: 'var(--foreground)' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+                            {prefix}{domain}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                   <Err field="contactEmail" />
                 </div>
+              </div>
+
+              {/* Row 2: Mobile Number + Telephone Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={lbl} style={lblS}>Phone Number <span className="text-red-500">*</span></label>
+                  <label className={lbl} style={lblS}>Mobile Number <span className="text-red-500">*</span></label>
                   <input type="tel" value={form.contactPhone}
                     onChange={e => update('contactPhone', formatPhone(e.target.value))}
                     placeholder="09XX-XXX-XXXX" maxLength={16}
@@ -686,11 +748,21 @@ export function AddListing() {
                       if (form.contactPhone) {
                         const digits = form.contactPhone.replace(/\D/g,'')
                         if (!/^(0\d{10}|63\d{10})$/.test(digits))
-                          setErrors(er => ({ ...er, contactPhone: 'Enter a valid PH number (09XX-XXX-XXXX).' }))
+                          setErrors(er => ({ ...er, contactPhone: 'Enter a valid PH mobile number (09XX-XXX-XXXX).' }))
                       }
                     }} />
                   <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>09XX-XXX-XXXX or +639XX-XXX-XXXX</p>
                   <Err field="contactPhone" />
+                </div>
+                <div>
+                  <label className={lbl} style={lblS}>Telephone Number</label>
+                  <input type="tel" value={form.contactTelephone}
+                    onChange={e => update('contactTelephone', e.target.value)}
+                    placeholder="e.g. (02) 8123-4567"
+                    className={inputClass} style={inputStyle}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                  <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>Optional landline number</p>
                 </div>
               </div>
             </div>
@@ -707,7 +779,7 @@ export function AddListing() {
                 onDrop={e => { e.preventDefault(); setPhotoDrag(false); handlePhotos(e.dataTransfer.files) }}>
                 <Image size={28} className="mx-auto mb-2" style={{ color: 'var(--muted-foreground)' }} />
                 <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Click or drag & drop photos</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>JPG, PNG, WEBP up to 10MB</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>JPG, PNG, WEBP — max {MAX_FILE_MB}MB per file</p>
                 <input ref={photoInputRef} type="file" multiple accept="image/*" className="hidden" onChange={e => handlePhotos(e.target.files)} />
               </div>
               {uploadedPhotos.map((f, i) => (
@@ -733,7 +805,7 @@ export function AddListing() {
                 onDrop={e => { e.preventDefault(); setDocDrag(false); handleDocs(e.dataTransfer.files) }}>
                 <FileText size={28} className="mx-auto mb-2" style={{ color: 'var(--muted-foreground)' }} />
                 <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Click or drag & drop documents</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>TCT, Tax Dec, Floor Plan, Survey (PDF, DOC)</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>TCT, Tax Dec, Floor Plan, Survey (PDF, DOC, DOCX) — max {MAX_FILE_MB}MB per file</p>
                 <input ref={docInputRef} type="file" multiple accept=".pdf,.doc,.docx" className="hidden" onChange={e => handleDocs(e.target.files)} />
               </div>
               {uploadedDocs.map((f, i) => (
@@ -791,9 +863,10 @@ export function AddListing() {
             </ReviewSection>
 
             <ReviewSection title="Contact Person">
-              <ReviewRow label="Name"   value={form.contactPerson} />
-              <ReviewRow label="Email"  value={form.contactEmail} />
-              <ReviewRow label="Phone"  value={form.contactPhone} />
+              <ReviewRow label="Name"      value={form.contactPerson} />
+              <ReviewRow label="Email"     value={form.contactEmail} />
+              <ReviewRow label="Mobile"    value={form.contactPhone} />
+              {form.contactTelephone && <ReviewRow label="Telephone" value={form.contactTelephone} />}
             </ReviewSection>
 
             <ReviewSection title="Media">

@@ -28,6 +28,7 @@ export interface ListingDraft {
     contactPerson: string
     contactEmail: string
     contactPhone: string
+    contactTelephone: string
     subdivision?: string
   }
   features: string[]
