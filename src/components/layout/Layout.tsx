@@ -4,10 +4,11 @@ import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
+import { cn } from '@/lib/utils'
 
 export function Layout({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
-  const { collapsed } = useSidebar()
+  const { collapsed, mobileOpen, closeMobile } = useSidebar()
 
   if (isLoading) {
     return (
@@ -24,12 +25,23 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: 'var(--background)' }}>
+      {/* Mobile backdrop — only visible when sidebar drawer is open */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={closeMobile}
+        />
+      )}
+
       <Sidebar />
-      <div
-        className="flex-1 flex flex-col min-w-0 transition-all duration-300"
-        style={{ marginLeft: collapsed ? '4rem' : '16rem' }}>
+
+      {/* Main content — on mobile fills full width; on desktop offsets for sidebar */}
+      <div className={cn(
+        'flex-1 flex flex-col min-w-0 transition-all duration-300',
+        collapsed ? 'md:ml-16' : 'md:ml-64',
+      )}>
         <TopBar />
-        <main className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'var(--card)' }}>
+        <main className="flex-1 overflow-auto p-4 md:p-6" style={{ backgroundColor: 'var(--card)' }}>
           {children}
         </main>
       </div>

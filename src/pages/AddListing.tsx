@@ -128,7 +128,7 @@ export function AddListing() {
   const [docDrag, setDocDrag]         = useState(false)
   const [submitted, setSubmitted]     = useState(false)
   const [loadingDraft, setLoadingDraft] = useState(!!searchParams.get('draft'))
-  const [subdivisionOptions, setSubdivisionOptions] = useState<string[]>([])
+  const [subdivisionOptions] = useState<string[]>([])
   const [emailSuggestions, setEmailSuggestions]     = useState<string[]>([])
 
   // ── Load existing draft from cloud on mount ────────────────────────────

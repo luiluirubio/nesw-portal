@@ -359,7 +359,7 @@ export function Users() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Total Users',  value: users.length,  icon: Shield,       color: 'var(--primary)', bg: 'bg-emerald-50' },
           { label: 'Active',       value: activeCount,   icon: CheckCircle,  color: '#10b981',         bg: 'bg-emerald-50' },
@@ -426,8 +426,16 @@ export function Users() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
-                  {['User','Email','Role','Branch','Status','Last Login','Actions'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                  {[
+                    { h: 'User',       cls: '' },
+                    { h: 'Email',      cls: 'hidden md:table-cell' },
+                    { h: 'Role',       cls: '' },
+                    { h: 'Branch',     cls: 'hidden lg:table-cell' },
+                    { h: 'Status',     cls: 'hidden sm:table-cell' },
+                    { h: 'Last Login', cls: 'hidden lg:table-cell' },
+                    { h: 'Actions',    cls: '' },
+                  ].map(({ h, cls }) => (
+                    <th key={h} className={`text-left px-3 md:px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap ${cls}`}
                       style={{ color: 'var(--muted-foreground)' }}>{h}</th>
                   ))}
                 </tr>
@@ -439,7 +447,7 @@ export function Users() {
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
 
-                    <td className="px-4 py-3">
+                    <td className="px-3 md:px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0',
                           u.status === 'inactive' && 'opacity-40')}
@@ -455,17 +463,17 @@ export function Users() {
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>{u.email}</td>
+                    <td className="hidden md:table-cell px-3 md:px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>{u.email}</td>
 
-                    <td className="px-4 py-3">
+                    <td className="px-3 md:px-4 py-3">
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold', roleBadge[u.role] ?? 'bg-slate-100 text-slate-600')}>
                         {u.role}
                       </span>
                     </td>
 
-                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{u.branch}</td>
+                    <td className="hidden lg:table-cell px-3 md:px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{u.branch}</td>
 
-                    <td className="px-4 py-3">
+                    <td className="hidden sm:table-cell px-3 md:px-4 py-3">
                       <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold',
                         u.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600')}>
                         <span className={cn('w-1.5 h-1.5 rounded-full', u.status === 'active' ? 'bg-emerald-500' : 'bg-red-400')} />
@@ -473,13 +481,13 @@ export function Users() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="hidden lg:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
                       <p className="text-xs flex items-center gap-1" style={{ color: 'var(--muted-foreground)' }}>
                         <Clock size={11} />{timeAgo(u.lastLoginAt)}
                       </p>
                     </td>
 
-                    <td className="px-4 py-3">
+                    <td className="px-3 md:px-4 py-3">
                       <div className="flex items-center gap-1">
                         {/* Change Password */}
                         <button onClick={() => setPwTarget(u)}

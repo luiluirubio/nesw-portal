@@ -1,20 +1,20 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, Home, ScrollText } from 'lucide-react'
+import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, Home, ScrollText, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
 
-
 function NavItem({
-  to, icon: Icon, label, collapsed, end,
+  to, icon: Icon, label, collapsed, end, onNavigate,
 }: {
-  to: string; icon: typeof LayoutDashboard; label: string; collapsed: boolean; end?: boolean
+  to: string; icon: typeof LayoutDashboard; label: string; collapsed: boolean; end?: boolean; onNavigate?: () => void
 }) {
   return (
     <NavLink
       to={to}
       end={end}
       title={collapsed ? label : undefined}
+      onClick={onNavigate}
       className={({ isActive }) => cn(
         'flex items-center rounded-[var(--radius-sm)] text-sm font-medium transition-all',
         collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-3 px-3 py-2.5',
@@ -50,27 +50,55 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
 export function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const { collapsed, toggle } = useSidebar()
+  const { collapsed, toggle, mobileOpen, closeMobile } = useSidebar()
   const isAdmin = user?.role === 'Admin'
 
   function handleLogout() { logout(); navigate('/login') }
 
+  // On mobile the sidebar always shows full width (w-64) when open.
+  // On desktop it respects the collapsed/expanded toggle.
   const w = collapsed ? 'w-16' : 'w-64'
 
   return (
     <aside
-      className={cn('fixed inset-y-0 left-0 z-50 flex flex-col border-r transition-all duration-300', w)}
+      className={cn(
+        'fixed inset-y-0 left-0 z-50 flex flex-col border-r transition-all duration-300',
+        // Desktop: always use w based on collapsed state; Mobile: always full w-64
+        'w-64 md:' + w,
+        // Mobile: translate to hide/show; Desktop: always visible
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        'md:translate-x-0',
+      )}
       style={{ backgroundColor: 'var(--sidebar)', borderColor: 'var(--sidebar-border)' }}>
 
       {/* Header */}
-      <div className={cn('flex items-center border-b shrink-0 h-16', collapsed ? 'justify-center px-0' : 'px-4 gap-2')}
+      <div className={cn('flex items-center border-b shrink-0 h-16', collapsed ? 'md:justify-center md:px-0 px-4 gap-2' : 'px-4 gap-2')}
         style={{ borderColor: 'var(--sidebar-border)' }}>
+
+        {/* Desktop collapsed icon */}
         {collapsed ? (
-          <button onClick={toggle} title="Expand sidebar"
-            className="w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-80 transition-opacity shrink-0"
-            style={{ backgroundColor: 'var(--primary)' }}>
-            <Home size={16} className="text-white" />
-          </button>
+          <>
+            {/* Mobile: always show full header */}
+            <div className="flex md:hidden flex-1 items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                style={{ backgroundColor: 'var(--primary)' }}>
+                <Home size={16} className="text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black leading-tight truncate" style={{ color: 'var(--foreground)' }}>NESW Realty</p>
+                <p className="text-xs leading-tight" style={{ color: 'var(--muted-foreground)' }}>Property Portal</p>
+              </div>
+              <button onClick={closeMobile} className="ml-auto p-1.5 rounded-lg" style={{ color: 'var(--muted-foreground)' }}>
+                <X size={16} />
+              </button>
+            </div>
+            {/* Desktop collapsed: icon only */}
+            <button onClick={toggle} title="Expand sidebar"
+              className="hidden md:flex w-10 h-10 rounded-xl items-center justify-center hover:opacity-80 transition-opacity shrink-0"
+              style={{ backgroundColor: 'var(--primary)' }}>
+              <Home size={16} className="text-white" />
+            </button>
+          </>
         ) : (
           <>
             <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -83,8 +111,14 @@ export function Sidebar() {
                 <p className="text-xs leading-tight" style={{ color: 'var(--muted-foreground)' }}>Property Portal</p>
               </div>
             </div>
+            {/* Mobile: close button; Desktop: collapse button */}
+            <button onClick={closeMobile}
+              className="md:hidden w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+              style={{ color: 'var(--muted-foreground)' }}>
+              <X size={15} />
+            </button>
             <button onClick={toggle} title="Collapse sidebar"
-              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+              className="hidden md:flex w-7 h-7 rounded-lg items-center justify-center shrink-0 transition-colors"
               style={{ color: 'var(--muted-foreground)' }}
               onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
@@ -95,24 +129,21 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'px-2 space-y-1' : 'px-3 space-y-0.5')}>
-
-        {/* Listings */}
+      <nav className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'md:px-2 md:space-y-1 px-3 space-y-0.5' : 'px-3 space-y-0.5')}>
         <SectionLabel label="LISTINGS" collapsed={collapsed} />
-        <NavItem to="/listings" icon={Building2} label="All Listings" collapsed={collapsed} end />
+        <NavItem to="/listings" icon={Building2} label="All Listings" collapsed={collapsed} end onNavigate={closeMobile} />
 
-        {/* Admin */}
         {isAdmin && (
           <>
             <SectionLabel label="ADMIN" collapsed={collapsed} />
-            <NavItem to="/users" icon={Users}       label="Users" collapsed={collapsed} end />
-            <NavItem to="/logs"  icon={ScrollText}  label="Logs"  collapsed={collapsed} end />
+            <NavItem to="/users" icon={Users}      label="Users" collapsed={collapsed} end onNavigate={closeMobile} />
+            <NavItem to="/logs"  icon={ScrollText} label="Logs"  collapsed={collapsed} end onNavigate={closeMobile} />
           </>
         )}
       </nav>
 
       {/* Footer */}
-      <div className={cn('border-t shrink-0', collapsed ? 'px-2 py-2 space-y-1' : 'px-3 py-3 space-y-1')}
+      <div className={cn('border-t shrink-0', collapsed ? 'md:px-2 md:py-2 px-3 py-3 space-y-1' : 'px-3 py-3 space-y-1')}
         style={{ borderColor: 'var(--sidebar-border)' }}>
 
         {!collapsed && (
@@ -127,7 +158,7 @@ export function Sidebar() {
         {user && (
           collapsed ? (
             <button onClick={handleLogout} title={`Logout ${user.name}`}
-              className="flex items-center justify-center w-10 h-10 mx-auto rounded-full transition-opacity hover:opacity-80">
+              className="hidden md:flex items-center justify-center w-10 h-10 mx-auto rounded-full transition-opacity hover:opacity-80">
               <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white"
                 style={{ backgroundColor: 'var(--primary)' }}>
                 {user.name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()}

@@ -1,6 +1,7 @@
-import { Bell, Sun, Moon } from 'lucide-react'
+import { Bell, Sun, Moon, Menu } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
+import { useSidebar } from '@/context/SidebarContext'
 
 function MicrosoftLogo({ size = 13 }: { size?: number }) {
   return (
@@ -21,8 +22,8 @@ const roleBadgeColors: Record<string, string> = {
 export function TopBar() {
   const { user } = useAuth()
   const { theme, toggle } = useTheme()
+  const { openMobile } = useSidebar()
 
-  // Detect how this user last logged in
   let lastMethod: 'microsoft_sso' | 'manual' | null = null
   try {
     const history = JSON.parse(localStorage.getItem('nesw_login_history') ?? '[]')
@@ -31,14 +32,32 @@ export function TopBar() {
   } catch { /* ignore */ }
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 gap-4 border-b"
+    <header className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6 gap-3 border-b shrink-0"
       style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
 
-      <div className="flex items-center gap-2" style={{ color: 'var(--muted-foreground)' }}>
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={openMobile}
+        aria-label="Open navigation"
+        className="md:hidden p-2 -ml-1 rounded-[var(--radius-sm)] transition-colors"
+        style={{ color: 'var(--foreground)' }}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+        <Menu size={20} />
+      </button>
+
+      {/* Brand title — desktop only (sidebar shows it on mobile) */}
+      <div className="hidden md:flex items-center gap-2" style={{ color: 'var(--muted-foreground)' }}>
         <span className="text-xs">NESW Realty Portal</span>
       </div>
 
-      <div className="flex items-center gap-2 ml-auto">
+      {/* Mobile: app name centered */}
+      <p className="md:hidden text-sm font-bold flex-1 text-center" style={{ color: 'var(--foreground)' }}>
+        NESW Realty
+      </p>
+
+      <div className="flex items-center gap-1.5 md:gap-2 ml-auto md:ml-0">
+        {/* User badge — desktop only */}
         {user && (
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-sm)] border"
             style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
@@ -52,7 +71,6 @@ export function TopBar() {
               </p>
               <p className="text-xs leading-tight" style={{ color: 'var(--muted-foreground)' }}>{user.role}</p>
             </div>
-            {/* SSO badge */}
             {lastMethod === 'microsoft_sso' && (
               <span className="ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 shrink-0">
                 <MicrosoftLogo />SSO
@@ -66,16 +84,17 @@ export function TopBar() {
           </div>
         )}
 
+        {/* Theme toggle */}
         <button
           onClick={toggle}
           title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] border text-xs font-medium transition-all"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] border text-xs font-medium transition-all"
           style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
           onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
           onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
           {theme === 'light'
-            ? <><Moon size={14} style={{ color: 'var(--primary)' }} /><span>Dark</span></>
-            : <><Sun  size={14} style={{ color: 'var(--chart-3)' }} /><span>Light</span></>}
+            ? <><Moon size={14} style={{ color: 'var(--primary)' }} /><span className="hidden sm:inline">Dark</span></>
+            : <><Sun  size={14} style={{ color: 'var(--chart-3)' }} /><span className="hidden sm:inline">Light</span></>}
         </button>
 
         <button className="relative p-2 rounded-[var(--radius-sm)] transition-colors"

@@ -188,7 +188,7 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
         style={{ animation: 'fadeIn 0.2s ease' }} onClick={onClose} />
 
-      <div className="fixed inset-y-0 right-0 z-50 w-[620px] flex flex-col shadow-2xl"
+      <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[520px] md:w-[620px] flex flex-col shadow-2xl"
         style={{ backgroundColor: 'var(--background)', animation: 'slideInRight 0.25s cubic-bezier(0.32,0.72,0,1)' }}>
 
         {/* Header */}
@@ -790,8 +790,19 @@ export function Listings({ myOnly = false }: ListingsProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
-                {['ID', 'Property', 'Type', 'Location', 'Area', 'Price', 'Price/sqm', 'Status', 'Agent', ''].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                {[
+                  { h: 'ID',        cls: 'hidden lg:table-cell' },
+                  { h: 'Property',  cls: '' },
+                  { h: 'Type',      cls: 'hidden sm:table-cell' },
+                  { h: 'Location',  cls: 'hidden sm:table-cell' },
+                  { h: 'Area',      cls: 'hidden lg:table-cell' },
+                  { h: 'Price',     cls: '' },
+                  { h: 'Price/sqm', cls: 'hidden xl:table-cell' },
+                  { h: 'Status',    cls: '' },
+                  { h: 'Agent',     cls: 'hidden md:table-cell' },
+                  { h: '',          cls: '' },
+                ].map(({ h, cls }) => (
+                  <th key={h} className={`text-left px-3 md:px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap ${cls}`}
                     style={{ color: 'var(--muted-foreground)' }}>{h}</th>
                 ))}
               </tr>
@@ -807,24 +818,24 @@ export function Listings({ myOnly = false }: ListingsProps) {
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
                     onClick={() => setSelectedProperty(p)}>
-                    <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--muted-foreground)' }}>{p.id}</td>
-                    <td className="px-4 py-3 max-w-48">
-                      <p className="font-semibold truncate" style={{ color: 'var(--foreground)' }}>{p.title}</p>
+                    <td className="hidden lg:table-cell px-3 md:px-4 py-3 font-mono text-xs" style={{ color: 'var(--muted-foreground)' }}>{p.id}</td>
+                    <td className="px-3 md:px-4 py-3 max-w-[160px] md:max-w-48">
+                      <p className="font-semibold truncate text-xs md:text-sm" style={{ color: 'var(--foreground)' }}>{p.title}</p>
                       <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                        {p.listingType === 'for_rent' ? '🔑 For Rent' : '🏷️ For Sale'}
+                        {p.listingType === 'for_rent' ? '🔑 Rent' : '🏷️ Sale'}
                       </p>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="hidden sm:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium"
                         style={{ backgroundColor: 'var(--accent)', color: 'var(--foreground)' }}>
                         {typeLabels[p.type]}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="hidden sm:table-cell px-3 md:px-4 py-3">
                       <p className="text-xs font-medium whitespace-nowrap" style={{ color: 'var(--foreground)' }}>{p.location.city}</p>
                       <p className="text-xs truncate max-w-28" style={{ color: 'var(--muted-foreground)' }}>{p.location.barangay}</p>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="hidden lg:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
                       <div className="space-y-0.5">
                         {p.floorArea > 0 && (
                           <p className="text-xs flex items-center gap-1" style={{ color: 'var(--muted-foreground)' }}>
@@ -838,10 +849,10 @@ export function Listings({ myOnly = false }: ListingsProps) {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
+                    <td className="px-3 md:px-4 py-3 font-semibold whitespace-nowrap text-xs md:text-sm" style={{ color: 'var(--foreground)' }}>
                       {p.listingType === 'for_rent' ? `${formatPHP(p.price)}/mo` : formatPHP(p.price)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="hidden xl:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
                       {p.listingType === 'for_sale' ? (
                         <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
                           {pricePerSqm(p.price, p.floorArea, p.lotArea)}
@@ -850,16 +861,17 @@ export function Listings({ myOnly = false }: ListingsProps) {
                         <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1', sc.bg, sc.text)}>
-                        <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />{sc.label}
+                    <td className="px-3 md:px-4 py-3">
+                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1', sc.bg, sc.text)}>
+                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', sc.dot)} />
+                        <span className="hidden sm:inline">{sc.label}</span>
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="hidden md:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
                       <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>{agent?.name.split(' ')[0]}</p>
                       <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent?.branch}</p>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 md:px-4 py-3">
                       <button className="p-1.5 rounded-lg transition-colors"
                         style={{ color: 'var(--muted-foreground)' }}
                         onMouseEnter={e => (e.currentTarget.style.color = 'var(--primary)')}
