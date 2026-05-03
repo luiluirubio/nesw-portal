@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: NESW Portal – Frontend hosting (S3 + CloudFront)
+
+# Usage:
+#   aws cloudformation deploy \
+#     --template-file infra/frontend-stack.yml \
+#     --stack-name nesw-portal-frontend-production \
+#     --region us-east-1 \
+#     --parameter-overrides \
+#         Environment=production \
+#         DomainName=portal.neswcorp.com \
+#         CertificateArn=arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID \
+#     --capabilities CAPABILITY_NAMED_IAM
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [staging, production]
+    Description: staging or production
+  DomainName:
+    Type: String
+    Description: Custom domain (e.g. portal.neswcorp.com or staging-portal.neswcorp.com)
+  CertificateArn:
+    Type: String
+    Description: >
+      ACM certificate ARN in us-east-1 that covers the DomainName.
+      Must already exist and be in ISSUED state.
+
+Resources:
+
+  # ── S3 Bucket ──────────────────────────────────────────────────────────────
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub nesw-portal-frontend-${Environment}
+      # No public access — CloudFront uses OAC
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # ── Origin Access Control ──────────────────────────────────────────────────
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub nesw-portal-oac-${Environment}
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # ── Bucket Policy – allow only CloudFront OAC ─────────────────────────────
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${FrontendBucket}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub >-
+                  arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  # ── CloudFront Distribution ────────────────────────────────────────────────
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub NESW Portal (${Environment})
+        HttpVersion: http2
+        PriceClass: PriceClass_All
+
+        # Custom domain + ACM cert
+        Aliases:
+          - !Ref DomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+        # S3 origin
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !Ref OriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''   # empty when using OAC
+
+        DefaultRootObject: index.html
+
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods:  [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+        # SPA routing: map 403 / 404 → index.html so React Router works
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+Outputs:
+  BucketName:
+    Description: S3 bucket name to use as NESW_PORTAL_S3_BUCKET_PROD secret
+    Value: !Ref FrontendBucket
+    Export:
+      Name: !Sub nesw-portal-frontend-bucket-${Environment}
+
+  DistributionId:
+    Description: CloudFront distribution ID to use as NESW_PORTAL_CF_DIST_ID_PROD secret
+    Value: !Ref Distribution
+    Export:
+      Name: !Sub nesw-portal-cf-dist-id-${Environment}
+
+  DistributionDomain:
+    Description: CloudFront domain – add as CNAME target for your custom domain
+    Value: !GetAtt Distribution.DomainName
+    Export:
+      Name: !Sub nesw-portal-cf-domain-${Environment}

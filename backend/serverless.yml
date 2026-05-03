@@ -2,17 +2,23 @@ service: nesw-portal-api
 
 frameworkVersion: '3'
 
+custom:
+  # Stage-specific frontend URLs used in CORS and S3 bucket policy
+  frontendUrl:
+    staging:    https://staging-portal.neswcorp.com
+    production: https://portal.neswcorp.com
+
 provider:
   name: aws
   runtime: nodejs20.x
   region: ap-southeast-1
   stage: ${opt:stage, 'staging'}
   environment:
-    STAGE: ${self:provider.stage}
+    STAGE:       ${self:provider.stage}
+    FRONTEND_URL: ${env:FRONTEND_URL, '${self:custom.frontendUrl.${self:provider.stage}}'}
+    JWT_SECRET:  ${env:JWT_SECRET, 'nesw-portal-jwt-dev-only-change-in-prod'}
     COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID, ''}
-    COGNITO_CLIENT_ID: ${env:COGNITO_CLIENT_ID, ''}
-    FRONTEND_URL: ${env:FRONTEND_URL, 'https://staging-portal.neswcorp.com'}
-    JWT_SECRET: ${env:JWT_SECRET, 'nesw-portal-jwt-secret-staging-2025'}
+    COGNITO_CLIENT_ID:    ${env:COGNITO_CLIENT_ID, ''}
   iam:
     role:
       statements:
@@ -47,16 +53,26 @@ functions:
           path: /api/{proxy+}
           method: ANY
           cors:
-            origin: ${env:FRONTEND_URL, 'https://staging-portal.neswcorp.com'}
+            origin: ${env:FRONTEND_URL, '${self:custom.frontendUrl.${self:provider.stage}}'}
             headers:
               - Content-Type
               - Authorization
+              - X-Agent-Id
+              - X-Agent-Email
               - X-Requested-With
             allowCredentials: true
       - http:
           path: /api
           method: ANY
-          cors: true
+          cors:
+            origin: ${env:FRONTEND_URL, '${self:custom.frontendUrl.${self:provider.stage}}'}
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Agent-Id
+              - X-Agent-Email
+              - X-Requested-With
+            allowCredentials: true
 
 resources:
   Resources:
@@ -179,5 +195,6 @@ resources:
           CorsRules:
             - AllowedHeaders: ['*']
               AllowedMethods: [GET, PUT, POST, DELETE]
-              AllowedOrigins: ['https://staging-portal.neswcorp.com']
+              AllowedOrigins:
+                - ${env:FRONTEND_URL, '${self:custom.frontendUrl.${self:provider.stage}}'}
               MaxAge: 3600
