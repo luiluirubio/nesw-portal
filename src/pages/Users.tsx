@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, X, Plus, Shield, Clock, Eye, EyeOff, RefreshCw,
-         CheckCircle, XCircle, Pencil, KeyRound, ChevronDown } from 'lucide-react'
+         CheckCircle, XCircle, Pencil, KeyRound, ChevronDown, Lock } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -26,6 +26,103 @@ function timeAgo(iso?: string) {
   if (hrs < 24) return `${hrs}h ago`; return `${days}d ago`
 }
 
+// ── Change Password Modal ─────────────────────────────────────────────────────
+function ChangePasswordModal({ user, onClose }: { user: PortalUser; onClose: () => void }) {
+  const [password, setPassword]   = useState('')
+  const [confirm, setConfirm]     = useState('')
+  const [showPw, setShowPw]       = useState(false)
+  const [error, setError]         = useState('')
+  const [saving, setSaving]       = useState(false)
+  const [done, setDone]           = useState(false)
+
+  const inputCls = 'w-full px-3 py-2.5 text-sm rounded-[var(--radius-sm)] focus:outline-none transition-colors'
+  const inputSty = { border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
+
+  async function handleSave() {
+    if (!password) { setError('New password is required.'); return }
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    if (password !== confirm) { setError('Passwords do not match.'); return }
+    setError(''); setSaving(true)
+    try {
+      await api.updateUser(user.id, { password })
+      setDone(true)
+      setTimeout(onClose, 1500)
+    } catch (e) { setError((e as Error).message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" style={{ animation: 'fadeIn 0.15s ease' }}>
+        <div className="w-full max-w-sm rounded-[var(--radius)] border shadow-2xl" style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', animation: 'slideUp 0.2s ease' }}>
+          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center gap-2">
+              <Lock size={16} style={{ color: 'var(--primary)' }} />
+              <p className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Change Password</p>
+            </div>
+            <button onClick={onClose} style={{ color: 'var(--muted-foreground)' }} className="hover:opacity-70"><X size={18} /></button>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              Setting new password for <strong style={{ color: 'var(--foreground)' }}>{user.name}</strong> ({user.email})
+            </p>
+
+            {done ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                <CheckCircle size={16} className="text-emerald-600" />
+                <p className="text-sm font-semibold text-emerald-700">Password updated successfully!</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--foreground)' }}>New Password</label>
+                  <div className="relative">
+                    <input type={showPw ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setError('') }}
+                      placeholder="Min. 8 characters" className={cn(inputCls, 'pr-9')} style={inputSty}
+                      onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                      onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                    <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }}>
+                      {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--foreground)' }}>Confirm Password</label>
+                  <input type={showPw ? 'text' : 'password'} value={confirm} onChange={e => { setConfirm(e.target.value); setError('') }}
+                    placeholder="Repeat new password" className={inputCls} style={inputSty}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                </div>
+                {error && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+              </>
+            )}
+          </div>
+
+          {!done && (
+            <div className="flex gap-2 px-6 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 py-2.5 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: 'var(--primary)' }}>
+                {saving ? 'Saving…' : 'Update Password'}
+              </button>
+              <button onClick={onClose}
+                className="flex-1 py-2.5 rounded-[var(--radius-sm)] text-sm font-semibold border transition-all hover:opacity-80"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)', backgroundColor: 'var(--accent)' }}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <style>{`
+        @keyframes fadeIn  { from{opacity:0}to{opacity:1} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+      `}</style>
+    </>
+  )
+}
+
 // ── Create / Edit User Modal ──────────────────────────────────────────────────
 function UserModal({ user, onClose, onSaved }: {
   user: PortalUser | null
@@ -42,7 +139,7 @@ function UserModal({ user, onClose, onSaved }: {
     password:  '',
     confirmPw: '',
   })
-  const [showPw, setShowPw]   = useState(false)
+  const [showPw, setShowPw]   = useState(false) // kept for new user creation
   const [error, setError]     = useState('')
   const [saving, setSaving]   = useState(false)
 
@@ -135,30 +232,38 @@ function UserModal({ user, onClose, onSaved }: {
                   onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
                   onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
               </div>
-              <div>
-                <label className={lbl} style={lblS}>
-                  {isEdit ? 'New Password (leave blank to keep)' : 'Password'} {!isEdit && <span className="text-red-500">*</span>}
-                </label>
-                <div className="relative">
-                  <input type={showPw ? 'text' : 'password'} value={form.password}
-                    onChange={e => setForm(f => ({...f, password: e.target.value}))}
-                    placeholder="Min. 8 characters" className={cn(inputCls,'pr-9')} style={inputSty}
-                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
-                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
-                  <button type="button" onClick={() => setShowPw(s => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }}>
-                    {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
+              {!isEdit && (
+                <>
+                  <div>
+                    <label className={lbl} style={lblS}>Password <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <input type={showPw ? 'text' : 'password'} value={form.password}
+                        onChange={e => setForm(f => ({...f, password: e.target.value}))}
+                        placeholder="Min. 8 characters" className={cn(inputCls,'pr-9')} style={inputSty}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                      <button type="button" onClick={() => setShowPw(s => !s)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }}>
+                        {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className={lbl} style={lblS}>Confirm Password</label>
+                    <input type={showPw ? 'text' : 'password'} value={form.confirmPw}
+                      onChange={e => setForm(f => ({...f, confirmPw: e.target.value}))}
+                      placeholder="Repeat password" className={inputCls} style={inputSty}
+                      onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                      onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                  </div>
+                </>
+              )}
+              {isEdit && (
+                <div className="col-span-2 flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <Lock size={14} className="text-blue-600 shrink-0" />
+                  <p className="text-xs text-blue-700">To change this user's password, use the <strong>🔒 key icon</strong> in the users table.</p>
                 </div>
-              </div>
-              <div>
-                <label className={lbl} style={lblS}>Confirm Password</label>
-                <input type={showPw ? 'text' : 'password'} value={form.confirmPw}
-                  onChange={e => setForm(f => ({...f, confirmPw: e.target.value}))}
-                  placeholder="Repeat password" className={inputCls} style={inputSty}
-                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
-                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
-              </div>
+              )}
             </div>
 
             {error && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
@@ -199,6 +304,7 @@ export function Users() {
   const [filterRole, setFilterRole] = useState<'all'|'Admin'|'Agent'>('all')
   const [filterStatus, setFilterStatus] = useState<'all'|'active'|'inactive'>('all')
   const [editTarget, setEditTarget] = useState<PortalUser | null | 'new'>(null)
+  const [pwTarget, setPwTarget]   = useState<PortalUser | null>(null)
   const [toggling, setToggling]   = useState<string | null>(null)
 
   async function loadUsers() {
@@ -375,6 +481,16 @@ export function Users() {
 
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
+                        {/* Change Password */}
+                        <button onClick={() => setPwTarget(u)}
+                          title="Change password"
+                          className="p-1.5 rounded-lg transition-colors"
+                          style={{ color: 'var(--muted-foreground)' }}
+                          onMouseEnter={e => (e.currentTarget.style.color = '#f59e0b')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted-foreground)')}>
+                          <Lock size={14} />
+                        </button>
+
                         {/* Edit */}
                         <button onClick={() => setEditTarget(u)}
                           title="Edit user"
@@ -415,6 +531,11 @@ export function Users() {
           </div>
         )}
       </div>
+
+      {/* Change Password modal */}
+      {pwTarget && (
+        <ChangePasswordModal user={pwTarget} onClose={() => setPwTarget(null)} />
+      )}
 
       {/* Create / Edit modal */}
       {editTarget !== null && (

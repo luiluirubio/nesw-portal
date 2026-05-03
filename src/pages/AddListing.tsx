@@ -107,6 +107,7 @@ export function AddListing() {
     floorArea: '', lotArea: '', bedrooms: '', bathrooms: '', parking: '',
     description: '',
     contactPerson: '', contactEmail: '', contactPhone: '',
+    subdivision: '' as string,
   }
 
   const isResuming = !!searchParams.get('draft')
@@ -129,7 +130,7 @@ export function AddListing() {
     fetchDraft(id).then(d => {
       if (d) {
         setStep(d.lastStep)
-        setForm(d.form)
+        setForm({ ...d.form, subdivision: d.form.subdivision ?? '' })
         setFeatures(d.features)
         setPhotos(d.photos.map(f => ({ ...f, type: 'photo'    as const })))
         setDocs(d.docs.map(f   => ({ ...f, type: 'document' as const })))
@@ -494,6 +495,15 @@ export function AddListing() {
                 onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
             </div>
 
+            <div>
+              <label className={lbl} style={lblS}>Subdivision / Village</label>
+              <input value={form.subdivision} onChange={e => update('subdivision', e.target.value)}
+                placeholder="e.g. Banilad Heights Subd. (optional)"
+                className={inputClass} style={inputStyle}
+                onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={lbl} style={lblS}>City / Municipality <span className="text-red-500">*</span></label>
@@ -766,6 +776,7 @@ export function AddListing() {
               <ReviewRow label="Barangay"           value={form.barangay} />
               <ReviewRow label="City / Municipality" value={form.city} />
               <ReviewRow label="Province"           value={form.province} />
+              {form.subdivision && <ReviewRow label="Subdivision / Village" value={form.subdivision} />}
             </ReviewSection>
 
             <ReviewSection title="Specifications">

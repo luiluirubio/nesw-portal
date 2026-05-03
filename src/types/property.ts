@@ -7,7 +7,7 @@ export type PropertyType =
   | 'warehouse'
   | 'farm_lot'
 
-export type PropertyStatus = 'available' | 'reserved' | 'under_contract' | 'sold' | 'off_market'
+export type PropertyStatus = 'available' | 'reserved' | 'under_contract' | 'sold' | 'off_market' | 'expired'
 
 export type ListingType = 'for_sale' | 'for_rent'
 
@@ -53,4 +53,6 @@ export interface Property {
   contactPerson: string
   contactEmail: string
   contactPhone: string
+  // Optional
+  subdivision?: string
 }

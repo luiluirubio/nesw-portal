@@ -29,6 +29,7 @@ const statusConfig: Record<PropertyStatus, { label: string; bg: string; text: st
   under_contract: { label: 'Under Contract', bg: 'bg-blue-50',    text: 'text-blue-700',    dot: 'bg-blue-500',    color: '#3b82f6' },
   sold:           { label: 'Sold',           bg: 'bg-slate-100',  text: 'text-slate-500',   dot: 'bg-slate-400',   color: '#94a3b8' },
   off_market:     { label: 'Off Market',     bg: 'bg-red-50',     text: 'text-red-400',     dot: 'bg-red-300',     color: '#ef4444' },
+  expired:        { label: 'Expired',        bg: 'bg-orange-50',  text: 'text-orange-600',  dot: 'bg-orange-400',  color: '#ea580c' },
 }
 
 const typeLabels: Record<PropertyType, string> = {
@@ -45,6 +46,11 @@ const typeLabels: Record<PropertyType, string> = {
 const EDITABLE_FIELDS: { key: keyof EditDraft; label: string; type?: 'select' | 'textarea' | 'number' }[] = [
   { key: 'status',          label: 'Status',             type: 'select'   },
   { key: 'price',           label: 'Price',              type: 'number'   },
+  { key: 'floorArea',       label: 'Floor Area (sqm)',   type: 'number'   },
+  { key: 'lotArea',         label: 'Lot Area (sqm)',     type: 'number'   },
+  { key: 'bedrooms',        label: 'Bedrooms',           type: 'number'   },
+  { key: 'bathrooms',       label: 'Bathrooms',          type: 'number'   },
+  { key: 'parking',         label: 'Parking Slots',      type: 'number'   },
   { key: 'ownerName',       label: "Owner's Name"                         },
   { key: 'nameInTitle',     label: 'Name in Title'                        },
   { key: 'taxDeclarationNo',label: 'Tax Declaration No.'                  },
@@ -52,18 +58,28 @@ const EDITABLE_FIELDS: { key: keyof EditDraft; label: string; type?: 'select' | 
 ]
 
 interface EditDraft {
-  status:          PropertyStatus
-  price:           string
-  ownerName:       string
-  nameInTitle:     string
-  taxDeclarationNo:string
-  description:     string
+  status:           PropertyStatus
+  price:            string
+  floorArea:        string
+  lotArea:          string
+  bedrooms:         string
+  bathrooms:        string
+  parking:          string
+  ownerName:        string
+  nameInTitle:      string
+  taxDeclarationNo: string
+  description:      string
 }
 
 function toDraft(p: Property): EditDraft {
   return {
     status:           p.status,
     price:            String(p.price),
+    floorArea:        String(p.floorArea),
+    lotArea:          String(p.lotArea),
+    bedrooms:         String(p.bedrooms),
+    bathrooms:        String(p.bathrooms),
+    parking:          String(p.parking),
     ownerName:        p.ownerName,
     nameInTitle:      p.nameInTitle,
     taxDeclarationNo: p.taxDeclarationNo,
@@ -120,6 +136,11 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
       ...current,
       status:           draft.status,
       price:            Number(draft.price),
+      floorArea:        Number(draft.floorArea),
+      lotArea:          Number(draft.lotArea),
+      bedrooms:         Number(draft.bedrooms),
+      bathrooms:        Number(draft.bathrooms),
+      parking:          Number(draft.parking),
       ownerName:        draft.ownerName,
       nameInTitle:      draft.nameInTitle,
       taxDeclarationNo: draft.taxDeclarationNo,
@@ -177,11 +198,27 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
             className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
             <X size={13} className="text-white" />
           </button>
-          <div className="flex items-center gap-1.5 mb-2">
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">{typeLabels[current.type]}</span>
-            <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1', sc.bg, sc.text)}>
-              <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />{sc.label}
-            </span>
+            {/* Quick status change — always visible */}
+            {canEdit ? (
+              <div className="relative">
+                <select
+                  value={draft.status}
+                  onChange={e => { update('status', e.target.value as PropertyStatus) }}
+                  className={cn('appearance-none pl-2 pr-6 py-0.5 rounded-full text-xs font-bold cursor-pointer focus:outline-none', sc.bg, sc.text)}
+                  title="Change status">
+                  {(Object.entries(statusConfig) as [PropertyStatus, typeof statusConfig[PropertyStatus]][]).map(([k, v]) => (
+                    <option key={k} value={k}>{v.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={10} className={cn('absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none', sc.text)} />
+              </div>
+            ) : (
+              <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1', sc.bg, sc.text)}>
+                <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />{sc.label}
+              </span>
+            )}
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">
               {current.listingType === 'for_rent' ? 'For Rent' : 'For Sale'}
             </span>
@@ -202,20 +239,43 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
         {/* Body */}
         <div className="flex-1 px-6 py-4 flex flex-col gap-3 overflow-y-auto">
 
-          {/* Property Details */}
+          {/* Property Details — editable when in edit mode */}
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>Property Details</p>
-            <div className="grid grid-cols-4 gap-2">
-              {current.bedrooms  > 0 && <Field label="Bedrooms"   value={String(current.bedrooms)}  />}
-              {current.bathrooms > 0 && <Field label="Bathrooms"  value={String(current.bathrooms)} />}
-              {current.parking   > 0 && <Field label="Parking"    value={String(current.parking)}   />}
-              {current.floorArea > 0 && <Field label="Floor Area" value={`${current.floorArea} sqm`} />}
-              {current.lotArea   > 0 && <Field label="Lot Area"   value={`${current.lotArea} sqm`}  />}
-              <Field label="Commission" value={`${current.commission}%`} />
-              {current.listingType === 'for_sale' && (
-                <Field label="Price / sqm" value={pricePerSqm(current.price, current.floorArea, current.lotArea)} />
-              )}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Property Details</p>
+              {editing && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Editing</span>}
             </div>
+            {!editing ? (
+              <div className="grid grid-cols-4 gap-2">
+                {current.bedrooms  > 0 && <Field label="Bedrooms"   value={String(current.bedrooms)}  />}
+                {current.bathrooms > 0 && <Field label="Bathrooms"  value={String(current.bathrooms)} />}
+                {current.parking   >= 0 && <Field label="Parking"   value={String(current.parking)}   />}
+                {current.floorArea > 0 && <Field label="Floor Area" value={`${current.floorArea} sqm`} />}
+                {current.lotArea   > 0 && <Field label="Lot Area"   value={`${current.lotArea} sqm`}  />}
+                <Field label="Commission" value={`${current.commission}%`} />
+                {current.listingType === 'for_sale' && (
+                  <Field label="Price / sqm" value={pricePerSqm(current.price, current.floorArea, current.lotArea)} />
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 p-3 rounded-lg border" style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--primary)' }}>
+                {[
+                  { key: 'bedrooms'  as keyof EditDraft, label: 'Bedrooms'        },
+                  { key: 'bathrooms' as keyof EditDraft, label: 'Bathrooms'       },
+                  { key: 'parking'   as keyof EditDraft, label: 'Parking Slots'   },
+                  { key: 'floorArea' as keyof EditDraft, label: 'Floor Area (sqm)'},
+                  { key: 'lotArea'   as keyof EditDraft, label: 'Lot Area (sqm)'  },
+                  { key: 'price'     as keyof EditDraft, label: 'Price (PHP)'     },
+                ].map(({ key, label }) => (
+                  <div key={key}>
+                    <p className="text-xs mb-1" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
+                    <input type="number" value={draft[key]}
+                      onChange={e => update(key, e.target.value)}
+                      className={inputClass} style={inputStyle} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Location */}
@@ -435,14 +495,6 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
         {/* Footer */}
         <div className="px-6 py-3 border-t flex gap-2 shrink-0"
           style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-          {!editing && current.status === 'available' && canEdit && (
-            <button
-              onClick={() => { update('status', 'reserved'); setEditing(true) }}
-              className="flex-1 py-2 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-all hover:opacity-90"
-              style={{ backgroundColor: 'var(--primary)' }}>
-              Mark as Reserved
-            </button>
-          )}
           {!editing && canEdit && (
             <button
               onClick={() => setEditing(true)}
@@ -495,6 +547,8 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const [filterStatus, setFilterStatus] = useState<PropertyStatus | 'all'>('all')
   const [filterType, setFilterType] = useState<PropertyType | 'all'>('all')
   const [filterListing, setFilterListing] = useState<'all' | 'for_sale' | 'for_rent'>('all')
+  const [filterCity, setFilterCity] = useState('all')
+  const [filterAgent, setFilterAgent] = useState('all')
   const [drafts, setDrafts] = useState<ListingDraft[]>([])
 
   useEffect(() => {
@@ -512,13 +566,12 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const effective = (p: Property) => localOverrides[p.id] ?? p
 
   const scoped = properties.filter(p => {
-    if (myOnly || !isAdmin) {
-      if (p.agentId !== user?.id) return false
-    } else if (selectedBranch !== 'all') {
+    if (myOnly) return p.agentId === user?.id
+    if (isAdmin && selectedBranch !== 'all') {
       const agent = getAgent(p.agentId)
-      if (agent?.branch !== selectedBranch) return false
+      return agent?.branch === selectedBranch
     }
-    return true
+    return true  // All agents see all listings
   }).map(effective)
 
   const counts = {
@@ -528,10 +581,16 @@ export function Listings({ myOnly = false }: ListingsProps) {
     sold:           scoped.filter(p => p.status === 'sold').length,
   }
 
+  // Unique cities and agents from scoped listings
+  const cities  = Array.from(new Set(scoped.map(p => p.location.city))).sort()
+  const agentIds = Array.from(new Set(scoped.map(p => p.agentId)))
+
   const filtered = scoped.filter(p => {
-    if (filterStatus !== 'all' && p.status !== filterStatus) return false
-    if (filterType !== 'all' && p.type !== filterType) return false
-    if (filterListing !== 'all' && p.listingType !== filterListing) return false
+    if (filterStatus  !== 'all' && p.status         !== filterStatus)  return false
+    if (filterType    !== 'all' && p.type            !== filterType)    return false
+    if (filterListing !== 'all' && p.listingType     !== filterListing) return false
+    if (filterCity    !== 'all' && p.location.city   !== filterCity)    return false
+    if (filterAgent   !== 'all' && p.agentId         !== filterAgent)   return false
     const q = search.toLowerCase()
     if (q && !p.title.toLowerCase().includes(q) && !p.location.city.toLowerCase().includes(q) && !p.id.toLowerCase().includes(q)) return false
     return true
@@ -690,8 +749,33 @@ export function Listings({ myOnly = false }: ListingsProps) {
           <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
         </div>
 
-        {(filterStatus !== 'all' || filterType !== 'all' || filterListing !== 'all' || search) && (
-          <button onClick={() => { setFilterStatus('all'); setFilterType('all'); setFilterListing('all'); setSearch('') }}
+        {/* Location filter */}
+        <div className="relative">
+          <select value={filterCity} onChange={e => setFilterCity(e.target.value)}
+            className="appearance-none pl-3 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none cursor-pointer"
+            style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)', minWidth: '150px' }}>
+            <option value="all">All Locations</option>
+            {cities.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
+        </div>
+
+        {/* Agent filter */}
+        <div className="relative">
+          <select value={filterAgent} onChange={e => setFilterAgent(e.target.value)}
+            className="appearance-none pl-3 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none cursor-pointer"
+            style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)', minWidth: '150px' }}>
+            <option value="all">All Agents</option>
+            {agentIds.map(id => {
+              const a = getAgent(id)
+              return a ? <option key={id} value={id}>{a.name.split(' ').slice(0,2).join(' ')}</option> : null
+            })}
+          </select>
+          <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
+        </div>
+
+        {(filterStatus !== 'all' || filterType !== 'all' || filterListing !== 'all' || filterCity !== 'all' || filterAgent !== 'all' || search) && (
+          <button onClick={() => { setFilterStatus('all'); setFilterType('all'); setFilterListing('all'); setFilterCity('all'); setFilterAgent('all'); setSearch('') }}
             className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold flex items-center gap-1.5 transition-all"
             style={{ border: '1px solid var(--destructive)', color: 'var(--destructive)', backgroundColor: 'transparent' }}>
             <X size={12} /> Clear filters
@@ -706,7 +790,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
-                {['ID', 'Property', 'Type', 'Location', 'Area', 'Price', 'Price/sqm', 'Status', 'Agent', 'Days', ''].map(h => (
+                {['ID', 'Property', 'Type', 'Location', 'Area', 'Price', 'Price/sqm', 'Status', 'Agent', ''].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap"
                     style={{ color: 'var(--muted-foreground)' }}>{h}</th>
                 ))}
@@ -715,8 +799,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
             <tbody>
               {filtered.map(p => {
                 const agent = getAgent(p.agentId)
-                const sc    = statusConfig[p.status]
-                const days  = daysSince(p.dateListed)
+                const sc    = statusConfig[p.status] ?? statusConfig['available']
                 return (
                   <tr key={p.id}
                     className="border-b cursor-pointer transition-all"
@@ -775,11 +858,6 @@ export function Listings({ myOnly = false }: ListingsProps) {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>{agent?.name.split(' ')[0]}</p>
                       <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent?.branch}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-bold ${days > 90 ? 'text-red-500' : days > 30 ? 'text-amber-500' : 'text-emerald-600'}`}>
-                        {days}d
-                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <button className="p-1.5 rounded-lg transition-colors"

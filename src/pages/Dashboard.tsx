@@ -13,6 +13,7 @@ const statusConfig = {
   under_contract: { label: 'Under Contract', bg: 'bg-blue-50',    text: 'text-blue-700',    dot: 'bg-blue-500',    color: '#3b82f6' },
   sold:           { label: 'Sold',           bg: 'bg-slate-100',  text: 'text-slate-500',   dot: 'bg-slate-400',   color: '#94a3b8' },
   off_market:     { label: 'Off Market',     bg: 'bg-red-50',     text: 'text-red-400',     dot: 'bg-red-300',     color: '#ef4444' },
+  expired:        { label: 'Expired',        bg: 'bg-orange-50',  text: 'text-orange-600',  dot: 'bg-orange-400',  color: '#ea580c' },
 }
 
 const typeLabels: Record<string, string> = {

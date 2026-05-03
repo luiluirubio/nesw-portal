@@ -12,7 +12,7 @@ export function setApiAgent(id: string, email: string) {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('nesw_access_token')
+  const token = localStorage.getItem('nesw_token')
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
