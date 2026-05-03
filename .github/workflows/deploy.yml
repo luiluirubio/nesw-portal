@@ -59,6 +59,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
 
+      - name: Validate secrets
+        run: |
+          [ -n "$JWT_SECRET" ] || (echo "ERROR: JWT_SECRET_STAGING secret is not set" && exit 1)
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET_STAGING }}
+
       - name: Deploy with Serverless Framework
         run: npx serverless deploy --stage staging --verbose
         env:
@@ -161,6 +167,12 @@ jobs:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Validate secrets
+        run: |
+          [ -n "$JWT_SECRET" ] || (echo "ERROR: JWT_SECRET_PROD secret is not set" && exit 1)
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET_PROD }}
 
       - name: Deploy with Serverless Framework
         run: npx serverless deploy --stage production --verbose

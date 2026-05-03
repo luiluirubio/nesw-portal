@@ -16,7 +16,9 @@ provider:
   environment:
     STAGE:       ${self:provider.stage}
     FRONTEND_URL: ${env:FRONTEND_URL, '${self:custom.frontendUrl.${self:provider.stage}}'}
-    JWT_SECRET:  ${env:JWT_SECRET, 'nesw-portal-jwt-dev-only-change-in-prod'}
+    # JWT_SECRET must be set via CI secret. Falls back to a dev-only default
+    # when the env var is absent (not when it's empty — CI must always supply it).
+    JWT_SECRET:  ${env:JWT_SECRET, 'nesw-portal-dev-secret-change-in-ci'}
     COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID, ''}
     COGNITO_CLIENT_ID:    ${env:COGNITO_CLIENT_ID, ''}
   iam:
