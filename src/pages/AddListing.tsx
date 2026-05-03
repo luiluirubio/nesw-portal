@@ -6,11 +6,12 @@ import {
   User, FileImage, Eye,
 } from 'lucide-react'
 import { toaster } from '@/components/ui/toast'
-import { SelectMenu } from '@/components/ui/select-menu'
+import { ComboBox } from '@/components/ui/combo-box'
+import type { ComboBoxOption } from '@/components/ui/combo-box'
 import { useAuth } from '@/context/AuthContext'
 import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP } from '@/lib/utils'
-import { phLgusSorted, getProvinceByCity } from '@/data/philippines'
+import { phLgusSorted } from '@/data/philippines'
 import { saveDraftCloud, deleteDraftCloud, fetchDraft, generateDraftId } from '@/lib/drafts'
 import type { PropertyType, ListingType } from '@/types/property'
 
@@ -176,11 +177,21 @@ export function AddListing() {
   }, [step])
 
   // ── City options (memoised — large list) ──────────────────────────────
+  // value encodes both city and province so we don't need a secondary lookup
   const cityOptions = useMemo(
-    () => phLgusSorted.map((l, i) => ({ value: `${i}::${l.name}`, label: l.name, sublabel: l.province })),
+    () => phLgusSorted.map(l => ({
+      value:    `${l.name}|||${l.province}`,
+      label:    l.name,
+      sublabel: l.province,
+    })) as ComboBoxOption[],
     []
   )
-  const citySelectValue = cityOptions.find(o => o.label === form.city)?.value ?? ''
+  // Derive current city select value from form state
+  const citySelectValue = form.city
+    ? (cityOptions.find(o => o.label === form.city && o.sublabel === form.province)?.value
+        ?? cityOptions.find(o => o.label === form.city)?.value
+        ?? '')
+    : ''
 
   // ── Helpers ───────────────────────────────────────────────────────────
   function update(field: string, value: string) {
@@ -518,26 +529,28 @@ export function AddListing() {
 
             <div>
               <label className={lbl} style={lblS}>Subdivision / Village</label>
-              <SelectMenu
+              <ComboBox
                 value={form.subdivision}
                 onChange={val => update('subdivision', val)}
                 options={subdivisionOptions.map(s => ({ value: s, label: s }))}
-                placeholder="Search or type to add… (optional)"
+                placeholder="Type to search or add new…"
                 creatable
               />
-              <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>Type a new name and press Enter or click "Add" to save it.</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
+                Not in the list? Type the name and tap "Add".
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={lbl} style={lblS}>City / Municipality <span className="text-red-500">*</span></label>
-                <SelectMenu
+                <ComboBox
                   value={citySelectValue}
-                  onChange={val => {
-                    const city = val.split('::')[1] ?? val
+                  onChange={(_val, opt) => {
+                    if (!opt) return
+                    const [city, province] = opt.value.split('|||')
                     update('city', city)
-                    const prov = getProvinceByCity(city)
-                    if (prov) update('province', prov)
+                    if (province) update('province', province)
                   }}
                   options={cityOptions}
                   placeholder="Search city or municipality…"
