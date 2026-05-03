@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Search, X, Trash2, ScrollText, Plus, Pencil } from 'lucide-react'
+import { ChevronDown, Search, X, Trash2, ScrollText, Plus, Pencil, RefreshCw } from 'lucide-react'
 import { useLogs } from '@/context/LogsContext'
 import { useAuth } from '@/context/AuthContext'
 import { agents } from '@/data/agents'
@@ -150,7 +150,7 @@ function LogRow({ log }: { log: ActivityLog }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function Logs() {
   const { user } = useAuth()
-  const { logs, clearLogs } = useLogs()
+  const { logs, loading, clearLogs, refresh } = useLogs()
   const isAdmin = user?.role === 'Super Admin' || user?.role === 'Branch Manager'
   if (!isAdmin) return <Navigate to="/listings" replace />
 
@@ -171,11 +171,19 @@ export function Logs() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Activity Logs</h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-          Full audit trail of property creations and edits
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Activity Logs</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+            Full audit trail of property creations and edits
+          </p>
+        </div>
+        <button onClick={refresh} disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold border transition-all disabled:opacity-50"
+          style={{ borderColor: 'var(--border)', color: 'var(--foreground)', backgroundColor: 'var(--accent)' }}>
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
       </div>
 
       {/* KPI strip */}
@@ -255,7 +263,12 @@ export function Logs() {
       <div className="rounded-[var(--radius)] border overflow-hidden"
         style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
         <div className="overflow-x-auto">
-          {filtered.length === 0 ? (
+          {loading && logs.length === 0 ? (
+            <div className="py-20 flex flex-col items-center gap-3">
+              <RefreshCw size={24} className="animate-spin" style={{ color: 'var(--muted-foreground)' }} />
+              <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>Loading logs…</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="py-20 flex flex-col items-center gap-3">
               <ScrollText size={32} style={{ color: 'var(--muted-foreground)' }} />
               <div className="text-center">
