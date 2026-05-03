@@ -19,7 +19,7 @@ const typeLabels: Record<string, string> = {
 
 export function Approvals() {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'Super Admin' || user?.role === 'Branch Manager' || user?.role === 'Senior Agent'
+  const isAdmin = user?.role === 'Admin'
 
   const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set())
   const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set())

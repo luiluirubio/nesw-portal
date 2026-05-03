@@ -14,6 +14,7 @@ export const Tables = {
   activityLogs: `nesw-activity-logs-${stage}`,
   loginHistory: `nesw-login-history-${stage}`,
   drafts:       `nesw-drafts-${stage}`,
+  users:        `nesw-users-${stage}`,
 }
 
 export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand, QueryCommand }

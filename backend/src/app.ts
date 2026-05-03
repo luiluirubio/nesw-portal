@@ -5,6 +5,8 @@ import agentsRouter    from './routes/agents'
 import logsRouter      from './routes/logs'
 import uploadRouter    from './routes/upload'
 import draftsRouter    from './routes/drafts'
+import authRouter      from './routes/auth'
+import usersRouter     from './routes/users'
 
 const app = express()
 
@@ -23,6 +25,8 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', stage: process.env.STAGE ?? 'local', ts: new Date().toISOString() })
 })
 
+app.use('/api/auth',       authRouter)
+app.use('/api/users',      usersRouter)
 app.use('/api/properties', propertiesRouter)
 app.use('/api/agents',     agentsRouter)
 app.use('/api/logs',       logsRouter)

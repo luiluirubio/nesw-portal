@@ -1,268 +1,264 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Trash2, Search, X, Shield, Clock, Monitor } from 'lucide-react'
-import { agents } from '@/data/agents'
+import { useState, useEffect } from 'react'
+import { Search, X, Plus, Shield, Clock, Eye, EyeOff, RefreshCw,
+         CheckCircle, XCircle, Pencil, KeyRound, ChevronDown } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import type { LoginRecord } from '@/types/loginHistory'
 import { Navigate } from 'react-router-dom'
 
-// Microsoft logo
-function MicrosoftLogo({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-      <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-      <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-      <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-    </svg>
-  )
+interface PortalUser {
+  id: string; name: string; email: string; role: 'Admin' | 'Agent'
+  branch: string; licenseNo: string; status: 'active' | 'inactive'
+  createdAt?: string; lastLoginAt?: string
 }
 
-const roleBadgeColors: Record<string, string> = {
-  'Super Admin':    'bg-amber-100 text-amber-700',
-  'Branch Manager': 'bg-blue-100 text-blue-700',
-  'Senior Agent':   'bg-emerald-100 text-emerald-700',
-  'Agent':          'bg-violet-100 text-violet-700',
-  'Junior Agent':   'bg-slate-100 text-slate-500',
+const BRANCHES = ['Headquarters','Cebu City','Mandaue','Lapu-Lapu','Talisay']
+const roleBadge: Record<string, string> = {
+  Admin: 'bg-amber-100 text-amber-700',
+  Agent: 'bg-blue-100 text-blue-700',
 }
 
-function formatTimestamp(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleString('en-PH', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true,
-  })
-}
-
-function timeAgo(iso: string) {
+function timeAgo(iso?: string) {
+  if (!iso) return 'Never'
   const diff = Date.now() - new Date(iso).getTime()
-  const mins  = Math.floor(diff / 60000)
-  const hours = Math.floor(mins / 60)
-  const days  = Math.floor(hours / 24)
-  if (mins < 1)    return 'just now'
-  if (mins < 60)   return `${mins}m ago`
-  if (hours < 24)  return `${hours}h ago`
-  return `${days}d ago`
+  const mins = Math.floor(diff / 60000); const hrs = Math.floor(mins / 60); const days = Math.floor(hrs / 24)
+  if (mins < 1) return 'just now'; if (mins < 60) return `${mins}m ago`
+  if (hrs < 24) return `${hrs}h ago`; return `${days}d ago`
 }
 
-// ── User Row with expandable login history ────────────────────────────────────
-function UserRow({ agent, records, currentUserId, onClearHistory }: {
-  agent: typeof agents[0]
-  records: LoginRecord[]
-  currentUserId: string | undefined
-  onClearHistory: (agentId: string) => void
+// ── Create / Edit User Modal ──────────────────────────────────────────────────
+function UserModal({ user, onClose, onSaved }: {
+  user: PortalUser | null
+  onClose: () => void
+  onSaved:  () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const isEdit = !!user
+  const [form, setForm] = useState({
+    name:      user?.name      ?? '',
+    email:     user?.email     ?? '',
+    role:      user?.role      ?? 'Agent',
+    branch:    user?.branch    ?? 'Cebu City',
+    licenseNo: user?.licenseNo ?? '',
+    password:  '',
+    confirmPw: '',
+  })
+  const [showPw, setShowPw]   = useState(false)
+  const [error, setError]     = useState('')
+  const [saving, setSaving]   = useState(false)
 
-  const lastLogin  = records[0]
-  const isOnline   = currentUserId === agent.id
-  const ssoCount   = records.filter(r => r.method === 'microsoft_sso').length
-  const manualCount = records.filter(r => r.method === 'manual').length
+  const inputCls = 'w-full px-3 py-2.5 text-sm rounded-[var(--radius-sm)] focus:outline-none transition-colors'
+  const inputSty = { border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
+  const lbl = 'block text-xs font-semibold mb-1.5'
+  const lblS = { color: 'var(--foreground)' }
+
+  async function handleSave() {
+    if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required.'); return }
+    if (!isEdit && !form.password) { setError('Password is required for new users.'); return }
+    if (form.password && form.password !== form.confirmPw) { setError('Passwords do not match.'); return }
+    if (form.password && form.password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    setError(''); setSaving(true)
+    try {
+      if (isEdit) {
+        const body: Record<string, string> = { name: form.name, role: form.role, branch: form.branch, licenseNo: form.licenseNo }
+        if (form.password) body.password = form.password
+        await api.updateUser(user!.id, body)
+      } else {
+        await api.createUser({ name: form.name, email: form.email, role: form.role, branch: form.branch, licenseNo: form.licenseNo, password: form.password })
+      }
+      onSaved(); onClose()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <>
-      <tr
-        className="border-b cursor-pointer transition-colors"
-        style={{ borderColor: 'var(--border)' }}
-        onClick={() => setExpanded(e => !e)}
-        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
-        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+        style={{ animation: 'fadeIn 0.15s ease' }}>
+        <div className="w-full max-w-md rounded-[var(--radius)] border shadow-2xl"
+          style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)', animation: 'slideUp 0.2s ease' }}>
 
-        {/* Expand chevron */}
-        <td className="px-3 py-3 w-8">
-          {records.length > 0
-            ? <ChevronDown size={14} className={cn('transition-transform', expanded ? 'rotate-0' : '-rotate-90')}
-                style={{ color: 'var(--muted-foreground)' }} />
-            : <ChevronRight size={14} style={{ color: 'var(--border)' }} />}
-        </td>
-
-        {/* Agent */}
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="relative">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                style={{ backgroundColor: agent.role === 'Super Admin' ? 'var(--gold)' : 'var(--primary)' }}>
-                {agent.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
-              </div>
-              {isOnline && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" title="Currently online" />
-              )}
-            </div>
-            <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>{agent.name}</p>
-              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent.email}</p>
-            </div>
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-base font-bold" style={{ color: 'var(--foreground)' }}>
+              {isEdit ? 'Edit User' : 'Create New User'}
+            </p>
+            <button onClick={onClose} style={{ color: 'var(--muted-foreground)' }} className="hover:opacity-70"><X size={18} /></button>
           </div>
-        </td>
 
-        {/* Role */}
-        <td className="px-4 py-3">
-          <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold', roleBadgeColors[agent.role] ?? 'bg-slate-100 text-slate-500')}>
-            {agent.role}
-          </span>
-        </td>
-
-        {/* Branch */}
-        <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>
-          {agent.branch}
-        </td>
-
-        {/* Session status */}
-        <td className="px-4 py-3">
-          {isOnline ? (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Online
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              Offline
-            </span>
-          )}
-        </td>
-
-        {/* Last login */}
-        <td className="px-4 py-3">
-          {lastLogin ? (
-            <div>
-              <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>{timeAgo(lastLogin.timestamp)}</p>
-              <div className="flex items-center gap-1 mt-0.5">
-                {lastLogin.method === 'microsoft_sso'
-                  ? <><MicrosoftLogo size={11} /><span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Microsoft SSO</span></>
-                  : <><Monitor size={11} style={{ color: 'var(--muted-foreground)' }} /><span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Manual</span></>}
+          {/* Body */}
+          <div className="px-6 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className={lbl} style={lblS}>Full Name <span className="text-red-500">*</span></label>
+                <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))}
+                  placeholder="e.g. Juan dela Cruz" className={inputCls} style={inputSty}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+              </div>
+              {!isEdit && (
+                <div className="col-span-2">
+                  <label className={lbl} style={lblS}>Email Address <span className="text-red-500">*</span></label>
+                  <input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))}
+                    placeholder="name@nesw.com" className={inputCls} style={inputSty}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                </div>
+              )}
+              <div>
+                <label className={lbl} style={lblS}>Role</label>
+                <div className="relative">
+                  <select value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value as 'Admin'|'Agent'}))}
+                    className={cn(inputCls,'appearance-none cursor-pointer pr-8')} style={inputSty}>
+                    <option value="Admin">Admin</option>
+                    <option value="Agent">Agent</option>
+                  </select>
+                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
+                </div>
+              </div>
+              <div>
+                <label className={lbl} style={lblS}>Branch</label>
+                <div className="relative">
+                  <select value={form.branch} onChange={e => setForm(f => ({...f, branch: e.target.value}))}
+                    className={cn(inputCls,'appearance-none cursor-pointer pr-8')} style={inputSty}>
+                    {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
+                </div>
+              </div>
+              <div className="col-span-2">
+                <label className={lbl} style={lblS}>PRC License No.</label>
+                <input value={form.licenseNo} onChange={e => setForm(f => ({...f, licenseNo: e.target.value}))}
+                  placeholder="e.g. REB-2024-001234" className={inputCls} style={inputSty}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+              </div>
+              <div>
+                <label className={lbl} style={lblS}>
+                  {isEdit ? 'New Password (leave blank to keep)' : 'Password'} {!isEdit && <span className="text-red-500">*</span>}
+                </label>
+                <div className="relative">
+                  <input type={showPw ? 'text' : 'password'} value={form.password}
+                    onChange={e => setForm(f => ({...f, password: e.target.value}))}
+                    placeholder="Min. 8 characters" className={cn(inputCls,'pr-9')} style={inputSty}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                  <button type="button" onClick={() => setShowPw(s => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }}>
+                    {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className={lbl} style={lblS}>Confirm Password</label>
+                <input type={showPw ? 'text' : 'password'} value={form.confirmPw}
+                  onChange={e => setForm(f => ({...f, confirmPw: e.target.value}))}
+                  placeholder="Repeat password" className={inputCls} style={inputSty}
+                  onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
               </div>
             </div>
-          ) : (
-            <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Never</span>
-          )}
-        </td>
 
-        {/* Login count */}
-        <td className="px-4 py-3">
-          <div className="space-y-0.5">
-            <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>{records.length}</p>
-            <div className="flex items-center gap-2">
-              {ssoCount > 0 && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                  <MicrosoftLogo size={10} />{ssoCount}
-                </span>
-              )}
-              {manualCount > 0 && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                  <Monitor size={10} />{manualCount}
-                </span>
-              )}
-            </div>
+            {error && <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
           </div>
-        </td>
 
-        {/* Actions */}
-        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-          {records.length > 0 && (
-            <button
-              onClick={() => onClearHistory(agent.id)}
-              title="Clear login history"
-              className="p-1.5 rounded-lg transition-colors"
-              style={{ color: 'var(--muted-foreground)' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted-foreground)')}>
-              <Trash2 size={14} />
+          {/* Footer */}
+          <div className="flex gap-2 px-6 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 py-2.5 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-60"
+              style={{ backgroundColor: 'var(--primary)' }}>
+              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create User'}
             </button>
-          )}
-        </td>
-      </tr>
-
-      {/* Expanded history sub-rows */}
-      {expanded && records.length > 0 && (
-        <tr style={{ borderColor: 'var(--border)' }}>
-          <td />
-          <td colSpan={7} className="px-4 pb-3 pt-0">
-            <div className="rounded-[var(--radius-sm)] border overflow-hidden"
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                    {['#', 'Date & Time', 'Method', 'Session ID', 'IP Address', 'User Agent'].map(h => (
-                      <th key={h} className="text-left px-3 py-2 font-bold uppercase tracking-wide"
-                        style={{ color: 'var(--muted-foreground)' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.slice(0, 20).map((r, i) => (
-                    <tr key={r.id} className="border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
-                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--muted-foreground)' }}>{i + 1}</td>
-                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--foreground)' }}>
-                        {formatTimestamp(r.timestamp)}
-                      </td>
-                      <td className="px-3 py-2">
-                        {r.method === 'microsoft_sso' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-semibold bg-blue-50 text-blue-700">
-                            <MicrosoftLogo size={10} />Microsoft SSO
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">
-                            <Monitor size={10} />Manual
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--muted-foreground)' }}>{r.sessionId}</td>
-                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--muted-foreground)' }}>{r.ipAddress}</td>
-                      <td className="px-3 py-2 max-w-48 truncate" style={{ color: 'var(--muted-foreground)' }} title={r.userAgent}>
-                        {r.userAgent}
-                      </td>
-                    </tr>
-                  ))}
-                  {records.length > 20 && (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-2 text-center" style={{ color: 'var(--muted-foreground)' }}>
-                        +{records.length - 20} more records
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
-      )}
+            <button onClick={onClose}
+              className="flex-1 py-2.5 rounded-[var(--radius-sm)] text-sm font-semibold border transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)', backgroundColor: 'var(--accent)' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+      <style>{`
+        @keyframes fadeIn  { from{opacity:0}to{opacity:1} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+      `}</style>
     </>
   )
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function Users() {
-  const { user, loginHistory, clearHistory } = useAuth()
-  const [search, setSearch] = useState('')
-
-  const isAdmin = user?.role === 'Super Admin' || user?.role === 'Branch Manager'
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
   if (!isAdmin) return <Navigate to="/listings" replace />
 
-  const filtered = agents.filter(a => {
+  const [users, setUsers]         = useState<PortalUser[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [search, setSearch]       = useState('')
+  const [filterRole, setFilterRole] = useState<'all'|'Admin'|'Agent'>('all')
+  const [filterStatus, setFilterStatus] = useState<'all'|'active'|'inactive'>('all')
+  const [editTarget, setEditTarget] = useState<PortalUser | null | 'new'>(null)
+  const [toggling, setToggling]   = useState<string | null>(null)
+
+  async function loadUsers() {
+    setLoading(true)
+    try { setUsers(await api.getUsers() as PortalUser[]) } catch { /* ignore */ }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadUsers() }, [])
+
+  async function toggleStatus(u: PortalUser) {
+    setToggling(u.id)
+    const newStatus = u.status === 'active' ? 'inactive' : 'active'
+    try {
+      await api.setUserStatus(u.id, newStatus)
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: newStatus } : x))
+    } catch { /* ignore */ } finally { setToggling(null) }
+  }
+
+  const filtered = users.filter(u => {
+    if (filterRole   !== 'all' && u.role   !== filterRole)   return false
+    if (filterStatus !== 'all' && u.status !== filterStatus) return false
     const q = search.toLowerCase()
-    return !q || a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || a.branch.toLowerCase().includes(q)
+    return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.branch.toLowerCase().includes(q)
   })
 
-  const totalLogins = loginHistory.length
-  const ssoLogins   = loginHistory.filter(r => r.method === 'microsoft_sso').length
+  const activeCount = users.filter(u => u.status === 'active').length
+  const adminCount  = users.filter(u => u.role === 'Admin').length
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Users</h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-          Agent accounts, session status, and login history
-        </p>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>User Management</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+            Manage portal accounts, roles, and access
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadUsers} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold border"
+            style={{ borderColor: 'var(--border)', color: 'var(--foreground)', backgroundColor: 'var(--accent)' }}>
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />Refresh
+          </button>
+          <button onClick={() => setEditTarget('new')}
+            className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)] text-sm font-bold text-white hover:opacity-90 transition-all"
+            style={{ backgroundColor: 'var(--primary)' }}>
+            <Plus size={15} />Create User
+          </button>
+        </div>
       </div>
 
-      {/* KPI strip */}
+      {/* KPIs */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total Users',    value: agents.length,  icon: Shield,  color: 'var(--primary)', bg: 'bg-emerald-50' },
-          { label: 'Total Logins',   value: totalLogins,    icon: Clock,   color: '#3b82f6',         bg: 'bg-blue-50'    },
-          { label: 'Microsoft SSO',  value: ssoLogins,      icon: Monitor, color: '#0078d4',         bg: 'bg-blue-50'    },
-          { label: 'Manual Logins',  value: totalLogins - ssoLogins, icon: Monitor, color: '#94a3b8', bg: 'bg-slate-50' },
+          { label: 'Total Users',  value: users.length,  icon: Shield,       color: 'var(--primary)', bg: 'bg-emerald-50' },
+          { label: 'Active',       value: activeCount,   icon: CheckCircle,  color: '#10b981',         bg: 'bg-emerald-50' },
+          { label: 'Inactive',     value: users.length - activeCount, icon: XCircle, color: '#ef4444', bg: 'bg-red-50' },
+          { label: 'Admins',       value: adminCount,    icon: KeyRound,     color: '#f59e0b',         bg: 'bg-amber-50'   },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="rounded-[var(--radius)] border p-4 flex items-center gap-3"
             style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
@@ -277,87 +273,157 @@ export function Users() {
         ))}
       </div>
 
-      {/* SSO info banner */}
-      <div className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius-sm)] border"
-        style={{ backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }}>
-        <div className="shrink-0">
-          <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-            <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-            <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-            <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-          </svg>
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-blue-800">Microsoft 365 Single Sign-On Enabled</p>
-          <p className="text-xs text-blue-600 mt-0.5">
-            Agents can sign in using their <strong>@nesw.com</strong> Microsoft 365 accounts. Sessions are tracked and visible below.
-          </p>
-        </div>
-        <div className="ml-auto shrink-0">
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-600 text-white">Active</span>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="flex items-center gap-2">
+      {/* Filters */}
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, email, branch..."
-            className="pl-8 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none w-64"
+            placeholder="Search name, email, branch…"
+            className="pl-8 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none w-56"
             style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
-              <X size={13} style={{ color: 'var(--muted-foreground)' }} />
-            </button>
-          )}
+          {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2"><X size={13} style={{ color: 'var(--muted-foreground)' }} /></button>}
         </div>
-        {loginHistory.length > 0 && (
-          <button
-            onClick={() => clearHistory()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold border transition-all"
-            style={{ borderColor: '#ef4444', color: '#ef4444', backgroundColor: 'transparent' }}>
-            <Trash2 size={12} /> Clear All History
+        {(['all','Admin','Agent'] as const).map(r => (
+          <button key={r} onClick={() => setFilterRole(r)}
+            className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold border transition-all"
+            style={{
+              backgroundColor: filterRole === r ? 'var(--primary)' : 'var(--background)',
+              color:           filterRole === r ? 'white'           : 'var(--foreground)',
+              borderColor:     filterRole === r ? 'var(--primary)'  : 'var(--border)',
+            }}>
+            {r === 'all' ? 'All Roles' : r}
           </button>
+        ))}
+        {(['all','active','inactive'] as const).map(s => (
+          <button key={s} onClick={() => setFilterStatus(s)}
+            className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold border transition-all"
+            style={{
+              backgroundColor: filterStatus === s ? (s === 'inactive' ? '#ef4444' : 'var(--primary)') : 'var(--background)',
+              color:           filterStatus === s ? 'white' : 'var(--foreground)',
+              borderColor:     filterStatus === s ? (s === 'inactive' ? '#ef4444' : 'var(--primary)') : 'var(--border)',
+            }}>
+            {s === 'all' ? 'All Status' : s.charAt(0).toUpperCase() + s.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="rounded-[var(--radius)] border overflow-hidden"
+        style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+        {loading ? (
+          <div className="py-16 flex items-center justify-center gap-3">
+            <RefreshCw size={20} className="animate-spin" style={{ color: 'var(--muted-foreground)' }} />
+            <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>Loading users…</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
+                  {['User','Email','Role','Branch','Status','Last Login','Actions'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                      style={{ color: 'var(--muted-foreground)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(u => (
+                  <tr key={u.id} className="border-b transition-colors"
+                    style={{ borderColor: 'var(--border)' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0',
+                          u.status === 'inactive' && 'opacity-40')}
+                          style={{ backgroundColor: u.role === 'Admin' ? 'var(--gold)' : 'var(--primary)' }}>
+                          {u.name.split(' ').slice(0,2).map(n => n[0]).join('')}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold" style={{ color: u.status === 'inactive' ? 'var(--muted-foreground)' : 'var(--foreground)' }}>
+                            {u.name}
+                          </p>
+                          <p className="text-xs font-mono" style={{ color: 'var(--muted-foreground)' }}>{u.id}</p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>{u.email}</td>
+
+                    <td className="px-4 py-3">
+                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold', roleBadge[u.role] ?? 'bg-slate-100 text-slate-600')}>
+                        {u.role}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{u.branch}</td>
+
+                    <td className="px-4 py-3">
+                      <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold',
+                        u.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600')}>
+                        <span className={cn('w-1.5 h-1.5 rounded-full', u.status === 'active' ? 'bg-emerald-500' : 'bg-red-400')} />
+                        {u.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="text-xs flex items-center gap-1" style={{ color: 'var(--muted-foreground)' }}>
+                        <Clock size={11} />{timeAgo(u.lastLoginAt)}
+                      </p>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        {/* Edit */}
+                        <button onClick={() => setEditTarget(u)}
+                          title="Edit user"
+                          className="p-1.5 rounded-lg transition-colors"
+                          style={{ color: 'var(--muted-foreground)' }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--primary)')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted-foreground)')}>
+                          <Pencil size={14} />
+                        </button>
+
+                        {/* Activate / Deactivate — cannot deactivate yourself */}
+                        {u.id !== user?.id && (
+                          <button
+                            onClick={() => toggleStatus(u)}
+                            disabled={toggling === u.id}
+                            title={u.status === 'active' ? 'Deactivate user' : 'Activate user'}
+                            className="p-1.5 rounded-lg transition-colors disabled:opacity-40"
+                            style={{ color: u.status === 'active' ? '#ef4444' : '#10b981' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+                            {toggling === u.id
+                              ? <RefreshCw size={14} className="animate-spin" />
+                              : u.status === 'active'
+                                ? <XCircle size={14} />
+                                : <CheckCircle size={14} />
+                            }
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && !loading && (
+                  <tr><td colSpan={7} className="py-12 text-center text-sm" style={{ color: 'var(--muted-foreground)' }}>No users found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* Users Table */}
-      <div className="rounded-[var(--radius)] border overflow-hidden"
-        style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
-                <th className="px-3 py-3 w-8" />
-                {['Agent', 'Role', 'Branch', 'Session', 'Last Login', 'Total Logins', ''].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap"
-                    style={{ color: 'var(--muted-foreground)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(agent => (
-                <UserRow
-                  key={agent.id}
-                  agent={agent}
-                  records={loginHistory.filter(r => r.agentId === agent.id)}
-                  currentUserId={user?.id}
-                  onClearHistory={clearHistory}
-                />
-              ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--muted-foreground)' }}>No users found.</div>
-          )}
-        </div>
-      </div>
-
-      <p className="text-xs pb-4" style={{ color: 'var(--muted-foreground)' }}>
-        Login history is stored locally in this browser session. Up to 200 records per agent are retained.
-      </p>
+      {/* Create / Edit modal */}
+      {editTarget !== null && (
+        <UserModal
+          user={editTarget === 'new' ? null : editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={loadUsers}
+        />
+      )}
     </div>
   )
 }

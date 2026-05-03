@@ -14,11 +14,8 @@ function MicrosoftLogo({ size = 13 }: { size?: number }) {
 }
 
 const roleBadgeColors: Record<string, string> = {
-  'Super Admin':    'bg-amber-100 text-amber-700',
-  'Branch Manager': 'bg-blue-100 text-blue-700',
-  'Senior Agent':   'bg-emerald-100 text-emerald-700',
-  'Agent':          'bg-violet-100 text-violet-700',
-  'Junior Agent':   'bg-slate-100 text-slate-600',
+  'Admin': 'bg-amber-100 text-amber-700',
+  'Agent': 'bg-blue-100 text-blue-700',
 }
 
 export function TopBar() {
@@ -46,7 +43,7 @@ export function TopBar() {
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius-sm)] border"
             style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-              style={{ backgroundColor: user.role === 'Super Admin' ? 'var(--gold)' : 'var(--primary)' }}>
+              style={{ backgroundColor: user.role === 'Admin' ? 'var(--gold)' : 'var(--primary)' }}>
               {user.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
             </div>
             <div className="min-w-0">
@@ -63,7 +60,7 @@ export function TopBar() {
             )}
             {lastMethod === 'manual' && (
               <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${roleBadgeColors[user.role] ?? 'bg-slate-100 text-slate-600'}`}>
-                {user.role === 'Super Admin' ? '⭐ Admin' : user.role}
+                {user.role === 'Admin' ? '⭐ Admin' : user.role}
               </span>
             )}
           </div>

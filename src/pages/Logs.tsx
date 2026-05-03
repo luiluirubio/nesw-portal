@@ -151,7 +151,7 @@ function LogRow({ log }: { log: ActivityLog }) {
 export function Logs() {
   const { user } = useAuth()
   const { logs, loading, clearLogs, refresh } = useLogs()
-  const isAdmin = user?.role === 'Super Admin' || user?.role === 'Branch Manager'
+  const isAdmin = user?.role === 'Admin'
   if (!isAdmin) return <Navigate to="/listings" replace />
 
   const [search, setSearch]           = useState('')

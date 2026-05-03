@@ -28,7 +28,7 @@ const typeLabels: Record<string, string> = {
 export function Dashboard() {
   const { user } = useAuth()
   const { selectedBranch } = useApp()
-  const isAdmin = user?.role === 'Super Admin' || user?.role === 'Branch Manager'
+  const isAdmin = user?.role === 'Admin'
 
   const scoped = isAdmin
     ? (selectedBranch === 'all' ? properties : properties.filter(p => {

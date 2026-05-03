@@ -81,6 +81,8 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   const { addLog } = useLogs()
   const agent = getAgent(orig.agentId)
   const days  = daysSince(orig.dateListed)
+  // Admins can edit any listing; Agents can only edit their own
+  const canEdit = user?.role === 'Admin' || orig.agentId === user?.id
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft]     = useState<EditDraft>(toDraft(orig))
@@ -433,7 +435,7 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
         {/* Footer */}
         <div className="px-6 py-3 border-t flex gap-2 shrink-0"
           style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-          {!editing && current.status === 'available' && (
+          {!editing && current.status === 'available' && canEdit && (
             <button
               onClick={() => { update('status', 'reserved'); setEditing(true) }}
               className="flex-1 py-2 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-all hover:opacity-90"
@@ -441,13 +443,19 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
               Mark as Reserved
             </button>
           )}
-          {!editing && (
+          {!editing && canEdit && (
             <button
               onClick={() => setEditing(true)}
               className="flex items-center justify-center gap-2 flex-1 py-2 rounded-[var(--radius-sm)] text-sm font-semibold border transition-all hover:opacity-80"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)', backgroundColor: 'var(--accent)' }}>
               <Pencil size={14} />Edit Listing
             </button>
+          )}
+          {!editing && !canEdit && (
+            <div className="flex-1 py-2 text-center text-xs rounded-[var(--radius-sm)]"
+              style={{ backgroundColor: 'var(--card)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}>
+              View Only — you can only edit your own listings
+            </div>
           )}
           {editing && (
             <>
@@ -481,7 +489,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const { user } = useAuth()
   const { selectedBranch } = useApp()
   const navigate = useNavigate()
-  const isAdmin = user?.role === 'Super Admin' || user?.role === 'Branch Manager'
+  const isAdmin = user?.role === 'Admin'
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<PropertyStatus | 'all'>('all')

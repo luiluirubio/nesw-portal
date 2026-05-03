@@ -1,12 +1,9 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, Home, ScrollText } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth, getNavPermissions } from '@/context/AuthContext'
+import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
 
-function hasAccess(perms: Set<string>, key: string) {
-  return perms.has('all') || perms.has(key)
-}
 
 function NavItem({
   to, icon: Icon, label, collapsed, end,
@@ -54,8 +51,7 @@ export function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { collapsed, toggle } = useSidebar()
-  const perms = getNavPermissions(user)
-  const isAdmin = hasAccess(perms, 'users')
+  const isAdmin = user?.role === 'Admin'
 
   function handleLogout() { logout(); navigate('/login') }
 
@@ -141,7 +137,7 @@ export function Sidebar() {
             <div className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-sm)]"
               style={{ backgroundColor: 'var(--accent)' }}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white"
-                style={{ backgroundColor: user.role === 'Super Admin' ? 'var(--gold)' : 'var(--primary)' }}>
+                style={{ backgroundColor: user.role === 'Admin' ? 'var(--gold)' : 'var(--primary)' }}>
                 {user.name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">

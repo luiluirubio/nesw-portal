@@ -64,6 +64,20 @@ export const api = {
       method: 'POST', body: JSON.stringify(body),
     }),
 
+  // Auth
+  login: (email: string, password: string) =>
+    request<{ token: string; user: Record<string, unknown> }>('/api/auth/login', {
+      method: 'POST', body: JSON.stringify({ email, password }),
+    }),
+
+  // Users (admin)
+  getUsers:     ()                          => request<unknown[]>('/api/users'),
+  getUser:      (id: string)               => request<unknown>(`/api/users/${id}`),
+  createUser:   (body: unknown)            => request<unknown>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser:   (id: string, body: unknown) => request<unknown>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  setUserStatus:(id: string, status: 'active' | 'inactive') =>
+    request<unknown>(`/api/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+
   // Health
   health: () => request<{ status: string; stage: string; ts: string }>('/api/health'),
 }

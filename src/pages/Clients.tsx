@@ -171,7 +171,7 @@ function ClientDetailPanel({ client: c, onClose }: { client: Client; onClose: ()
 // ── Main Page ────────────────────────────────────────────────────────────────
 export function Clients() {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'Super Admin' || user?.role === 'Branch Manager'
+  const isAdmin = user?.role === 'Admin'
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<ClientStatus | 'all'>('all')
