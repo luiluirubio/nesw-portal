@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Home, Eye, EyeOff, LogIn } from 'lucide-react'
+import { Eye, EyeOff, LogIn } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 function MicrosoftLogo({ size = 20 }: { size?: number }) {
@@ -59,10 +59,9 @@ export function Login() {
         <div className="absolute -bottom-24 -right-24 w-80 h-80 rounded-full opacity-5" style={{ backgroundColor: '#C9973A' }} />
 
         <div className="relative z-10">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg" style={{ backgroundColor: '#1A6B3C' }}>
-              <Home size={28} className="text-white" />
-            </div>
+          <div className="mb-6 flex items-center gap-4">
+            <img src="/nesw-logo.png" alt="NESW Logo"
+              className="w-16 h-16 object-contain drop-shadow-lg" />
             <div>
               <p className="text-2xl font-black text-white leading-tight">NESW Realty</p>
               <p className="text-xs font-semibold tracking-widest" style={{ color: '#4B7A5C' }}>PROPERTY PORTAL</p>
@@ -98,9 +97,8 @@ export function Login() {
       {/* Right panel */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-12">
         <div className="lg:hidden mb-8 flex flex-col items-center">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ backgroundColor: '#1A6B3C' }}>
-            <Home size={28} className="text-white" />
-          </div>
+          <img src="/nesw-logo.png" alt="NESW Logo"
+            className="w-20 h-20 object-contain mb-3" />
           <p className="text-xl font-black text-slate-900">NESW Realty</p>
           <p className="text-xs font-semibold tracking-widest text-slate-400">PROPERTY PORTAL</p>
         </div>

@@ -4,23 +4,23 @@ import {
   Upload, ChevronDown, Paperclip, Pencil, Check, ArrowLeft,
   Phone, Mail, User, PenLine, Trash2,
 } from 'lucide-react'
-import { properties } from '@/data/properties'
 import { getAgent } from '@/data/agents'
 import { useAuth } from '@/context/AuthContext'
 import { useApp } from '@/context/AppContext'
 import { useLogs } from '@/context/LogsContext'
 import { formatPHP, daysSince, cn } from '@/lib/utils'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
+import { api } from '@/lib/api'
 import type { ListingDraft } from '@/types/draft'
+import type { Property, PropertyStatus, PropertyType } from '@/types/property'
+import type { FieldChange } from '@/types/activityLog'
+import { useNavigate } from 'react-router-dom'
 
 function pricePerSqm(price: number, floorArea: number, lotArea: number): string {
   const area = floorArea > 0 ? floorArea : lotArea
   if (!area) return '—'
   return formatPHP(Math.round(price / area)) + '/sqm'
 }
-import type { Property, PropertyStatus, PropertyType } from '@/types/property'
-import type { FieldChange } from '@/types/activityLog'
-import { useNavigate } from 'react-router-dom'
 import { toaster } from '@/components/ui/toast'
 
 const statusConfig: Record<PropertyStatus, { label: string; bg: string; text: string; dot: string; color: string }> = {
@@ -551,9 +551,21 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const [filterListing, setFilterListing] = useState<'all' | 'for_sale' | 'for_rent'>('all')
   const [filterCity, setFilterCity] = useState('all')
   const [filterAgent, setFilterAgent] = useState('all')
-  const [drafts, setDrafts] = useState<ListingDraft[]>([])
+  const [drafts, setDrafts]       = useState<ListingDraft[]>([])
+  const [properties, setProperties] = useState<Property[]>([])
+  const [loadingProps, setLoadingProps] = useState(true)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const sentinelRef = useRef<HTMLDivElement>(null)
+
+  // Fetch live properties from the API
+  useEffect(() => {
+    if (!user) return
+    setLoadingProps(true)
+    api.getProperties()
+      .then(data => setProperties(data as Property[]))
+      .catch(() => {})
+      .finally(() => setLoadingProps(false))
+  }, [user])
 
   useEffect(() => {
     if (user) fetchDrafts().then(setDrafts).catch(() => {})
@@ -564,10 +576,12 @@ export function Listings({ myOnly = false }: ListingsProps) {
     setDrafts(d => d.filter(x => x.id !== id))
   }
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
-  // local overrides so edits reflect immediately in the table
-  const [localOverrides, setLocalOverrides] = useState<Record<string, Property>>({})
 
-  const effective = (p: Property) => localOverrides[p.id] ?? p
+  // Patch the local properties array after an in-panel edit so the table
+  // reflects changes immediately without a full refetch
+  function patchProperty(updated: Property) {
+    setProperties(prev => prev.map(p => p.id === updated.id ? updated : p))
+  }
 
   const scoped = properties.filter(p => {
     if (myOnly) return p.agentId === user?.id
@@ -576,7 +590,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
       return agent?.branch === selectedBranch
     }
     return true  // All agents see all listings
-  }).map(effective)
+  })
 
   const counts = {
     available:      scoped.filter(p => p.status === 'available').length,
@@ -632,6 +646,15 @@ export function Listings({ myOnly = false }: ListingsProps) {
     obs.observe(el)
     return () => obs.disconnect()
   }, [hasMore, onSentinel])
+
+  if (loadingProps) {
+    return (
+      <div className="flex items-center justify-center py-32 gap-3">
+        <div className="w-5 h-5 border-2 border-t-[var(--primary)] border-[var(--muted)] rounded-full animate-spin" />
+        <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>Loading listings…</span>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -940,7 +963,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
         <PropertyDetailPanel
           property={selectedProperty}
           onClose={() => setSelectedProperty(null)}
-          onSaved={updated => setLocalOverrides(o => ({ ...o, [updated.id]: updated }))}
+          onSaved={updated => { patchProperty(updated); setSelectedProperty(updated) }}
         />
       )}
     </div>

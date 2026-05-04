@@ -8,6 +8,7 @@ import {
 import { toaster } from '@/components/ui/toast'
 import { ComboBox } from '@/components/ui/combo-box'
 import type { ComboBoxOption } from '@/components/ui/combo-box'
+import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP } from '@/lib/utils'
@@ -287,23 +288,64 @@ export function AddListing() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function handleSubmit() {
-    deleteDraftCloud(draftId)
-    const newId = 'PROP-' + String(Date.now()).slice(-5)
-    addLog({
-      action: 'created', propertyId: newId, propertyTitle: form.title,
-      agentId: user?.id ?? '', agentName: user?.name ?? '',
-      changes: [
-        { field: 'Type',  oldValue: '—', newValue: form.type },
-        { field: 'Price', oldValue: '—', newValue: `PHP ${Number(form.price).toLocaleString()}` },
-        { field: 'City',  oldValue: '—', newValue: form.city },
-        { field: 'Owner', oldValue: '—', newValue: form.ownerName },
-        { field: 'Tax Dec.', oldValue: '—', newValue: form.taxDeclarationNo || '—' },
-      ],
-    })
+  async function handleSubmit() {
     setSubmitted(true)
-    toaster.create({ type: 'success', title: 'Listing Submitted!', description: `"${form.title}" has been submitted and logged.` })
-    setTimeout(() => navigate('/listings'), 2000)
+    try {
+      const body = {
+        title:           form.title,
+        type:            form.type,
+        listingType:     form.listingType,
+        status:          'available',
+        price:           Number(form.price),
+        commission:      Number(form.commission) || 3,
+        location: {
+          address:  form.address,
+          barangay: form.barangay,
+          city:     form.city,
+          province: form.province,
+        },
+        subdivision:     form.subdivision || undefined,
+        floorArea:       Number(form.floorArea)  || 0,
+        lotArea:         Number(form.lotArea)    || 0,
+        bedrooms:        Number(form.bedrooms)   || 0,
+        bathrooms:       Number(form.bathrooms)  || 0,
+        parking:         Number(form.parking)    || 0,
+        description:     form.description,
+        ownerName:       form.ownerName,
+        nameInTitle:     form.nameInTitle || form.ownerName,
+        taxDeclarationNo: form.taxDeclarationNo,
+        contactPerson:   form.contactPerson,
+        contactEmail:    form.contactEmail,
+        contactPhone:    form.contactPhone,
+        contactTelephone: form.contactTelephone || undefined,
+        features:        selectedFeatures,
+        photos:          uploadedPhotos.map(f => f.name),
+        documents:       uploadedDocs.map(f => ({ name: f.name, type: 'other', size: f.size })),
+        agentId:         user?.id ?? '',
+        agentName:       user?.name ?? '',
+      }
+
+      const created = await api.createProperty(body) as { id: string }
+
+      deleteDraftCloud(draftId)
+      addLog({
+        action: 'created', propertyId: created.id, propertyTitle: form.title,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [
+          { field: 'Type',     oldValue: '—', newValue: form.type },
+          { field: 'Price',    oldValue: '—', newValue: `PHP ${Number(form.price).toLocaleString()}` },
+          { field: 'City',     oldValue: '—', newValue: form.city },
+          { field: 'Owner',    oldValue: '—', newValue: form.ownerName },
+          { field: 'Tax Dec.', oldValue: '—', newValue: form.taxDeclarationNo || '—' },
+        ],
+      })
+
+      toaster.create({ type: 'success', title: 'Listing Submitted!', description: `"${form.title}" saved as ${created.id}.` })
+      setTimeout(() => navigate('/listings'), 1500)
+    } catch (err) {
+      setSubmitted(false)
+      toaster.create({ type: 'error', title: 'Submit Failed', description: (err as Error).message })
+    }
   }
 
   // ── Shared styles ──────────────────────────────────────────────────────
