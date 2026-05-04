@@ -176,11 +176,14 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   const inputClass = 'w-full px-2.5 py-1.5 text-xs rounded-[var(--radius-sm)] focus:outline-none transition-colors'
   const inputStyle = { border: '1px solid var(--primary)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
 
-  const Field = ({ label, value }: { label: string; value: string }) => (
-    <div className="flex items-center justify-between px-3 py-2 rounded-lg border"
+  // Card-style field: label on top, value below — works cleanly in a 2-column grid
+  const Field = ({ label, value }: { label: string; value: string | React.ReactNode }) => (
+    <div className="flex flex-col px-3 py-2.5 rounded-lg border"
       style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-      <p className="text-xs shrink-0 w-36" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
-      <p className="text-xs font-semibold text-right truncate" style={{ color: 'var(--foreground)' }}>{value || '—'}</p>
+      <p className="text-xs mb-0.5" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
+      <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>
+        {(value === '' || value === null || value === undefined) ? '—' : value}
+      </p>
     </div>
   )
 
@@ -201,25 +204,6 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
           </button>
           <div className="flex items-center gap-1.5 mb-2 flex-wrap">
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">{typeLabels[current.type]}</span>
-            {/* Quick status change — always visible */}
-            {canEdit ? (
-              <div className="relative">
-                <select
-                  value={draft.status}
-                  onChange={e => { update('status', e.target.value as PropertyStatus) }}
-                  className={cn('appearance-none pl-2 pr-6 py-0.5 rounded-full text-xs font-bold cursor-pointer focus:outline-none', sc.bg, sc.text)}
-                  title="Change status">
-                  {(Object.entries(statusConfig) as [PropertyStatus, typeof statusConfig[PropertyStatus]][]).map(([k, v]) => (
-                    <option key={k} value={k}>{v.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={10} className={cn('absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none', sc.text)} />
-              </div>
-            ) : (
-              <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1', sc.bg, sc.text)}>
-                <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />{sc.label}
-              </span>
-            )}
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">
               {current.listingType === 'for_rent' ? 'For Rent' : 'For Sale'}
             </span>
@@ -240,39 +224,65 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
         {/* Body */}
         <div className="flex-1 px-6 py-4 flex flex-col gap-3 overflow-y-auto">
 
-          {/* Property Details — editable when in edit mode */}
+          {/* Property Details */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Property Details</p>
               {editing && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Editing</span>}
             </div>
+
             {!editing ? (
-              <div className="grid grid-cols-4 gap-2">
-                {current.bedrooms  > 0 && <Field label="Bedrooms"   value={String(current.bedrooms)}  />}
-                {current.bathrooms > 0 && <Field label="Bathrooms"  value={String(current.bathrooms)} />}
-                {current.parking   >= 0 && <Field label="Parking"   value={String(current.parking)}   />}
-                {current.floorArea > 0 && <Field label="Floor Area" value={`${current.floorArea} sqm`} />}
-                {current.lotArea   > 0 && <Field label="Lot Area"   value={`${current.lotArea} sqm`}  />}
-                <Field label="Commission" value={`${current.commission}%`} />
+              <div className="grid grid-cols-2 gap-2">
+                {/* Status — moved from header */}
+                <div className="col-span-2 flex items-center justify-between px-3 py-2.5 rounded-lg border"
+                  style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Status</p>
+                  <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5', sc.bg, sc.text)}>
+                    <span className={cn('w-1.5 h-1.5 rounded-full', sc.dot)} />{sc.label}
+                  </span>
+                </div>
+
                 <Field label="Price / sqm" value={pricePerSqm(current.price, current.floorArea, current.lotArea)} />
+                <Field label="Commission"  value={current.commission ? `${current.commission}%` : '—'} />
+                {(current.floorArea > 0) && <Field label="Floor Area" value={`${current.floorArea} sqm`} />}
+                {(current.lotArea   > 0) && <Field label="Lot Area"   value={`${current.lotArea} sqm`} />}
+                {(current.bedrooms  > 0) && <Field label="Bedrooms"   value={String(current.bedrooms)} />}
+                {(current.bathrooms > 0) && <Field label="Bathrooms"  value={String(current.bathrooms)} />}
+                <Field label="Parking"     value={current.parking > 0 ? String(current.parking) : '—'} />
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2 p-3 rounded-lg border" style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--primary)' }}>
-                {[
-                  { key: 'bedrooms'  as keyof EditDraft, label: 'Bedrooms'        },
-                  { key: 'bathrooms' as keyof EditDraft, label: 'Bathrooms'       },
-                  { key: 'parking'   as keyof EditDraft, label: 'Parking Slots'   },
-                  { key: 'floorArea' as keyof EditDraft, label: 'Floor Area (sqm)'},
-                  { key: 'lotArea'   as keyof EditDraft, label: 'Lot Area (sqm)'  },
-                  { key: 'price'     as keyof EditDraft, label: 'Price (PHP)'     },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <p className="text-xs mb-1" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
-                    <input type="number" value={draft[key]}
-                      onChange={e => update(key, e.target.value)}
-                      className={inputClass} style={inputStyle} />
+              /* Edit mode — status dropdown + numeric fields */
+              <div className="space-y-2 p-3 rounded-lg border" style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--primary)' }}>
+                {/* Status quick-change */}
+                <div>
+                  <p className="text-xs mb-1" style={{ color: 'var(--muted-foreground)' }}>Status</p>
+                  <div className="relative">
+                    <select value={draft.status} onChange={e => update('status', e.target.value as PropertyStatus)}
+                      className={cn(inputClass, 'appearance-none cursor-pointer pr-7')} style={inputStyle}>
+                      {(Object.keys(statusConfig) as PropertyStatus[]).map(s => (
+                        <option key={s} value={s}>{statusConfig[s].label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
                   </div>
-                ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { key: 'price'     as keyof EditDraft, label: 'Price (PHP)'      },
+                    { key: 'floorArea' as keyof EditDraft, label: 'Floor Area (sqm)' },
+                    { key: 'lotArea'   as keyof EditDraft, label: 'Lot Area (sqm)'   },
+                    { key: 'bedrooms'  as keyof EditDraft, label: 'Bedrooms'         },
+                    { key: 'bathrooms' as keyof EditDraft, label: 'Bathrooms'        },
+                    { key: 'parking'   as keyof EditDraft, label: 'Parking Slots'    },
+                  ].map(({ key, label }) => (
+                    <div key={key}>
+                      <p className="text-xs mb-1" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
+                      <input type="number" value={draft[key]}
+                        onChange={e => update(key, e.target.value)}
+                        className={inputClass} style={inputStyle} />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -344,32 +354,6 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
               </div>
             )}
           </div>
-
-          {/* Status & Price — edit mode */}
-          {editing && (
-            <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
-              <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>Status & Price</p>
-              <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border" style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--primary)' }}>
-                <div>
-                  <p className="text-xs mb-1" style={{ color: 'var(--muted-foreground)' }}>Status</p>
-                  <div className="relative">
-                    <select value={draft.status} onChange={e => update('status', e.target.value as PropertyStatus)}
-                      className={cn(inputClass, 'appearance-none cursor-pointer pr-7')} style={inputStyle}>
-                      {(Object.keys(statusConfig) as PropertyStatus[]).map(s => (
-                        <option key={s} value={s}>{statusConfig[s].label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs mb-1" style={{ color: 'var(--muted-foreground)' }}>Price (PHP)</p>
-                  <input type="number" value={draft.price} onChange={e => update('price', e.target.value)}
-                    className={inputClass} style={inputStyle} />
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Description */}
           <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
