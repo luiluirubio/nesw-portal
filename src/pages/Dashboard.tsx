@@ -1,11 +1,11 @@
+import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { Building2, Home, TrendingUp, DollarSign, Users, Clock } from 'lucide-react'
-import { properties } from '@/data/properties'
-import { agents, getAgent } from '@/data/agents'
-import { clients } from '@/data/clients'
+import { Building2, Home, TrendingUp, DollarSign, Clock } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useApp } from '@/context/AppContext'
 import { formatPHP, daysSince, cn } from '@/lib/utils'
+import { api } from '@/lib/api'
+import type { Property } from '@/types/property'
 
 const statusConfig = {
   available:      { label: 'Available',      bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', color: '#10b981' },
@@ -31,11 +31,13 @@ export function Dashboard() {
   const { selectedBranch } = useApp()
   const isAdmin = user?.role === 'Admin'
 
+  const [properties, setProperties] = useState<Property[]>([])
+  useEffect(() => {
+    api.getProperties().then(d => setProperties(d as Property[])).catch(() => {})
+  }, [])
+
   const scoped = isAdmin
-    ? (selectedBranch === 'all' ? properties : properties.filter(p => {
-        const agent = getAgent(p.agentId)
-        return agent?.branch === selectedBranch
-      }))
+    ? properties  // branch filter removed (branch not stored on property)
     : properties.filter(p => p.agentId === user?.id)
 
   const counts = {
@@ -52,8 +54,6 @@ export function Dashboard() {
   const soldValue = scoped
     .filter(p => p.status === 'sold' && p.listingType === 'for_sale')
     .reduce((sum, p) => sum + p.price, 0)
-
-  const activeClients = isAdmin ? clients.filter(c => c.status === 'active').length : clients.filter(c => c.agentId === user?.id && c.status === 'active').length
 
   // Chart data: listings by type
   const byType = Object.entries(
@@ -77,7 +77,7 @@ export function Dashboard() {
     { label: 'Active Listings', value: counts.available + counts.reserved + counts.under_contract, icon: Building2, color: 'var(--primary)', bg: 'bg-blue-50' },
     { label: 'For Sale Value',  value: formatPHP(totalValue), icon: DollarSign, color: '#f59e0b', bg: 'bg-amber-50' },
     { label: 'Sold Value',      value: formatPHP(soldValue),  icon: TrendingUp,  color: '#10b981', bg: 'bg-emerald-50' },
-    { label: 'Active Clients',  value: activeClients,         icon: Users,       color: '#8b5cf6', bg: 'bg-violet-50' },
+    { label: 'Total Listings',  value: scoped.length,         icon: Home,        color: '#8b5cf6', bg: 'bg-violet-50' },
   ]
 
   return (
@@ -185,7 +185,6 @@ export function Dashboard() {
         </div>
         <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
           {recent.map(p => {
-            const agent = getAgent(p.agentId)
             const sc = statusConfig[p.status]
             const days = daysSince(p.dateListed)
             return (
@@ -199,7 +198,7 @@ export function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{p.title}</p>
                   <p className="text-xs truncate" style={{ color: 'var(--muted-foreground)' }}>
-                    {p.location.city} · {typeLabels[p.type]} · {agent?.name}
+                    {p.location.city} · {typeLabels[p.type]} · {p.agentName ?? p.agentId}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -219,57 +218,66 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Top Agents Table (admin only) */}
-      {isAdmin && (
-        <div className="rounded-[var(--radius)] border overflow-hidden"
-          style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
-            <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>Agent Performance</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
-                  {['Agent', 'Branch', 'Role', 'Active', 'Sold', 'Under Contract'].map(h => (
-                    <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wide"
-                      style={{ color: 'var(--muted-foreground)' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {agents.filter(a => a.status === 'active').map(agent => {
-                  const agentProps = scoped.filter(p => p.agentId === agent.id)
-                  const active = agentProps.filter(p => p.status === 'available' || p.status === 'reserved').length
-                  const sold   = agentProps.filter(p => p.status === 'sold').length
-                  const uc     = agentProps.filter(p => p.status === 'under_contract').length
-                  if (agentProps.length === 0) return null
-                  return (
-                    <tr key={agent.id} className="border-b transition-colors"
-                      style={{ borderColor: 'var(--border)' }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
-                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                            style={{ backgroundColor: 'var(--primary)' }}>
-                            {agent.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+      {/* Agent Performance (admin only) — derived from real property data */}
+      {isAdmin && (() => {
+        const byAgent = Object.entries(
+          scoped.reduce<Record<string, { name: string; props: typeof scoped }>>((acc, p) => {
+            const key = p.agentName ?? p.agentId
+            if (!acc[key]) acc[key] = { name: key, props: [] }
+            acc[key].props.push(p)
+            return acc
+          }, {})
+        ).sort((a, b) => b[1].props.length - a[1].props.length)
+
+        if (byAgent.length === 0) return null
+        return (
+          <div className="rounded-[var(--radius)] border overflow-hidden"
+            style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
+              <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>Agent Performance</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
+                    {['Agent', 'Active', 'Sold', 'Under Contract', 'Total'].map(h => (
+                      <th key={h} className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wide"
+                        style={{ color: 'var(--muted-foreground)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {byAgent.map(([key, { name, props: ap }]) => {
+                    const active = ap.filter(p => p.status === 'available' || p.status === 'reserved').length
+                    const sold   = ap.filter(p => p.status === 'sold').length
+                    const uc     = ap.filter(p => p.status === 'under_contract').length
+                    return (
+                      <tr key={key} className="border-b transition-colors"
+                        style={{ borderColor: 'var(--border)' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                              style={{ backgroundColor: 'var(--primary)' }}>
+                              {name.split(' ').slice(0, 2).map((n: string) => n[0]).join('')}
+                            </div>
+                            <span className="font-medium text-sm" style={{ color: 'var(--foreground)' }}>{name}</span>
                           </div>
-                          <span className="font-medium" style={{ color: 'var(--foreground)' }}>{agent.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent.branch}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent.role}</td>
-                      <td className="px-4 py-3 font-bold" style={{ color: '#10b981' }}>{active}</td>
-                      <td className="px-4 py-3 font-bold" style={{ color: 'var(--muted-foreground)' }}>{sold}</td>
-                      <td className="px-4 py-3 font-bold" style={{ color: '#3b82f6' }}>{uc}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="px-4 py-3 font-bold" style={{ color: '#10b981' }}>{active}</td>
+                        <td className="px-4 py-3 font-bold" style={{ color: 'var(--muted-foreground)' }}>{sold}</td>
+                        <td className="px-4 py-3 font-bold" style={{ color: '#3b82f6' }}>{uc}</td>
+                        <td className="px-4 py-3 font-bold" style={{ color: 'var(--foreground)' }}>{ap.length}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

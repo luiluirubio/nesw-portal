@@ -38,6 +38,7 @@ export interface Property {
   bathrooms: number
   parking: number
   agentId: string
+  agentName?: string
   dateListed: string
   description: string
   features: string[]

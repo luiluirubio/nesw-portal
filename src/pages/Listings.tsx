@@ -4,7 +4,6 @@ import {
   Upload, ChevronDown, Paperclip, Pencil, Check, ArrowLeft,
   Phone, Mail, User, PenLine, Trash2,
 } from 'lucide-react'
-import { getAgent } from '@/data/agents'
 import { useAuth } from '@/context/AuthContext'
 import { useApp } from '@/context/AppContext'
 import { useLogs } from '@/context/LogsContext'
@@ -95,7 +94,6 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
 }) {
   const { user } = useAuth()
   const { addLog } = useLogs()
-  const agent = getAgent(orig.agentId)
   const days  = daysSince(orig.dateListed)
   // Admins can edit any listing; Agents can only edit their own
   const canEdit = user?.role === 'Admin' || orig.agentId === user?.id
@@ -459,13 +457,12 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
               style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
                 style={{ backgroundColor: 'var(--primary)' }}>
-                {agent?.name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+                {(orig.agentName ?? orig.agentId).split(' ').slice(0, 2).map(n => n[0]).join('')}
               </div>
               <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>{agent?.name}</p>
-                <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent?.role} · {agent?.branch}</p>
+                <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>{orig.agentName ?? orig.agentId}</p>
+                <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Listing Agent</p>
               </div>
-              <div className="ml-auto text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent?.phone}</div>
             </div>
           </div>
 
@@ -586,8 +583,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
   const scoped = properties.filter(p => {
     if (myOnly) return p.agentId === user?.id
     if (isAdmin && selectedBranch !== 'all') {
-      const agent = getAgent(p.agentId)
-      return agent?.branch === selectedBranch
+      return false // branch filter not available without static agent data
     }
     return true  // All agents see all listings
   })
@@ -600,15 +596,15 @@ export function Listings({ myOnly = false }: ListingsProps) {
   }
 
   // Unique cities and agents from scoped listings
-  const cities  = Array.from(new Set(scoped.map(p => p.location.city))).sort()
-  const agentIds = Array.from(new Set(scoped.map(p => p.agentId)))
+  const cities     = Array.from(new Set(scoped.map(p => p.location.city))).sort()
+  const agentNames = Array.from(new Set(scoped.map(p => p.agentName ?? p.agentId).filter(Boolean))).sort()
 
   const filtered = scoped.filter(p => {
     if (filterStatus  !== 'all' && p.status         !== filterStatus)  return false
     if (filterType    !== 'all' && p.type            !== filterType)    return false
     if (filterListing !== 'all' && p.listingType     !== filterListing) return false
     if (filterCity    !== 'all' && p.location.city   !== filterCity)    return false
-    if (filterAgent   !== 'all' && p.agentId         !== filterAgent)   return false
+    if (filterAgent   !== 'all' && (p.agentName ?? p.agentId) !== filterAgent) return false
     const q = search.toLowerCase()
     if (q && !p.title.toLowerCase().includes(q) && !p.location.city.toLowerCase().includes(q) && !p.id.toLowerCase().includes(q)) return false
     return true
@@ -817,10 +813,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
             className="appearance-none pl-3 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none cursor-pointer"
             style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)', minWidth: '150px' }}>
             <option value="all">All Agents</option>
-            {agentIds.map(id => {
-              const a = getAgent(id)
-              return a ? <option key={id} value={id}>{a.name.split(' ').slice(0,2).join(' ')}</option> : null
-            })}
+            {agentNames.map(name => <option key={name} value={name}>{name.split(' ').slice(0,2).join(' ')}</option>)}
           </select>
           <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
         </div>
@@ -860,8 +853,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
             </thead>
             <tbody>
               {filteredVisible.map(p => {
-                const agent = getAgent(p.agentId)
-                const sc    = statusConfig[p.status] ?? statusConfig['available']
+                const sc = statusConfig[p.status] ?? statusConfig['available']
                 return (
                   <tr key={p.id}
                     className="border-b cursor-pointer transition-all"
@@ -919,8 +911,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
                       </span>
                     </td>
                     <td className="hidden md:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
-                      <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>{agent?.name.split(' ')[0]}</p>
-                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent?.branch}</p>
+                      <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>{(p.agentName ?? p.agentId).split(' ')[0]}</p>
                     </td>
                     <td className="px-3 md:px-4 py-3">
                       <button className="p-1.5 rounded-lg transition-colors"

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { ChevronDown, Search, X, Trash2, ScrollText, Plus, Pencil, RefreshCw } from 'lucide-react'
 import { useLogs } from '@/context/LogsContext'
 import { useAuth } from '@/context/AuthContext'
-import { agents } from '@/data/agents'
 import { cn } from '@/lib/utils'
 import type { ActivityLog, LogAction } from '@/types/activityLog'
 import { Navigate } from 'react-router-dom'
@@ -160,7 +159,7 @@ export function Logs() {
 
   const filtered = logs.filter(l => {
     if (filterAction !== 'all' && l.action !== filterAction) return false
-    if (filterAgent  !== 'all' && l.agentId !== filterAgent)  return false
+    if (filterAgent  !== 'all' && l.agentName !== filterAgent) return false
     const q = search.toLowerCase()
     if (q && !l.propertyTitle.toLowerCase().includes(q) && !l.propertyId.toLowerCase().includes(q) && !l.agentName.toLowerCase().includes(q)) return false
     return true
@@ -237,7 +236,9 @@ export function Logs() {
             className="appearance-none pl-3 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none cursor-pointer"
             style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)', minWidth: '160px' }}>
             <option value="all">All Agents</option>
-            {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {Array.from(new Set(logs.map(l => l.agentName).filter(Boolean))).sort().map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
           </select>
           <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
         </div>

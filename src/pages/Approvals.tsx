@@ -1,10 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckCircle, XCircle, Eye, Clock, Building2, MapPin } from 'lucide-react'
-import { properties } from '@/data/properties'
-import { getAgent } from '@/data/agents'
 import { useAuth } from '@/context/AuthContext'
 import { formatPHP, daysSince, cn } from '@/lib/utils'
 import { toaster } from '@/components/ui/toast'
+import { api } from '@/lib/api'
 import type { Property } from '@/types/property'
 
 const typeLabels: Record<string, string> = {
@@ -21,18 +20,16 @@ export function Approvals() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
 
+  const [properties, setProperties] = useState<Property[]>([])
   const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set())
   const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set())
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
 
-  // Pending listings = recently listed "available" ones not yet approved
-  const pending = properties.filter(p =>
-    p.status === 'available' &&
-    p.dateListed >= '2025-04-01' &&
-    !approvedIds.has(p.id) &&
-    !rejectedIds.has(p.id)
-  )
+  useEffect(() => {
+    api.getProperties().then(d => setProperties(d as Property[])).catch(() => {})
+  }, [])
 
+  const pending  = properties.filter(p => p.status === 'available' && !approvedIds.has(p.id) && !rejectedIds.has(p.id))
   const approved = properties.filter(p => approvedIds.has(p.id))
   const rejected = properties.filter(p => rejectedIds.has(p.id))
 
@@ -113,7 +110,6 @@ export function Approvals() {
             ) : (
               <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
                 {pending.map(p => {
-                  const agent = getAgent(p.agentId)
                   const days = daysSince(p.dateListed)
                   return (
                     <div key={p.id} className="px-4 py-4 flex items-center gap-4 transition-colors"
@@ -145,7 +141,7 @@ export function Approvals() {
                         <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>
                           {p.listingType === 'for_rent' ? `${formatPHP(p.price)}/mo` : formatPHP(p.price)}
                         </p>
-                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{agent?.name.split(' ')[0]} · {agent?.branch}</p>
+                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{p.agentName ?? p.agentId}</p>
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
