@@ -103,16 +103,16 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   // Admins can edit any listing; Agents can only edit their own
   const canEdit = user?.role === 'Admin' || orig.agentId === user?.id
 
-  const [editing, setEditing]     = useState(false)
-  const [saving, setSaving]       = useState(false)
-  const [mediaSaving, setMediaSaving] = useState(false)
-  const [draft, setDraft]         = useState<EditDraft>(toDraft(orig))
-  const [current, setCurrent]     = useState<Property>(orig)
+  const [editing, setEditing]         = useState(false)
+  const [saving, setSaving]           = useState(false)
+  const [mediaUploading, setMediaUploading] = useState(false)
+  const [draft, setDraft]             = useState<EditDraft>(toDraft(orig))
+  const [current, setCurrent]         = useState<Property>(orig)
 
-  // Photo / doc state — always active, not tied to edit mode
-  const [livePhotos, setLivePhotos] = useState<string[]>(orig.photos ?? [])
+  // Media state — live = saved to DB, pending = queued for upload
+  const [livePhotos, setLivePhotos]   = useState<string[]>(orig.photos ?? [])
   const [pendingPhotos, setPendingPhotos] = useState<PhotoFile[]>([])
-  const [liveDocs, setLiveDocs]   = useState<typeof orig.documents>(orig.documents ?? [])
+  const [liveDocs, setLiveDocs]       = useState<Property['documents']>(orig.documents ?? [])
   const [pendingDocs, setPendingDocs] = useState<DocFile[]>([])
 
   const sc = statusConfig[current.status]
@@ -121,39 +121,71 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
     setDraft(d => ({ ...d, [key]: value }))
   }
 
-  // ── Save media (photos + docs) immediately — no Edit mode needed ──────
-  async function saveMedia(photos: string[], docs: typeof liveDocs, newP: PhotoFile[], newD: DocFile[]) {
-    setMediaSaving(true)
+  // ── Auto-save helpers (no button — fires on drop/remove) ──────────────
+
+  async function uploadAndSavePhotos(newFiles: PhotoFile[]) {
+    if (newFiles.length === 0) return
+    setMediaUploading(true)
     try {
-      const uploadedUrls: string[] = []
-      for (const f of newP) {
+      const urls: string[] = []
+      for (const f of newFiles) {
         const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: f.file.type, propertyId: orig.id })
         await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': f.file.type } })
-        uploadedUrls.push(publicUrl)
+        urls.push(publicUrl)
       }
-      const uploadedDocs: Property['documents'] = []
-      for (const f of newD) {
+      const merged = [...livePhotos, ...urls]
+      await api.updateProperty(orig.id, { ...current, photos: merged, documents: liveDocs })
+      setCurrent(c => ({ ...c, photos: merged }))
+      setLivePhotos(merged)
+      setPendingPhotos([])          // clear the upload zone
+      onSaved({ ...current, photos: merged, documents: liveDocs } as Property)
+    } catch (err) {
+      toaster.create({ type: 'error', title: 'Upload failed', description: (err as Error).message })
+      setPendingPhotos([])
+    } finally { setMediaUploading(false) }
+  }
+
+  async function removeLivePhoto(index: number) {
+    const merged = livePhotos.filter((_, i) => i !== index)
+    setLivePhotos(merged)
+    try {
+      await api.updateProperty(orig.id, { ...current, photos: merged, documents: liveDocs })
+      setCurrent(c => ({ ...c, photos: merged }))
+      onSaved({ ...current, photos: merged, documents: liveDocs } as Property)
+    } catch { setLivePhotos(livePhotos) /* revert */ }
+  }
+
+  async function uploadAndSaveDocs(newFiles: DocFile[]) {
+    if (newFiles.length === 0) return
+    setMediaUploading(true)
+    try {
+      const docs: Property['documents'] = []
+      for (const f of newFiles) {
         const ft = f.file.type || 'application/octet-stream'
         const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: ft, propertyId: orig.id })
         await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': ft } })
-        uploadedDocs.push({ name: f.name, type: 'other' as const, size: f.size, url: publicUrl })
+        docs.push({ name: f.name, type: 'other' as const, size: f.size, url: publicUrl })
       }
-      const mergedPhotos = [...photos, ...uploadedUrls]
-      const mergedDocs   = [...docs,   ...uploadedDocs]
-      const updated = { ...current, photos: mergedPhotos, documents: mergedDocs }
-      await api.updateProperty(orig.id, updated)
-      setCurrent(updated as Property)
-      setLivePhotos(mergedPhotos)
-      setLiveDocs(mergedDocs)
-      setPendingPhotos([])
+      const merged = [...liveDocs, ...docs]
+      await api.updateProperty(orig.id, { ...current, photos: livePhotos, documents: merged })
+      setCurrent(c => ({ ...c, documents: merged }))
+      setLiveDocs(merged)
       setPendingDocs([])
-      onSaved(updated as Property)
-      toaster.create({ type: 'success', title: 'Media Saved', description: `${mergedPhotos.length} photo(s) · ${mergedDocs.length} document(s)` })
+      onSaved({ ...current, photos: livePhotos, documents: merged } as Property)
     } catch (err) {
-      toaster.create({ type: 'error', title: 'Upload Failed', description: (err as Error).message })
-    } finally {
-      setMediaSaving(false)
-    }
+      toaster.create({ type: 'error', title: 'Upload failed', description: (err as Error).message })
+      setPendingDocs([])
+    } finally { setMediaUploading(false) }
+  }
+
+  async function removeLiveDoc(index: number) {
+    const merged = liveDocs.filter((_, i) => i !== index)
+    setLiveDocs(merged)
+    try {
+      await api.updateProperty(orig.id, { ...current, photos: livePhotos, documents: merged })
+      setCurrent(c => ({ ...c, documents: merged }))
+      onSaved({ ...current, photos: livePhotos, documents: merged } as Property)
+    } catch { setLiveDocs(liveDocs) /* revert */ }
   }
 
   // ── Save text field edits ───────────────────────────────────────────────
@@ -474,37 +506,27 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* Photos — always editable for canEdit users */}
+          {/* Photos — drop to auto-upload, X to auto-remove */}
           <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 mb-2">
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>
-                Photos {(livePhotos.length + pendingPhotos.length) > 0 && `(${livePhotos.length + pendingPhotos.length})`}
+                Photos {livePhotos.length > 0 && `(${livePhotos.length})`}
               </p>
-              {canEdit && (livePhotos.length !== (current.photos?.length ?? 0) || pendingPhotos.length > 0 || pendingDocs.length > 0) && (
-                <button
-                  type="button"
-                  onClick={() => saveMedia(livePhotos, liveDocs, pendingPhotos, pendingDocs)}
-                  disabled={mediaSaving}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-bold text-white disabled:opacity-60"
-                  style={{ backgroundColor: 'var(--primary)' }}>
-                  {mediaSaving ? <><span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Upload size={11} />Save Media</>}
-                </button>
+              {mediaUploading && (
+                <span className="w-3 h-3 border border-[var(--primary)]/30 border-t-[var(--primary)] rounded-full animate-spin" />
               )}
             </div>
 
-            {/* Existing saved photos */}
             {livePhotos.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
                 {livePhotos.map((url, i) => (
                   url.startsWith('http') ? (
-                    <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border"
-                      style={{ borderColor: 'var(--border)' }}>
+                    <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
                       <a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
                         <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
                       </a>
                       {canEdit && (
-                        <button type="button"
-                          onClick={() => setLivePhotos(p => p.filter((_, j) => j !== i))}
+                        <button type="button" onClick={() => removeLivePhoto(i)}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-500 transition-colors z-10">
                           <X size={10} />
                         </button>
@@ -513,11 +535,10 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
                   ) : (
                     <div key={i} className="relative aspect-square rounded-lg border flex flex-col items-center justify-center gap-1"
                       style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
-                      <ImagePlus size={18} style={{ color: 'var(--muted-foreground)' }} />
+                      <ImagePlus size={16} style={{ color: 'var(--muted-foreground)' }} />
                       <p className="text-xs truncate px-2 max-w-full" style={{ color: 'var(--muted-foreground)' }}>{url}</p>
                       {canEdit && (
-                        <button type="button"
-                          onClick={() => setLivePhotos(p => p.filter((_, j) => j !== i))}
+                        <button type="button" onClick={() => removeLivePhoto(i)}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10">
                           <X size={10} />
                         </button>
@@ -528,66 +549,63 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
               </div>
             )}
 
-            {/* Upload zone — always visible for editors */}
             {canEdit && (
-              <MultiPhotoUpload photos={pendingPhotos} onChange={setPendingPhotos} maxSizeMB={20} />
+              <MultiPhotoUpload
+                photos={pendingPhotos}
+                onChange={newFiles => { setPendingPhotos(newFiles); uploadAndSavePhotos(newFiles) }}
+                maxSizeMB={20}
+              />
             )}
             {!canEdit && livePhotos.length === 0 && (
               <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No photos attached.</p>
             )}
           </div>
 
-          {/* Documents — always editable for canEdit users */}
+          {/* Documents — drop to auto-upload, trash to auto-remove */}
           <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 mb-2">
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>
-                Documents {(liveDocs.length + pendingDocs.length) > 0 && `(${liveDocs.length + pendingDocs.length})`}
+                Documents {liveDocs.length > 0 && `(${liveDocs.length})`}
               </p>
-              {canEdit && (liveDocs.length !== (current.documents?.length ?? 0) || pendingDocs.length > 0 || pendingPhotos.length > 0) && (
-                <button
-                  type="button"
-                  onClick={() => saveMedia(livePhotos, liveDocs, pendingPhotos, pendingDocs)}
-                  disabled={mediaSaving}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-bold text-white disabled:opacity-60"
-                  style={{ backgroundColor: 'var(--primary)' }}>
-                  {mediaSaving ? <><span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Upload size={11} />Save Media</>}
-                </button>
+              {mediaUploading && (
+                <span className="w-3 h-3 border border-[var(--primary)]/30 border-t-[var(--primary)] rounded-full animate-spin" />
               )}
             </div>
 
-            {/* Existing docs list */}
             {liveDocs.length > 0 && (
               <div className="space-y-1.5 mb-2">
-                {liveDocs.map((doc, i) => {
-                  const row = (
-                    <div key={i} className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors"
-                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
-                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--card)')}>
-                      <span className="text-lg shrink-0">📄</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
-                        {doc.size && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.size}</p>}
-                      </div>
-                      {doc.url && <Paperclip size={12} style={{ color: 'var(--primary)' }} />}
-                      {canEdit && (
-                        <button type="button" onClick={() => setLiveDocs(d => d.filter((_, j) => j !== i))}
-                          className="p-1 rounded transition-colors hover:text-red-500" style={{ color: 'var(--muted-foreground)' }}>
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                {liveDocs.map((doc, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors"
+                    style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--card)')}>
+                    <span className="text-lg shrink-0">📄</span>
+                    <div className="flex-1 min-w-0">
+                      {doc.url
+                        ? <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                            className="text-xs font-semibold truncate block hover:underline" style={{ color: 'var(--primary)' }}>{doc.name}</a>
+                        : <p className="text-xs font-semibold truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
+                      }
+                      {doc.size && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.size}</p>}
                     </div>
-                  )
-                  return doc.url
-                    ? <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="block">{row}</a>
-                    : row
-                })}
+                    {doc.url && <Paperclip size={12} style={{ color: 'var(--primary)' }} />}
+                    {canEdit && (
+                      <button type="button" onClick={() => removeLiveDoc(i)}
+                        className="p-1 rounded transition-colors hover:text-red-500 shrink-0" style={{ color: 'var(--muted-foreground)' }}>
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* Upload zone — always visible for editors */}
             {canEdit && (
-              <MultiDocUpload docs={pendingDocs} onChange={setPendingDocs} maxSizeMB={20} />
+              <MultiDocUpload
+                docs={pendingDocs}
+                onChange={newFiles => { setPendingDocs(newFiles); uploadAndSaveDocs(newFiles) }}
+                maxSizeMB={20}
+              />
             )}
             {!canEdit && liveDocs.length === 0 && (
               <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No documents attached.</p>
