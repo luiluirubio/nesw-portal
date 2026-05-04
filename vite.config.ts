@@ -31,9 +31,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Bump cacheId to invalidate all previously cached assets
+        cacheId: 'nesw-portal-v2',
         // Force new SW to activate immediately (skipWaiting + clientsClaim)
         skipWaiting: true,
         clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // Cache the app shell and static assets; skip API calls
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [
