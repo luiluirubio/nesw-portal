@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Search, X, Eye, MapPin, Home, Calendar, Maximize2,
   Upload, ChevronDown, Paperclip, Pencil, Check, ArrowLeft,
-  Phone, Mail, User, PenLine, Trash2,
+  Phone, Mail, User, PenLine, Trash2, ImagePlus,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useApp } from '@/context/AppContext'
@@ -10,6 +10,8 @@ import { useLogs } from '@/context/LogsContext'
 import { formatPHP, daysSince, cn } from '@/lib/utils'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
 import { api } from '@/lib/api'
+import { MultiPhotoUpload, MultiDocUpload } from '@/components/ui/file-upload'
+import type { PhotoFile, DocFile } from '@/components/ui/file-upload'
 import type { ListingDraft } from '@/types/draft'
 import type { Property, PropertyStatus, PropertyType } from '@/types/property'
 import type { FieldChange } from '@/types/activityLog'
@@ -102,9 +104,15 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   const canEdit = user?.role === 'Admin' || orig.agentId === user?.id
 
   const [editing, setEditing] = useState(false)
+  const [saving, setSaving]   = useState(false)
   const [draft, setDraft]     = useState<EditDraft>(toDraft(orig))
-  // use a local copy so edits are reflected immediately in this panel
   const [current, setCurrent] = useState<Property>(orig)
+
+  // Photo / doc edit state
+  const [editPhotos, setEditPhotos] = useState<string[]>(orig.photos ?? [])
+  const [newPhotos,  setNewPhotos]  = useState<PhotoFile[]>([])
+  const [editDocs,   setEditDocs]   = useState<typeof orig.documents>(orig.documents ?? [])
+  const [newDocs,    setNewDocs]    = useState<DocFile[]>([])
 
   const sc = statusConfig[current.status]
 
@@ -112,64 +120,84 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
     setDraft(d => ({ ...d, [key]: value }))
   }
 
-  function handleSave() {
-    const changes: FieldChange[] = []
-
-    EDITABLE_FIELDS.forEach(({ key, label }) => {
-      const oldVal = key === 'price' ? String(current.price) : String(current[key as keyof Property] ?? '')
-      const newVal = draft[key]
-      if (oldVal !== newVal) {
-        changes.push({
-          field:    label,
-          oldValue: key === 'price' ? formatPHP(Number(oldVal)) : oldVal,
-          newValue: key === 'price' ? formatPHP(Number(newVal)) : newVal,
-        })
+  async function handleSave() {
+    setSaving(true)
+    try {
+      // Upload any new photos to S3
+      const uploadedPhotoUrls: string[] = []
+      for (const f of newPhotos) {
+        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: f.file.type, propertyId: orig.id })
+        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': f.file.type } })
+        uploadedPhotoUrls.push(publicUrl)
       }
-    })
 
-    if (changes.length === 0) {
-      toaster.create({ type: 'info', title: 'No Changes', description: 'No fields were modified.' })
+      // Upload any new documents to S3
+      const uploadedDocObjects: Property['documents'] = []
+      for (const f of newDocs) {
+        const fileType = f.file.type || 'application/octet-stream'
+        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType, propertyId: orig.id })
+        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': fileType } })
+        uploadedDocObjects.push({ name: f.name, type: 'other' as const, size: f.size, url: publicUrl })
+      }
+
+      const mergedPhotos = [...editPhotos, ...uploadedPhotoUrls]
+      const mergedDocs   = [...editDocs,   ...uploadedDocObjects]
+
+      const changes: FieldChange[] = []
+      EDITABLE_FIELDS.forEach(({ key, label }) => {
+        const oldVal = key === 'price' ? String(current.price) : String(current[key as keyof Property] ?? '')
+        const newVal = draft[key]
+        if (oldVal !== newVal) changes.push({ field: label, oldValue: key === 'price' ? formatPHP(Number(oldVal)) : oldVal, newValue: key === 'price' ? formatPHP(Number(newVal)) : newVal })
+      })
+      if (newPhotos.length)                changes.push({ field: 'Photos',    oldValue: `${editPhotos.length}`, newValue: `${mergedPhotos.length}` })
+      if (newDocs.length)                  changes.push({ field: 'Documents', oldValue: `${editDocs.length}`,   newValue: `${mergedDocs.length}`   })
+      if (editPhotos.length < (current.photos?.length ?? 0)) changes.push({ field: 'Photos removed', oldValue: '', newValue: '' })
+
+      const updated: Property = {
+        ...current,
+        status:           draft.status,
+        price:            Number(draft.price),
+        floorArea:        Number(draft.floorArea),
+        lotArea:          Number(draft.lotArea),
+        bedrooms:         Number(draft.bedrooms),
+        bathrooms:        Number(draft.bathrooms),
+        parking:          Number(draft.parking),
+        ownerName:        draft.ownerName,
+        nameInTitle:      draft.nameInTitle,
+        taxDeclarationNo: draft.taxDeclarationNo,
+        description:      draft.description,
+        photos:           mergedPhotos,
+        documents:        mergedDocs,
+      }
+
+      // Persist to API
+      await api.updateProperty(orig.id, updated)
+
+      if (changes.length > 0) {
+        addLog({ action: 'edited', propertyId: orig.id, propertyTitle: orig.title, agentId: user?.id ?? '', agentName: user?.name ?? '', changes })
+      }
+
+      setCurrent(updated)
+      setEditPhotos(mergedPhotos)
+      setEditDocs(mergedDocs)
+      setNewPhotos([])
+      setNewDocs([])
       setEditing(false)
-      return
+      onSaved(updated)
+      toaster.create({ type: 'success', title: 'Listing Updated', description: `${changes.length} field${changes.length !== 1 ? 's' : ''} updated.` })
+    } catch (err) {
+      toaster.create({ type: 'error', title: 'Save Failed', description: (err as Error).message })
+    } finally {
+      setSaving(false)
     }
-
-    const updated: Property = {
-      ...current,
-      status:           draft.status,
-      price:            Number(draft.price),
-      floorArea:        Number(draft.floorArea),
-      lotArea:          Number(draft.lotArea),
-      bedrooms:         Number(draft.bedrooms),
-      bathrooms:        Number(draft.bathrooms),
-      parking:          Number(draft.parking),
-      ownerName:        draft.ownerName,
-      nameInTitle:      draft.nameInTitle,
-      taxDeclarationNo: draft.taxDeclarationNo,
-      description:      draft.description,
-    }
-
-    addLog({
-      action:        'edited',
-      propertyId:    orig.id,
-      propertyTitle: orig.title,
-      agentId:       user?.id ?? '',
-      agentName:     user?.name ?? '',
-      changes,
-    })
-
-    setCurrent(updated)
-    setEditing(false)
-    onSaved(updated)
-
-    toaster.create({
-      type:        'success',
-      title:       'Listing Updated',
-      description: `${changes.length} field${changes.length > 1 ? 's' : ''} updated and logged.`,
-    })
   }
 
   function handleCancel() {
     setDraft(toDraft(current))
+    setEditPhotos(current.photos ?? [])
+    setEditDocs(current.documents ?? [])
+    setNewPhotos([])
+    setNewDocs([])
     setEditing(false)
   }
 
@@ -320,10 +348,10 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
                     style={{ color: 'var(--muted-foreground)', backgroundColor: 'var(--accent)' }}>
                     <ArrowLeft size={11} />Cancel
                   </button>
-                  <button onClick={handleSave}
-                    className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-[var(--radius-sm)] text-white"
+                  <button onClick={handleSave} disabled={saving}
+                    className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-[var(--radius-sm)] text-white disabled:opacity-60"
                     style={{ backgroundColor: 'var(--primary)' }}>
-                    <Check size={11} />Save
+                    {saving ? <><span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />Saving…</> : <><Check size={11} />Save</>}
                   </button>
                 </div>
               )}
@@ -451,63 +479,114 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* Photos */}
-          {current.photos && current.photos.length > 0 && (
-            <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
-              <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>
-                Photos ({current.photos.length})
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {current.photos.map((url, i) => (
-                  url.startsWith('http') ? (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                      className="block rounded-lg overflow-hidden border aspect-video"
-                      style={{ borderColor: 'var(--border)' }}>
-                      <img src={url} alt={`Photo ${i + 1}`}
-                        className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
-                    </a>
-                  ) : (
-                    <div key={i} className="rounded-lg border aspect-video flex items-center justify-center"
-                      style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
-                      <div className="text-center">
-                        <span className="text-2xl">🖼️</span>
-                        <p className="text-xs mt-1 truncate px-2" style={{ color: 'var(--muted-foreground)' }}>{url}</p>
-                      </div>
-                    </div>
-                  )
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Photos — view + edit */}
+          <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>
+              Photos {(editing ? editPhotos.length + newPhotos.length : current.photos?.length ?? 0) > 0 && `(${editing ? editPhotos.length + newPhotos.length : current.photos?.length})`}
+            </p>
 
-          {/* Documents */}
-          {current.documents && current.documents.length > 0 && (
-            <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
-              <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>Documents</p>
-              <div className="space-y-1.5">
-                {current.documents.map((doc, i) => {
-                  const content = (
-                    <>
+            {!editing ? (
+              /* View mode */
+              (current.photos && current.photos.length > 0) ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {current.photos.map((url, i) => (
+                    url.startsWith('http') ? (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                        className="block rounded-lg overflow-hidden border aspect-video"
+                        style={{ borderColor: 'var(--border)' }}>
+                        <img src={url} alt={`Photo ${i + 1}`}
+                          className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                      </a>
+                    ) : (
+                      <div key={i} className="rounded-lg border aspect-video flex flex-col items-center justify-center gap-1"
+                        style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
+                        <ImagePlus size={20} style={{ color: 'var(--muted-foreground)' }} />
+                        <p className="text-xs truncate px-2" style={{ color: 'var(--muted-foreground)' }}>{url}</p>
+                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Click Edit to re-upload</p>
+                      </div>
+                    )
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No photos attached.</p>
+              )
+            ) : (
+              /* Edit mode */
+              <div className="space-y-2">
+                {/* Existing photos with remove */}
+                {editPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {editPhotos.map((url, i) => (
+                      <div key={i} className="relative aspect-square rounded-lg overflow-hidden border group"
+                        style={{ borderColor: 'var(--border)' }}>
+                        {url.startsWith('http') ? (
+                          <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center"
+                            style={{ backgroundColor: 'var(--accent)' }}>
+                            <ImagePlus size={16} style={{ color: 'var(--muted-foreground)' }} />
+                          </div>
+                        )}
+                        <button type="button"
+                          onClick={() => setEditPhotos(p => p.filter((_, j) => j !== i))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10">
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Add new photos */}
+                <MultiPhotoUpload photos={newPhotos} onChange={setNewPhotos} maxSizeMB={20} />
+              </div>
+            )}
+          </div>
+
+          {/* Documents — view + edit */}
+          <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>Documents</p>
+
+            {!editing ? (
+              (current.documents && current.documents.length > 0) ? (
+                <div className="space-y-1.5">
+                  {current.documents.map((doc, i) => {
+                    const content = (<>
                       <span className="text-lg shrink-0">📄</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
-                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.type.replace('_', ' ').toUpperCase()}{doc.size ? ` · ${doc.size}` : ''}</p>
+                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.type?.replace('_',' ').toUpperCase()}{doc.size ? ` · ${doc.size}` : ''}</p>
                       </div>
                       <Paperclip size={14} style={{ color: 'var(--muted-foreground)' }} />
-                    </>
-                  )
-                  const cls = "flex items-center gap-3 rounded-lg border px-4 py-2.5 transition-all hover:shadow-sm"
-                  const sty = { backgroundColor: 'var(--card)', borderColor: 'var(--border)' }
-                  const hover = { onMouseEnter: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--accent)'), onMouseLeave: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--card)') }
-                  return doc.url ? (
-                    <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className={cls} style={sty} {...hover}>{content}</a>
-                  ) : (
-                    <div key={i} className={cls} style={sty} {...hover}>{content}</div>
-                  )
-                })}
+                    </>)
+                    const cls = "flex items-center gap-3 rounded-lg border px-4 py-2.5 transition-all hover:shadow-sm"
+                    const sty = { backgroundColor: 'var(--card)', borderColor: 'var(--border)' }
+                    const hover = { onMouseEnter: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--accent)'), onMouseLeave: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--card)') }
+                    return doc.url ? (
+                      <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className={cls} style={sty} {...hover}>{content}</a>
+                    ) : (
+                      <div key={i} className={cls} style={sty} {...hover}>{content}</div>
+                    )
+                  })}
+                </div>
+              ) : <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No documents attached.</p>
+            ) : (
+              /* Edit mode — remove existing + add new */
+              <div className="space-y-2">
+                {editDocs.map((doc, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border"
+                    style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+                    <span className="text-lg shrink-0">📄</span>
+                    <p className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
+                    <button type="button" onClick={() => setEditDocs(d => d.filter((_, j) => j !== i))}
+                      className="p-1 hover:text-red-500 transition-colors" style={{ color: 'var(--muted-foreground)' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+                <MultiDocUpload docs={newDocs} onChange={setNewDocs} maxSizeMB={20} />
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -529,10 +608,10 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
           )}
           {editing && (
             <>
-              <button onClick={handleSave}
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-all hover:opacity-90"
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-60"
                 style={{ backgroundColor: 'var(--primary)' }}>
-                <Check size={14} />Save Changes
+                {saving ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Check size={14} />Save Changes</>}
               </button>
               <button onClick={handleCancel}
                 className="flex-1 py-2 rounded-[var(--radius-sm)] text-sm font-semibold border transition-all hover:opacity-80"
