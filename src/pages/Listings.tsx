@@ -15,10 +15,13 @@ import type { Property, PropertyStatus, PropertyType } from '@/types/property'
 import type { FieldChange } from '@/types/activityLog'
 import { useNavigate } from 'react-router-dom'
 
-function pricePerSqm(price: number, floorArea: number, lotArea: number): string {
-  const area = floorArea > 0 ? floorArea : lotArea
-  if (!area) return '—'
-  return formatPHP(Math.round(price / area)) + '/sqm'
+function pricePerSqm(price: number | undefined, floorArea: number | undefined, lotArea: number | undefined): string {
+  const fa  = Number(floorArea)  || 0
+  const la  = Number(lotArea)    || 0
+  const p   = Number(price)      || 0
+  const area = fa > 0 ? fa : la
+  if (!area || !p) return '—'
+  return formatPHP(Math.round(p / area)) + '/sqm'
 }
 import { toaster } from '@/components/ui/toast'
 
@@ -464,24 +467,60 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
             </div>
           </div>
 
+          {/* Photos */}
+          {current.photos && current.photos.length > 0 && (
+            <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
+              <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>
+                Photos ({current.photos.length})
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {current.photos.map((url, i) => (
+                  url.startsWith('http') ? (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      className="block rounded-lg overflow-hidden border aspect-video"
+                      style={{ borderColor: 'var(--border)' }}>
+                      <img src={url} alt={`Photo ${i + 1}`}
+                        className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                    </a>
+                  ) : (
+                    <div key={i} className="rounded-lg border aspect-video flex items-center justify-center"
+                      style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
+                      <div className="text-center">
+                        <span className="text-2xl">🖼️</span>
+                        <p className="text-xs mt-1 truncate px-2" style={{ color: 'var(--muted-foreground)' }}>{url}</p>
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Documents */}
-          {current.documents.length > 0 && (
+          {current.documents && current.documents.length > 0 && (
             <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
               <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>Documents</p>
               <div className="space-y-1.5">
-                {current.documents.map((doc, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-lg border px-4 py-2.5 cursor-pointer transition-all hover:shadow-sm"
-                    style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--card)')}>
-                    <span className="text-lg shrink-0">📄</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.type.replace('_', ' ').toUpperCase()} · {doc.size}</p>
-                    </div>
-                    <Paperclip size={14} style={{ color: 'var(--muted-foreground)' }} />
-                  </div>
-                ))}
+                {current.documents.map((doc, i) => {
+                  const content = (
+                    <>
+                      <span className="text-lg shrink-0">📄</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
+                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.type.replace('_', ' ').toUpperCase()}{doc.size ? ` · ${doc.size}` : ''}</p>
+                      </div>
+                      <Paperclip size={14} style={{ color: 'var(--muted-foreground)' }} />
+                    </>
+                  )
+                  const cls = "flex items-center gap-3 rounded-lg border px-4 py-2.5 transition-all hover:shadow-sm"
+                  const sty = { backgroundColor: 'var(--card)', borderColor: 'var(--border)' }
+                  const hover = { onMouseEnter: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--accent)'), onMouseLeave: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--card)') }
+                  return doc.url ? (
+                    <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className={cls} style={sty} {...hover}>{content}</a>
+                  ) : (
+                    <div key={i} className={cls} style={sty} {...hover}>{content}</div>
+                  )
+                })}
               </div>
             </div>
           )}

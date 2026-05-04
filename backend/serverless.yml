@@ -193,10 +193,30 @@ resources:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: nesw-portal-files-${self:provider.stage}
+        # Allow public GET so photo/document URLs render in the browser
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
         CorsConfiguration:
           CorsRules:
             - AllowedHeaders: ['*']
               AllowedMethods: [GET, PUT, POST, DELETE]
               AllowedOrigins:
                 - ${env:FRONTEND_URL, '${self:custom.frontendUrl.${self:provider.stage}}'}
+                - 'http://localhost:5173'
+                - 'http://localhost:5174'
               MaxAge: 3600
+
+    FilesBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref FilesBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: '*'
+              Action: s3:GetObject
+              Resource: !Sub 'arn:aws:s3:::nesw-portal-files-${self:provider.stage}/*'

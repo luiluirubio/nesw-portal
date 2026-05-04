@@ -48,7 +48,7 @@ const STEPS = [
   { number: 6, label: 'Review & Submit',  icon: Eye           },
 ]
 
-interface UploadedFile { name: string; size: string; type: 'photo' | 'document' }
+interface UploadedFile { name: string; size: string; type: 'photo' | 'document'; file?: File }
 
 // ── Step Indicator ────────────────────────────────────────────────────────────
 function StepIndicator({ current }: { current: number }) {
@@ -247,7 +247,7 @@ export function AddListing() {
     if (oversized.length > 0) {
       toaster.create({ type: 'error', title: 'File too large', description: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length === 1 ? 's' : ''} ${MAX_FILE_MB}MB limit.` })
     }
-    setPhotos(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'photo' as const }))])
+    setPhotos(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'photo' as const, file: f }))])
   }
 
   function handleDocs(files: FileList | null) {
@@ -256,7 +256,7 @@ export function AddListing() {
     if (oversized.length > 0) {
       toaster.create({ type: 'error', title: 'File too large', description: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length === 1 ? 's' : ''} ${MAX_FILE_MB}MB limit.` })
     }
-    setDocs(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'document' as const }))])
+    setDocs(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'document' as const, file: f }))])
   }
 
   // ── Per-step validation ────────────────────────────────────────────────
@@ -306,6 +306,27 @@ export function AddListing() {
   async function handleSubmit() {
     setSubmitted(true)
     try {
+      // ── Upload photos to S3 ───────────────────────────────────────────
+      const photoUrls: string[] = []
+      for (const f of uploadedPhotos) {
+        if (f.file) {
+          const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: f.file.type })
+          await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': f.file.type } })
+          photoUrls.push(publicUrl)
+        }
+      }
+
+      // ── Upload documents to S3 ────────────────────────────────────────
+      const docObjects: { name: string; type: string; size: string; url: string }[] = []
+      for (const f of uploadedDocs) {
+        if (f.file) {
+          const fileType = f.file.type || 'application/octet-stream'
+          const { url, publicUrl } = await api.presign({ fileName: f.name, fileType })
+          await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': fileType } })
+          docObjects.push({ name: f.name, type: 'other', size: f.size, url: publicUrl })
+        }
+      }
+
       const body = {
         title:           form.title,
         type:            form.type,
@@ -334,8 +355,8 @@ export function AddListing() {
         contactPhone:    form.contactPhone,
         contactTelephone: form.contactTelephone || undefined,
         features:        selectedFeatures,
-        photos:          uploadedPhotos.map(f => f.name),
-        documents:       uploadedDocs.map(f => ({ name: f.name, type: 'other', size: f.size })),
+        photos:          photoUrls,
+        documents:       docObjects,
         agentId:         user?.id ?? '',
         agentName:       user?.name ?? '',
         coBroker: form.coBrokerName ? {

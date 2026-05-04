@@ -22,6 +22,7 @@ export interface PropertyDocument {
   name: string
   type: 'title' | 'tax_dec' | 'floor_plan' | 'survey' | 'photo' | 'other'
   size: string
+  url?: string   // S3 public URL (set after successful upload)
 }
 
 export interface Property {
