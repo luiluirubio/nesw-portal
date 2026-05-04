@@ -12,6 +12,7 @@ import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
 import { api } from '@/lib/api'
 import { MultiPhotoUpload, MultiDocUpload } from '@/components/ui/file-upload'
 import type { PhotoFile, DocFile } from '@/components/ui/file-upload'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ListingDraft } from '@/types/draft'
 import type { Property, PropertyStatus, PropertyType } from '@/types/property'
 import type { FieldChange } from '@/types/activityLog'
@@ -114,6 +115,13 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   const [pendingPhotos, setPendingPhotos] = useState<PhotoFile[]>([])
   const [liveDocs, setLiveDocs]       = useState<Property['documents']>(orig.documents ?? [])
   const [pendingDocs, setPendingDocs] = useState<DocFile[]>([])
+
+  // Deletion confirmation
+  const [confirmDelete, setConfirmDelete] = useState<
+    { type: 'photo'; index: number; name: string } |
+    { type: 'doc';   index: number; name: string } |
+    null
+  >(null)
 
   const sc = statusConfig[current.status]
 
@@ -526,7 +534,8 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
                         <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
                       </a>
                       {canEdit && (
-                        <button type="button" onClick={() => removeLivePhoto(i)}
+                        <button type="button"
+                          onClick={() => setConfirmDelete({ type: 'photo', index: i, name: `Photo ${i + 1}` })}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-500 transition-colors z-10">
                           <X size={10} />
                         </button>
@@ -538,7 +547,8 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
                       <ImagePlus size={16} style={{ color: 'var(--muted-foreground)' }} />
                       <p className="text-xs truncate px-2 max-w-full" style={{ color: 'var(--muted-foreground)' }}>{url}</p>
                       {canEdit && (
-                        <button type="button" onClick={() => removeLivePhoto(i)}
+                        <button type="button"
+                          onClick={() => setConfirmDelete({ type: 'photo', index: i, name: url.split('/').pop() ?? `Photo ${i + 1}` })}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10">
                           <X size={10} />
                         </button>
@@ -590,7 +600,8 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
                     </div>
                     {doc.url && <Paperclip size={12} style={{ color: 'var(--primary)' }} />}
                     {canEdit && (
-                      <button type="button" onClick={() => removeLiveDoc(i)}
+                      <button type="button"
+                        onClick={() => setConfirmDelete({ type: 'doc', index: i, name: doc.name })}
                         className="p-1 rounded transition-colors hover:text-red-500 shrink-0" style={{ color: 'var(--muted-foreground)' }}>
                         <Trash2 size={13} />
                       </button>
@@ -651,6 +662,21 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
         @keyframes fadeIn       { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideInRight { from { transform: translateX(100%); opacity:.6 } to { transform: translateX(0); opacity:1 } }
       `}</style>
+
+      {/* Deletion confirmation dialog */}
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={confirmDelete?.type === 'photo' ? 'Remove Photo?' : 'Remove Document?'}
+        description={`"${confirmDelete?.name}" will be permanently removed from this listing. This cannot be undone.`}
+        confirmLabel="Remove"
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (!confirmDelete) return
+          if (confirmDelete.type === 'photo') removeLivePhoto(confirmDelete.index)
+          else                                removeLiveDoc(confirmDelete.index)
+          setConfirmDelete(null)
+        }}
+      />
     </>
   )
 }
