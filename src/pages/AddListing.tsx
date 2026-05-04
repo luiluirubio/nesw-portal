@@ -116,6 +116,8 @@ export function AddListing() {
     description: '',
     contactPerson: '', contactEmail: '', contactPhone: '', contactTelephone: '',
     subdivision: '' as string,
+    coBrokerName: '', coBrokerLicenseNo: '', coBrokerMobile: '',
+    coBrokerEmail: '', coBrokerTelephone: '', coBrokerAddress: '', coBrokerAffiliation: '',
   }
 
   const isResuming = !!searchParams.get('draft')
@@ -132,6 +134,7 @@ export function AddListing() {
   const [loadingDraft, setLoadingDraft] = useState(!!searchParams.get('draft'))
   const [subdivisionOptions] = useState<string[]>([])
   const [emailSuggestions, setEmailSuggestions]     = useState<string[]>([])
+  const [showCoBroker, setShowCoBroker]             = useState(false)
 
   // ── Load existing draft from cloud on mount ────────────────────────────
   useEffect(() => {
@@ -140,7 +143,19 @@ export function AddListing() {
     fetchDraft(id).then(d => {
       if (d) {
         setStep(d.lastStep)
-        setForm({ ...d.form, subdivision: d.form.subdivision ?? '', contactTelephone: d.form.contactTelephone ?? '' })
+        setForm({
+          ...d.form,
+          subdivision:       d.form.subdivision       ?? '',
+          contactTelephone:  d.form.contactTelephone  ?? '',
+          coBrokerName:      d.form.coBrokerName      ?? '',
+          coBrokerLicenseNo: d.form.coBrokerLicenseNo ?? '',
+          coBrokerMobile:    d.form.coBrokerMobile    ?? '',
+          coBrokerEmail:     d.form.coBrokerEmail     ?? '',
+          coBrokerTelephone: d.form.coBrokerTelephone ?? '',
+          coBrokerAddress:   d.form.coBrokerAddress   ?? '',
+          coBrokerAffiliation: d.form.coBrokerAffiliation ?? '',
+        })
+        if (d.form.coBrokerName) setShowCoBroker(true)
         setFeatures(d.features)
         setPhotos(d.photos.map(f => ({ ...f, type: 'photo'    as const })))
         setDocs(d.docs.map(f   => ({ ...f, type: 'document' as const })))
@@ -323,6 +338,15 @@ export function AddListing() {
         documents:       uploadedDocs.map(f => ({ name: f.name, type: 'other', size: f.size })),
         agentId:         user?.id ?? '',
         agentName:       user?.name ?? '',
+        coBroker: form.coBrokerName ? {
+          name:        form.coBrokerName,
+          licenseNo:   form.coBrokerLicenseNo,
+          mobile:      form.coBrokerMobile,
+          email:       form.coBrokerEmail,
+          telephone:   form.coBrokerTelephone,
+          address:     form.coBrokerAddress,
+          affiliation: form.coBrokerAffiliation,
+        } : undefined,
       }
 
       const created = await api.createProperty(body) as { id: string }
@@ -822,6 +846,105 @@ export function AddListing() {
               </div>
             </div>
 
+            {/* Co-Broker */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Co-Broker</p>
+                <button
+                  type="button"
+                  onClick={() => { setShowCoBroker(s => !s); if (showCoBroker) { ['coBrokerName','coBrokerLicenseNo','coBrokerMobile','coBrokerEmail','coBrokerTelephone','coBrokerAddress','coBrokerAffiliation'].forEach(f => update(f, '')) } }}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+                  style={{
+                    backgroundColor: showCoBroker ? 'var(--primary)' : 'var(--background)',
+                    color:           showCoBroker ? 'white'           : 'var(--foreground)',
+                    borderColor:     showCoBroker ? 'var(--primary)'  : 'var(--border)',
+                  }}>
+                  {showCoBroker ? '✓ Co-Broker Added' : '+ Add Co-Broker'}
+                </button>
+              </div>
+
+              {showCoBroker && (
+                <div className="rounded-[var(--radius-sm)] border p-4 space-y-4"
+                  style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
+
+                  {/* Row 1: Name + License No */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className={lbl} style={lblS}>Co-Broker Name</label>
+                      <input value={form.coBrokerName} onChange={e => update('coBrokerName', e.target.value)}
+                        placeholder="e.g. Maria Santos"
+                        className={inputClass} style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                    </div>
+                    <div>
+                      <label className={lbl} style={lblS}>PRC License No.</label>
+                      <input value={form.coBrokerLicenseNo} onChange={e => update('coBrokerLicenseNo', e.target.value)}
+                        placeholder="e.g. REB-2024-005678"
+                        className={inputClass} style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Mobile + Email */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className={lbl} style={lblS}>Mobile Number</label>
+                      <input type="tel" value={form.coBrokerMobile}
+                        onChange={e => update('coBrokerMobile', formatPhone(e.target.value))}
+                        placeholder="09XX-XXX-XXXX" maxLength={16}
+                        className={inputClass} style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                    </div>
+                    <div>
+                      <label className={lbl} style={lblS}>Email Address</label>
+                      <input type="email" value={form.coBrokerEmail}
+                        onChange={e => update('coBrokerEmail', e.target.value)}
+                        placeholder="e.g. maria@realty.com"
+                        className={inputClass} style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                    </div>
+                  </div>
+
+                  {/* Row 3: Telephone + Affiliation */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className={lbl} style={lblS}>Telephone Number</label>
+                      <input type="tel" value={form.coBrokerTelephone}
+                        onChange={e => update('coBrokerTelephone', e.target.value)}
+                        placeholder="e.g. (02) 8123-4567"
+                        className={inputClass} style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                    </div>
+                    <div>
+                      <label className={lbl} style={lblS}>Affiliation / Company</label>
+                      <input value={form.coBrokerAffiliation}
+                        onChange={e => update('coBrokerAffiliation', e.target.value)}
+                        placeholder="e.g. Santos Realty Inc."
+                        className={inputClass} style={inputStyle}
+                        onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                    </div>
+                  </div>
+
+                  {/* Row 4: Address (full width) */}
+                  <div>
+                    <label className={lbl} style={lblS}>Office Address</label>
+                    <input value={form.coBrokerAddress}
+                      onChange={e => update('coBrokerAddress', e.target.value)}
+                      placeholder="e.g. Unit 301, Ayala Ave., Makati City"
+                      className={inputClass} style={inputStyle}
+                      onFocus={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                      onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')} />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Photos */}
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Property Photos</p>
@@ -923,6 +1046,18 @@ export function AddListing() {
               <ReviewRow label="Mobile"    value={form.contactPhone} />
               {form.contactTelephone && <ReviewRow label="Telephone" value={form.contactTelephone} />}
             </ReviewSection>
+
+            {form.coBrokerName && (
+              <ReviewSection title="Co-Broker">
+                <ReviewRow label="Name"        value={form.coBrokerName} />
+                <ReviewRow label="License No." value={form.coBrokerLicenseNo} />
+                <ReviewRow label="Mobile"      value={form.coBrokerMobile} />
+                {form.coBrokerEmail     && <ReviewRow label="Email"       value={form.coBrokerEmail} />}
+                {form.coBrokerTelephone && <ReviewRow label="Telephone"   value={form.coBrokerTelephone} />}
+                {form.coBrokerAffiliation && <ReviewRow label="Affiliation" value={form.coBrokerAffiliation} />}
+                {form.coBrokerAddress   && <ReviewRow label="Address"     value={form.coBrokerAddress} />}
+              </ReviewSection>
+            )}
 
             <ReviewSection title="Media">
               <ReviewRow label="Photos"    value={uploadedPhotos.length ? `${uploadedPhotos.length} photo(s) attached` : 'None'} />

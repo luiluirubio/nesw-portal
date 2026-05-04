@@ -55,4 +55,14 @@ export interface Property {
   contactPhone: string
   // Optional
   subdivision?: string
+  // Co-Broker (optional — present only when a co-broker is involved)
+  coBroker?: {
+    name:        string
+    licenseNo:   string
+    mobile:      string
+    email:       string
+    telephone:   string
+    address:     string
+    affiliation: string
+  }
 }

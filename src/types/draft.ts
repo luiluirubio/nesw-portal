@@ -30,6 +30,14 @@ export interface ListingDraft {
     contactPhone: string
     contactTelephone: string
     subdivision?: string
+    // Co-Broker (all optional)
+    coBrokerName: string
+    coBrokerLicenseNo: string
+    coBrokerMobile: string
+    coBrokerEmail: string
+    coBrokerTelephone: string
+    coBrokerAddress: string
+    coBrokerAffiliation: string
   }
   features: string[]
   photos: { name: string; size: string }[]
