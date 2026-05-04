@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Upload, X, FileText, Image, ChevronDown, CheckCircle,
+  Upload, ChevronDown, CheckCircle,
   ArrowLeft, ArrowRight, ClipboardList, MapPin, Ruler,
   User, FileImage, Eye,
 } from 'lucide-react'
 import { toaster } from '@/components/ui/toast'
 import { ComboBox } from '@/components/ui/combo-box'
 import type { ComboBoxOption } from '@/components/ui/combo-box'
+import { MultiPhotoUpload, MultiDocUpload } from '@/components/ui/file-upload'
+import type { PhotoFile, DocFile } from '@/components/ui/file-upload'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { useLogs } from '@/context/LogsContext'
@@ -19,7 +21,6 @@ import type { PropertyType, ListingType } from '@/types/property'
 const EMAIL_DOMAINS = ['gmail.com','yahoo.com','outlook.com','hotmail.com','neswcorp.com','icloud.com','live.com','yahoo.com.ph']
 
 const MAX_FILE_MB = 20
-const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const propertyTypes: { value: PropertyType; label: string }[] = [
@@ -48,7 +49,6 @@ const STEPS = [
   { number: 6, label: 'Review & Submit',  icon: Eye           },
 ]
 
-interface UploadedFile { name: string; size: string; type: 'photo' | 'document'; file?: File }
 
 // ── Step Indicator ────────────────────────────────────────────────────────────
 function StepIndicator({ current }: { current: number }) {
@@ -100,8 +100,6 @@ export function AddListing() {
   const { addLog } = useLogs()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const photoInputRef = useRef<HTMLInputElement>(null)
-  const docInputRef   = useRef<HTMLInputElement>(null)
 
   // ── Draft ID — stable for this session ───────────────────────────────
   const draftIdRef = useRef<string>(searchParams.get('draft') ?? generateDraftId())
@@ -126,10 +124,8 @@ export function AddListing() {
   const [form, setForm]               = useState(blankForm)
   const [errors, setErrors]           = useState<Record<string, string>>({})
   const [selectedFeatures, setFeatures] = useState<string[]>([])
-  const [uploadedPhotos, setPhotos]   = useState<UploadedFile[]>([])
-  const [uploadedDocs, setDocs]       = useState<UploadedFile[]>([])
-  const [photoDrag, setPhotoDrag]     = useState(false)
-  const [docDrag, setDocDrag]         = useState(false)
+  const [uploadedPhotos, setPhotos]   = useState<PhotoFile[]>([])
+  const [uploadedDocs, setDocs]       = useState<DocFile[]>([])
   const [submitted, setSubmitted]     = useState(false)
   const [loadingDraft, setLoadingDraft] = useState(!!searchParams.get('draft'))
   const [subdivisionOptions] = useState<string[]>([])
@@ -157,8 +153,9 @@ export function AddListing() {
         })
         if (d.form.coBrokerName) setShowCoBroker(true)
         setFeatures(d.features)
-        setPhotos(d.photos.map(f => ({ ...f, type: 'photo'    as const })))
-        setDocs(d.docs.map(f   => ({ ...f, type: 'document' as const })))
+        // Files cannot be restored from draft metadata — user re-selects them
+        setPhotos([])
+        setDocs([])
       }
     }).finally(() => setLoadingDraft(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -175,7 +172,7 @@ export function AddListing() {
       form,
       features:  selectedFeatures,
       photos:    uploadedPhotos.map(f => ({ name: f.name, size: f.size })),
-      docs:      uploadedDocs.map(f   => ({ name: f.name, size: f.size })),
+      docs:      uploadedDocs.map(f  => ({ name: f.name, size: f.size })),
     })
   }, [draftId, user, step, form, selectedFeatures, uploadedPhotos, uploadedDocs, submitted, loadingDraft])
 
@@ -235,29 +232,6 @@ export function AddListing() {
     setFeatures(p => p.includes(f) ? p.filter(x => x !== f) : [...p, f])
   }
 
-  function formatFileSize(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024*1024) return `${(bytes/1024).toFixed(1)} KB`
-    return `${(bytes/1024/1024).toFixed(1)} MB`
-  }
-
-  function handlePhotos(files: FileList | null) {
-    if (!files) return
-    const oversized = Array.from(files).filter(f => f.size > MAX_FILE_BYTES)
-    if (oversized.length > 0) {
-      toaster.create({ type: 'error', title: 'File too large', description: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length === 1 ? 's' : ''} ${MAX_FILE_MB}MB limit.` })
-    }
-    setPhotos(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'photo' as const, file: f }))])
-  }
-
-  function handleDocs(files: FileList | null) {
-    if (!files) return
-    const oversized = Array.from(files).filter(f => f.size > MAX_FILE_BYTES)
-    if (oversized.length > 0) {
-      toaster.create({ type: 'error', title: 'File too large', description: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length === 1 ? 's' : ''} ${MAX_FILE_MB}MB limit.` })
-    }
-    setDocs(p => [...p, ...Array.from(files).filter(f => f.size <= MAX_FILE_BYTES).map(f => ({ name: f.name, size: formatFileSize(f.size), type: 'document' as const, file: f }))])
-  }
 
   // ── Per-step validation ────────────────────────────────────────────────
   function validateStep(s: number): Record<string, string> {
@@ -309,22 +283,18 @@ export function AddListing() {
       // ── Upload photos to S3 ───────────────────────────────────────────
       const photoUrls: string[] = []
       for (const f of uploadedPhotos) {
-        if (f.file) {
-          const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: f.file.type })
-          await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': f.file.type } })
-          photoUrls.push(publicUrl)
-        }
+        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: f.file.type })
+        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': f.file.type } })
+        photoUrls.push(publicUrl)
       }
 
       // ── Upload documents to S3 ────────────────────────────────────────
       const docObjects: { name: string; type: string; size: string; url: string }[] = []
       for (const f of uploadedDocs) {
-        if (f.file) {
-          const fileType = f.file.type || 'application/octet-stream'
-          const { url, publicUrl } = await api.presign({ fileName: f.name, fileType })
-          await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': fileType } })
-          docObjects.push({ name: f.name, type: 'other', size: f.size, url: publicUrl })
-        }
+        const fileType = f.file.type || 'application/octet-stream'
+        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType })
+        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': fileType } })
+        docObjects.push({ name: f.name, type: 'other', size: f.size, url: publicUrl })
       }
 
       const body = {
@@ -969,53 +939,21 @@ export function AddListing() {
             {/* Photos */}
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Property Photos</p>
-              <div
-                className="border-2 border-dashed rounded-[var(--radius-sm)] p-6 text-center cursor-pointer transition-all"
-                style={{ borderColor: photoDrag ? 'var(--primary)' : 'var(--border)', backgroundColor: photoDrag ? 'var(--accent)' : 'var(--card)' }}
-                onClick={() => photoInputRef.current?.click()}
-                onDragOver={e => { e.preventDefault(); setPhotoDrag(true) }}
-                onDragLeave={() => setPhotoDrag(false)}
-                onDrop={e => { e.preventDefault(); setPhotoDrag(false); handlePhotos(e.dataTransfer.files) }}>
-                <Image size={28} className="mx-auto mb-2" style={{ color: 'var(--muted-foreground)' }} />
-                <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Click or drag & drop photos</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>JPG, PNG, WEBP — max {MAX_FILE_MB}MB per file</p>
-                <input ref={photoInputRef} type="file" multiple accept="image/*" className="hidden" onChange={e => handlePhotos(e.target.files)} />
-              </div>
-              {uploadedPhotos.map((f, i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg border"
-                  style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
-                  <span>🖼️</span>
-                  <span className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--foreground)' }}>{f.name}</span>
-                  <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{f.size}</span>
-                  <button type="button" onClick={() => setPhotos(p => p.filter((_,j) => j !== i))} style={{ color: 'var(--muted-foreground)' }} className="hover:text-red-500"><X size={13} /></button>
-                </div>
-              ))}
+              <MultiPhotoUpload
+                photos={uploadedPhotos}
+                onChange={setPhotos}
+                maxSizeMB={MAX_FILE_MB}
+              />
             </div>
 
             {/* Documents */}
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Supporting Documents</p>
-              <div
-                className="border-2 border-dashed rounded-[var(--radius-sm)] p-6 text-center cursor-pointer transition-all"
-                style={{ borderColor: docDrag ? 'var(--primary)' : 'var(--border)', backgroundColor: docDrag ? 'var(--accent)' : 'var(--card)' }}
-                onClick={() => docInputRef.current?.click()}
-                onDragOver={e => { e.preventDefault(); setDocDrag(true) }}
-                onDragLeave={() => setDocDrag(false)}
-                onDrop={e => { e.preventDefault(); setDocDrag(false); handleDocs(e.dataTransfer.files) }}>
-                <FileText size={28} className="mx-auto mb-2" style={{ color: 'var(--muted-foreground)' }} />
-                <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Click or drag & drop documents</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>TCT, Tax Dec, Floor Plan, Survey (PDF, DOC, DOCX) — max {MAX_FILE_MB}MB per file</p>
-                <input ref={docInputRef} type="file" multiple accept=".pdf,.doc,.docx" className="hidden" onChange={e => handleDocs(e.target.files)} />
-              </div>
-              {uploadedDocs.map((f, i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg border"
-                  style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
-                  <span>📄</span>
-                  <span className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--foreground)' }}>{f.name}</span>
-                  <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{f.size}</span>
-                  <button type="button" onClick={() => setDocs(p => p.filter((_,j) => j !== i))} style={{ color: 'var(--muted-foreground)' }} className="hover:text-red-500"><X size={13} /></button>
-                </div>
-              ))}
+              <MultiDocUpload
+                docs={uploadedDocs}
+                onChange={setDocs}
+                maxSizeMB={MAX_FILE_MB}
+              />
             </div>
           </div>
         )}
