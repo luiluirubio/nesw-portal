@@ -251,9 +251,7 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
                 {current.floorArea > 0 && <Field label="Floor Area" value={`${current.floorArea} sqm`} />}
                 {current.lotArea   > 0 && <Field label="Lot Area"   value={`${current.lotArea} sqm`}  />}
                 <Field label="Commission" value={`${current.commission}%`} />
-                {current.listingType === 'for_sale' && (
-                  <Field label="Price / sqm" value={pricePerSqm(current.price, current.floorArea, current.lotArea)} />
-                )}
+                <Field label="Price / sqm" value={pricePerSqm(current.price, current.floorArea, current.lotArea)} />
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-2 p-3 rounded-lg border" style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--primary)' }}>
@@ -896,13 +894,9 @@ export function Listings({ myOnly = false }: ListingsProps) {
                       {p.listingType === 'for_rent' ? `${formatPHP(p.price)}/mo` : formatPHP(p.price)}
                     </td>
                     <td className="hidden xl:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
-                      {p.listingType === 'for_sale' ? (
-                        <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
-                          {pricePerSqm(p.price, p.floorArea, p.lotArea)}
-                        </span>
-                      ) : (
-                        <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>—</span>
-                      )}
+                      <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
+                        {pricePerSqm(p.price, p.floorArea, p.lotArea)}
+                      </span>
                     </td>
                     <td className="px-3 md:px-4 py-3">
                       <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold inline-flex items-center gap-1', sc.bg, sc.text)}>
