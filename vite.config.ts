@@ -10,8 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Force new SW to take over immediately without waiting for old tabs to close
-      injectRegister: 'auto',
+      injectRegister: null,   // disables auto-registration so SW is not injected
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png'],
       manifest: {
         name: 'NESW Realty Portal',
