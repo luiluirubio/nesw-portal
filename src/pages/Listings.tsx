@@ -103,16 +103,17 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   // Admins can edit any listing; Agents can only edit their own
   const canEdit = user?.role === 'Admin' || orig.agentId === user?.id
 
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving]   = useState(false)
-  const [draft, setDraft]     = useState<EditDraft>(toDraft(orig))
-  const [current, setCurrent] = useState<Property>(orig)
+  const [editing, setEditing]     = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [mediaSaving, setMediaSaving] = useState(false)
+  const [draft, setDraft]         = useState<EditDraft>(toDraft(orig))
+  const [current, setCurrent]     = useState<Property>(orig)
 
-  // Photo / doc edit state
-  const [editPhotos, setEditPhotos] = useState<string[]>(orig.photos ?? [])
-  const [newPhotos,  setNewPhotos]  = useState<PhotoFile[]>([])
-  const [editDocs,   setEditDocs]   = useState<typeof orig.documents>(orig.documents ?? [])
-  const [newDocs,    setNewDocs]    = useState<DocFile[]>([])
+  // Photo / doc state — always active, not tied to edit mode
+  const [livePhotos, setLivePhotos] = useState<string[]>(orig.photos ?? [])
+  const [pendingPhotos, setPendingPhotos] = useState<PhotoFile[]>([])
+  const [liveDocs, setLiveDocs]   = useState<typeof orig.documents>(orig.documents ?? [])
+  const [pendingDocs, setPendingDocs] = useState<DocFile[]>([])
 
   const sc = statusConfig[current.status]
 
@@ -120,68 +121,66 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
     setDraft(d => ({ ...d, [key]: value }))
   }
 
+  // ── Save media (photos + docs) immediately — no Edit mode needed ──────
+  async function saveMedia(photos: string[], docs: typeof liveDocs, newP: PhotoFile[], newD: DocFile[]) {
+    setMediaSaving(true)
+    try {
+      const uploadedUrls: string[] = []
+      for (const f of newP) {
+        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: f.file.type, propertyId: orig.id })
+        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': f.file.type } })
+        uploadedUrls.push(publicUrl)
+      }
+      const uploadedDocs: Property['documents'] = []
+      for (const f of newD) {
+        const ft = f.file.type || 'application/octet-stream'
+        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: ft, propertyId: orig.id })
+        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': ft } })
+        uploadedDocs.push({ name: f.name, type: 'other' as const, size: f.size, url: publicUrl })
+      }
+      const mergedPhotos = [...photos, ...uploadedUrls]
+      const mergedDocs   = [...docs,   ...uploadedDocs]
+      const updated = { ...current, photos: mergedPhotos, documents: mergedDocs }
+      await api.updateProperty(orig.id, updated)
+      setCurrent(updated as Property)
+      setLivePhotos(mergedPhotos)
+      setLiveDocs(mergedDocs)
+      setPendingPhotos([])
+      setPendingDocs([])
+      onSaved(updated as Property)
+      toaster.create({ type: 'success', title: 'Media Saved', description: `${mergedPhotos.length} photo(s) · ${mergedDocs.length} document(s)` })
+    } catch (err) {
+      toaster.create({ type: 'error', title: 'Upload Failed', description: (err as Error).message })
+    } finally {
+      setMediaSaving(false)
+    }
+  }
+
+  // ── Save text field edits ───────────────────────────────────────────────
   async function handleSave() {
     setSaving(true)
     try {
-      // Upload any new photos to S3
-      const uploadedPhotoUrls: string[] = []
-      for (const f of newPhotos) {
-        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType: f.file.type, propertyId: orig.id })
-        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': f.file.type } })
-        uploadedPhotoUrls.push(publicUrl)
-      }
-
-      // Upload any new documents to S3
-      const uploadedDocObjects: Property['documents'] = []
-      for (const f of newDocs) {
-        const fileType = f.file.type || 'application/octet-stream'
-        const { url, publicUrl } = await api.presign({ fileName: f.name, fileType, propertyId: orig.id })
-        await fetch(url, { method: 'PUT', body: f.file, headers: { 'Content-Type': fileType } })
-        uploadedDocObjects.push({ name: f.name, type: 'other' as const, size: f.size, url: publicUrl })
-      }
-
-      const mergedPhotos = [...editPhotos, ...uploadedPhotoUrls]
-      const mergedDocs   = [...editDocs,   ...uploadedDocObjects]
-
       const changes: FieldChange[] = []
       EDITABLE_FIELDS.forEach(({ key, label }) => {
         const oldVal = key === 'price' ? String(current.price) : String(current[key as keyof Property] ?? '')
         const newVal = draft[key]
         if (oldVal !== newVal) changes.push({ field: label, oldValue: key === 'price' ? formatPHP(Number(oldVal)) : oldVal, newValue: key === 'price' ? formatPHP(Number(newVal)) : newVal })
       })
-      if (newPhotos.length)                changes.push({ field: 'Photos',    oldValue: `${editPhotos.length}`, newValue: `${mergedPhotos.length}` })
-      if (newDocs.length)                  changes.push({ field: 'Documents', oldValue: `${editDocs.length}`,   newValue: `${mergedDocs.length}`   })
-      if (editPhotos.length < (current.photos?.length ?? 0)) changes.push({ field: 'Photos removed', oldValue: '', newValue: '' })
-
+      if (changes.length === 0) {
+        toaster.create({ type: 'info', title: 'No Changes', description: 'No fields were modified.' })
+        setEditing(false); return
+      }
       const updated: Property = {
         ...current,
-        status:           draft.status,
-        price:            Number(draft.price),
-        floorArea:        Number(draft.floorArea),
-        lotArea:          Number(draft.lotArea),
-        bedrooms:         Number(draft.bedrooms),
-        bathrooms:        Number(draft.bathrooms),
-        parking:          Number(draft.parking),
-        ownerName:        draft.ownerName,
-        nameInTitle:      draft.nameInTitle,
-        taxDeclarationNo: draft.taxDeclarationNo,
-        description:      draft.description,
-        photos:           mergedPhotos,
-        documents:        mergedDocs,
+        status: draft.status, price: Number(draft.price),
+        floorArea: Number(draft.floorArea), lotArea: Number(draft.lotArea),
+        bedrooms: Number(draft.bedrooms), bathrooms: Number(draft.bathrooms), parking: Number(draft.parking),
+        ownerName: draft.ownerName, nameInTitle: draft.nameInTitle,
+        taxDeclarationNo: draft.taxDeclarationNo, description: draft.description,
       }
-
-      // Persist to API
       await api.updateProperty(orig.id, updated)
-
-      if (changes.length > 0) {
-        addLog({ action: 'edited', propertyId: orig.id, propertyTitle: orig.title, agentId: user?.id ?? '', agentName: user?.name ?? '', changes })
-      }
-
+      addLog({ action: 'edited', propertyId: orig.id, propertyTitle: orig.title, agentId: user?.id ?? '', agentName: user?.name ?? '', changes })
       setCurrent(updated)
-      setEditPhotos(mergedPhotos)
-      setEditDocs(mergedDocs)
-      setNewPhotos([])
-      setNewDocs([])
       setEditing(false)
       onSaved(updated)
       toaster.create({ type: 'success', title: 'Listing Updated', description: `${changes.length} field${changes.length !== 1 ? 's' : ''} updated.` })
@@ -194,10 +193,6 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
 
   function handleCancel() {
     setDraft(toDraft(current))
-    setEditPhotos(current.photos ?? [])
-    setEditDocs(current.documents ?? [])
-    setNewPhotos([])
-    setNewDocs([])
     setEditing(false)
   }
 
@@ -479,112 +474,123 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* Photos — view + edit */}
+          {/* Photos — always editable for canEdit users */}
           <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>
-              Photos {(editing ? editPhotos.length + newPhotos.length : current.photos?.length ?? 0) > 0 && `(${editing ? editPhotos.length + newPhotos.length : current.photos?.length})`}
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>
+                Photos {(livePhotos.length + pendingPhotos.length) > 0 && `(${livePhotos.length + pendingPhotos.length})`}
+              </p>
+              {canEdit && (livePhotos.length !== (current.photos?.length ?? 0) || pendingPhotos.length > 0 || pendingDocs.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => saveMedia(livePhotos, liveDocs, pendingPhotos, pendingDocs)}
+                  disabled={mediaSaving}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-bold text-white disabled:opacity-60"
+                  style={{ backgroundColor: 'var(--primary)' }}>
+                  {mediaSaving ? <><span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Upload size={11} />Save Media</>}
+                </button>
+              )}
+            </div>
 
-            {!editing ? (
-              /* View mode */
-              (current.photos && current.photos.length > 0) ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {current.photos.map((url, i) => (
-                    url.startsWith('http') ? (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                        className="block rounded-lg overflow-hidden border aspect-video"
-                        style={{ borderColor: 'var(--border)' }}>
-                        <img src={url} alt={`Photo ${i + 1}`}
-                          className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+            {/* Existing saved photos */}
+            {livePhotos.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
+                {livePhotos.map((url, i) => (
+                  url.startsWith('http') ? (
+                    <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border"
+                      style={{ borderColor: 'var(--border)' }}>
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+                        <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
                       </a>
-                    ) : (
-                      <div key={i} className="rounded-lg border aspect-video flex flex-col items-center justify-center gap-1"
-                        style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
-                        <ImagePlus size={20} style={{ color: 'var(--muted-foreground)' }} />
-                        <p className="text-xs truncate px-2" style={{ color: 'var(--muted-foreground)' }}>{url}</p>
-                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Click Edit to re-upload</p>
-                      </div>
-                    )
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No photos attached.</p>
-              )
-            ) : (
-              /* Edit mode */
-              <div className="space-y-2">
-                {/* Existing photos with remove */}
-                {editPhotos.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {editPhotos.map((url, i) => (
-                      <div key={i} className="relative aspect-square rounded-lg overflow-hidden border group"
-                        style={{ borderColor: 'var(--border)' }}>
-                        {url.startsWith('http') ? (
-                          <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center"
-                            style={{ backgroundColor: 'var(--accent)' }}>
-                            <ImagePlus size={16} style={{ color: 'var(--muted-foreground)' }} />
-                          </div>
-                        )}
+                      {canEdit && (
                         <button type="button"
-                          onClick={() => setEditPhotos(p => p.filter((_, j) => j !== i))}
+                          onClick={() => setLivePhotos(p => p.filter((_, j) => j !== i))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-500 transition-colors z-10">
+                          <X size={10} />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div key={i} className="relative aspect-square rounded-lg border flex flex-col items-center justify-center gap-1"
+                      style={{ backgroundColor: 'var(--accent)', borderColor: 'var(--border)' }}>
+                      <ImagePlus size={18} style={{ color: 'var(--muted-foreground)' }} />
+                      <p className="text-xs truncate px-2 max-w-full" style={{ color: 'var(--muted-foreground)' }}>{url}</p>
+                      {canEdit && (
+                        <button type="button"
+                          onClick={() => setLivePhotos(p => p.filter((_, j) => j !== i))}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 z-10">
                           <X size={10} />
                         </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Add new photos */}
-                <MultiPhotoUpload photos={newPhotos} onChange={setNewPhotos} maxSizeMB={20} />
+                      )}
+                    </div>
+                  )
+                ))}
               </div>
+            )}
+
+            {/* Upload zone — always visible for editors */}
+            {canEdit && (
+              <MultiPhotoUpload photos={pendingPhotos} onChange={setPendingPhotos} maxSizeMB={20} />
+            )}
+            {!canEdit && livePhotos.length === 0 && (
+              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No photos attached.</p>
             )}
           </div>
 
-          {/* Documents — view + edit */}
+          {/* Documents — always editable for canEdit users */}
           <div className="border-t border-dashed pt-3" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--muted-foreground)' }}>Documents</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>
+                Documents {(liveDocs.length + pendingDocs.length) > 0 && `(${liveDocs.length + pendingDocs.length})`}
+              </p>
+              {canEdit && (liveDocs.length !== (current.documents?.length ?? 0) || pendingDocs.length > 0 || pendingPhotos.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => saveMedia(livePhotos, liveDocs, pendingPhotos, pendingDocs)}
+                  disabled={mediaSaving}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-bold text-white disabled:opacity-60"
+                  style={{ backgroundColor: 'var(--primary)' }}>
+                  {mediaSaving ? <><span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Upload size={11} />Save Media</>}
+                </button>
+              )}
+            </div>
 
-            {!editing ? (
-              (current.documents && current.documents.length > 0) ? (
-                <div className="space-y-1.5">
-                  {current.documents.map((doc, i) => {
-                    const content = (<>
+            {/* Existing docs list */}
+            {liveDocs.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {liveDocs.map((doc, i) => {
+                  const row = (
+                    <div key={i} className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors"
+                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'var(--card)')}>
                       <span className="text-lg shrink-0">📄</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
-                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.type?.replace('_',' ').toUpperCase()}{doc.size ? ` · ${doc.size}` : ''}</p>
+                        <p className="text-xs font-semibold truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
+                        {doc.size && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{doc.size}</p>}
                       </div>
-                      <Paperclip size={14} style={{ color: 'var(--muted-foreground)' }} />
-                    </>)
-                    const cls = "flex items-center gap-3 rounded-lg border px-4 py-2.5 transition-all hover:shadow-sm"
-                    const sty = { backgroundColor: 'var(--card)', borderColor: 'var(--border)' }
-                    const hover = { onMouseEnter: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--accent)'), onMouseLeave: (e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.backgroundColor = 'var(--card)') }
-                    return doc.url ? (
-                      <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className={cls} style={sty} {...hover}>{content}</a>
-                    ) : (
-                      <div key={i} className={cls} style={sty} {...hover}>{content}</div>
-                    )
-                  })}
-                </div>
-              ) : <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No documents attached.</p>
-            ) : (
-              /* Edit mode — remove existing + add new */
-              <div className="space-y-2">
-                {editDocs.map((doc, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border"
-                    style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-                    <span className="text-lg shrink-0">📄</span>
-                    <p className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--foreground)' }}>{doc.name}</p>
-                    <button type="button" onClick={() => setEditDocs(d => d.filter((_, j) => j !== i))}
-                      className="p-1 hover:text-red-500 transition-colors" style={{ color: 'var(--muted-foreground)' }}>
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-                <MultiDocUpload docs={newDocs} onChange={setNewDocs} maxSizeMB={20} />
+                      {doc.url && <Paperclip size={12} style={{ color: 'var(--primary)' }} />}
+                      {canEdit && (
+                        <button type="button" onClick={() => setLiveDocs(d => d.filter((_, j) => j !== i))}
+                          className="p-1 rounded transition-colors hover:text-red-500" style={{ color: 'var(--muted-foreground)' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  )
+                  return doc.url
+                    ? <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="block">{row}</a>
+                    : row
+                })}
               </div>
+            )}
+
+            {/* Upload zone — always visible for editors */}
+            {canEdit && (
+              <MultiDocUpload docs={pendingDocs} onChange={setPendingDocs} maxSizeMB={20} />
+            )}
+            {!canEdit && liveDocs.length === 0 && (
+              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>No documents attached.</p>
             )}
           </div>
         </div>
