@@ -10,6 +10,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Force new SW to take over immediately without waiting for old tabs to close
+      injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png'],
       manifest: {
         name: 'NESW Realty Portal',
@@ -29,6 +31,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Force new SW to activate immediately (skipWaiting + clientsClaim)
+        skipWaiting: true,
+        clientsClaim: true,
         // Cache the app shell and static assets; skip API calls
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [
