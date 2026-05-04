@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, Home, ScrollText, X } from 'lucide-react'
+import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
@@ -80,10 +80,7 @@ export function Sidebar() {
           <>
             {/* Mobile: always show full header */}
             <div className="flex md:hidden flex-1 items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: 'var(--primary)' }}>
-                <Home size={16} className="text-white" />
-              </div>
+              <img src="/nesw-logo.png" alt="NESW" className="w-8 h-8 object-contain shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-black leading-tight truncate" style={{ color: 'var(--foreground)' }}>NESW Realty</p>
                 <p className="text-xs leading-tight" style={{ color: 'var(--muted-foreground)' }}>Property Portal</p>
@@ -92,20 +89,17 @@ export function Sidebar() {
                 <X size={16} />
               </button>
             </div>
-            {/* Desktop collapsed: icon only */}
+            {/* Desktop collapsed: logo only */}
             <button onClick={toggle} title="Expand sidebar"
-              className="hidden md:flex w-10 h-10 rounded-xl items-center justify-center hover:opacity-80 transition-opacity shrink-0"
-              style={{ backgroundColor: 'var(--primary)' }}>
-              <Home size={16} className="text-white" />
+              className="hidden md:flex w-10 h-10 rounded-xl items-center justify-center hover:opacity-90 transition-opacity shrink-0 overflow-hidden"
+              style={{ backgroundColor: 'var(--background)' }}>
+              <img src="/nesw-logo.png" alt="NESW" className="w-8 h-8 object-contain" />
             </button>
           </>
         ) : (
           <>
             <div className="flex-1 min-w-0 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: 'var(--primary)' }}>
-                <Home size={16} className="text-white" />
-              </div>
+              <img src="/nesw-logo.png" alt="NESW" className="w-8 h-8 object-contain shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-black leading-tight truncate" style={{ color: 'var(--foreground)' }}>NESW Realty</p>
                 <p className="text-xs leading-tight" style={{ color: 'var(--muted-foreground)' }}>Property Portal</p>

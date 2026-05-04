@@ -51,10 +51,11 @@ export function TopBar() {
         <span className="text-xs">NESW Realty Portal</span>
       </div>
 
-      {/* Mobile: app name centered */}
-      <p className="md:hidden text-sm font-bold flex-1 text-center" style={{ color: 'var(--foreground)' }}>
-        NESW Realty
-      </p>
+      {/* Mobile: logo + app name centered */}
+      <div className="md:hidden flex items-center gap-2 flex-1 justify-center">
+        <img src="/nesw-logo.png" alt="NESW" className="w-6 h-6 object-contain" />
+        <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>NESW Realty</p>
+      </div>
 
       <div className="flex items-center gap-1.5 md:gap-2 ml-auto md:ml-0">
         {/* User badge — desktop only */}
