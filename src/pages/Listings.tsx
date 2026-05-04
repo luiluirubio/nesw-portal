@@ -181,7 +181,7 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
     <div className="flex flex-col px-3 py-2.5 rounded-lg border"
       style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
       <p className="text-xs mb-0.5" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
-      <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>
+      <p className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
         {(value === '' || value === null || value === undefined) ? '—' : value}
       </p>
     </div>
