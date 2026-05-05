@@ -7,6 +7,8 @@ import uploadRouter    from './routes/upload'
 import draftsRouter    from './routes/drafts'
 import authRouter      from './routes/auth'
 import usersRouter     from './routes/users'
+import servicesRouter  from './routes/services'
+import proposalsRouter from './routes/proposals'
 
 const app = express()
 
@@ -33,6 +35,8 @@ app.use('/api/agents',     agentsRouter)
 app.use('/api/logs',       logsRouter)
 app.use('/api/upload',     uploadRouter)
 app.use('/api/drafts',     draftsRouter)
+app.use('/api/services',   servicesRouter)
+app.use('/api/proposals',  proposalsRouter)
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }))
 

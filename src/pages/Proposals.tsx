@@ -1,0 +1,218 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, FileText, Download, ChevronRight } from 'lucide-react'
+import { api } from '@/lib/api'
+import { toaster } from '@/components/ui/toast'
+import { cn, formatPHP } from '@/lib/utils'
+import type { Proposal, ProposalStatus } from '@/types/proposal'
+import { generateProposalPDF } from '@/lib/proposalPdf'
+
+const STATUS_STYLE: Record<ProposalStatus, string> = {
+  draft:    'bg-gray-100 text-gray-600',
+  sent:     'bg-blue-100 text-blue-700',
+  accepted: 'bg-green-100 text-green-700',
+  declined: 'bg-red-100 text-red-600',
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+export function Proposals() {
+  const navigate = useNavigate()
+  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [filter, setFilter]       = useState<ProposalStatus | 'all'>('all')
+
+  useEffect(() => {
+    api.getProposals()
+      .then(data => setProposals(data as Proposal[]))
+      .catch(() => toaster.create({ title: 'Failed to load proposals', type: 'error' }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = filter === 'all' ? proposals : proposals.filter(p => p.status === filter)
+
+  async function handleStatusChange(p: Proposal, status: ProposalStatus) {
+    try {
+      await api.updateProposal(p.id, { status })
+      setProposals(ps => ps.map(x => x.id === p.id ? { ...x, status } : x))
+    } catch (err) {
+      toaster.create({ title: (err as Error).message, type: 'error' })
+    }
+  }
+
+  function handleDownload(p: Proposal) {
+    try {
+      generateProposalPDF(p)
+    } catch {
+      toaster.create({ title: 'Failed to generate PDF', type: 'error' })
+    }
+  }
+
+  const tabs: { label: string; value: ProposalStatus | 'all' }[] = [
+    { label: 'All', value: 'all' },
+    { label: 'Draft', value: 'draft' },
+    { label: 'Sent', value: 'sent' },
+    { label: 'Accepted', value: 'accepted' },
+    { label: 'Declined', value: 'declined' },
+  ]
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b shrink-0"
+        style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center gap-3">
+          <FileText size={20} style={{ color: 'var(--primary)' }} />
+          <div>
+            <h1 className="text-lg font-bold" style={{ color: 'var(--foreground)' }}>Proposals</h1>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {proposals.length} proposal{proposals.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        </div>
+        <button onClick={() => navigate('/add-proposal')}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: 'var(--primary)' }}>
+          <Plus size={15} /> New Proposal
+        </button>
+      </div>
+
+      {/* Status tabs */}
+      <div className="flex gap-1 px-6 py-3 border-b overflow-x-auto shrink-0"
+        style={{ borderColor: 'var(--border)' }}>
+        {tabs.map(t => (
+          <button key={t.value} onClick={() => setFilter(t.value)}
+            className={cn('px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors')}
+            style={{
+              backgroundColor: filter === t.value ? 'var(--primary)' : 'var(--accent)',
+              color: filter === t.value ? 'var(--primary-foreground)' : 'var(--foreground)',
+            }}>
+            {t.label}
+            {t.value !== 'all' && (
+              <span className="ml-1 opacity-70">
+                ({proposals.filter(p => p.status === t.value).length})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto px-6 py-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-40" style={{ color: 'var(--muted-foreground)' }}>
+            Loading proposals…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 gap-2"
+            style={{ color: 'var(--muted-foreground)' }}>
+            <FileText size={32} className="opacity-30" />
+            <p className="text-sm">No proposals yet</p>
+            <button onClick={() => navigate('/add-proposal')}
+              className="text-xs font-medium" style={{ color: 'var(--primary)' }}>
+              + Create your first proposal
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block rounded-xl border overflow-hidden"
+              style={{ borderColor: 'var(--border)' }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--muted-foreground)' }}>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Proposal #</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Client</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Services</th>
+                    <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide">Total</th>
+                    <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Date</th>
+                    <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((p, i) => (
+                    <tr key={p.id}
+                      className="border-t transition-colors hover:bg-[var(--accent)]"
+                      style={{ borderColor: 'var(--border)', backgroundColor: i % 2 === 0 ? 'var(--background)' : 'transparent' }}>
+                      <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>
+                        {p.proposalNo}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium" style={{ color: 'var(--foreground)' }}>{p.clientName}</p>
+                        {p.clientCompany && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{p.clientCompany}</p>}
+                      </td>
+                      <td className="px-4 py-3" style={{ color: 'var(--muted-foreground)' }}>
+                        {p.services.length} service{p.services.length !== 1 ? 's' : ''}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--foreground)' }}>
+                        {formatPHP(p.total)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <select
+                          value={p.status}
+                          onChange={e => handleStatusChange(p, e.target.value as ProposalStatus)}
+                          className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border-0 cursor-pointer', STATUS_STYLE[p.status])}
+                          onClick={e => e.stopPropagation()}>
+                          <option value="draft">Draft</option>
+                          <option value="sent">Sent</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="declined">Declined</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                        {formatDate(p.createdAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => handleDownload(p)}
+                            title="Download PDF"
+                            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
+                            style={{ color: 'var(--muted-foreground)' }}>
+                            <Download size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden flex flex-col gap-3">
+              {filtered.map(p => (
+                <div key={p.id} className="rounded-xl border p-4"
+                  style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>{p.proposalNo}</p>
+                      <p className="font-semibold text-sm mt-0.5" style={{ color: 'var(--foreground)' }}>{p.clientName}</p>
+                      {p.clientCompany && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{p.clientCompany}</p>}
+                    </div>
+                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold shrink-0', STATUS_STYLE[p.status])}>
+                      {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span style={{ color: 'var(--muted-foreground)' }}>{p.services.length} services · {formatDate(p.createdAt)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold" style={{ color: 'var(--foreground)' }}>{formatPHP(p.total)}</span>
+                      <button onClick={() => handleDownload(p)}
+                        className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
+                        style={{ color: 'var(--muted-foreground)' }}>
+                        <Download size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

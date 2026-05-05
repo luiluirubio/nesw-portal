@@ -82,6 +82,18 @@ export const api = {
   setUserStatus:(id: string, status: 'active' | 'inactive') =>
     request<unknown>(`/api/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 
+  // Services
+  getServices:   (activeOnly?: boolean) => request<unknown[]>(`/api/services${activeOnly ? '?status=active' : ''}`),
+  createService: (body: unknown)         => request<unknown>('/api/services', { method: 'POST', body: JSON.stringify(body) }),
+  updateService: (id: string, body: unknown) => request<unknown>(`/api/services/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  toggleService: (id: string)            => request<unknown>(`/api/services/${id}/toggle`, { method: 'PUT' }),
+
+  // Proposals
+  getProposals:   ()                          => request<unknown[]>('/api/proposals'),
+  getProposal:    (id: string)               => request<unknown>(`/api/proposals/${id}`),
+  createProposal: (body: unknown)            => request<unknown>('/api/proposals', { method: 'POST', body: JSON.stringify(body) }),
+  updateProposal: (id: string, body: unknown) => request<unknown>(`/api/proposals/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+
   // Health
   health: () => request<{ status: string; stage: string; ts: string }>('/api/health'),
 }

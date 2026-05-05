@@ -189,6 +189,30 @@ resources:
           - AttributeName: id
             KeyType: RANGE
 
+    ServicesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-services-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+
+    ProposalsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-proposals-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+
     FilesBucket:
       Type: AWS::S3::Bucket
       Properties:

@@ -11,6 +11,9 @@ import { Listings } from '@/pages/Listings'
 import { AddListing } from '@/pages/AddListing'
 import { Users } from '@/pages/Users'
 import { Logs } from '@/pages/Logs'
+import { Services } from '@/pages/Services'
+import { Proposals } from '@/pages/Proposals'
+import { AddProposal } from '@/pages/AddProposal'
 
 export default function App() {
   return (
@@ -27,10 +30,13 @@ export default function App() {
                 <Layout>
                   <Routes>
                     <Route path="/"         element={<Navigate to="/listings" replace />} />
-                    <Route path="/listings"    element={<Listings />} />
-                    <Route path="/add-listing" element={<AddListing />} />
-                    <Route path="/users"       element={<Users />} />
-                    <Route path="/logs"        element={<Logs />} />
+                    <Route path="/listings"     element={<Listings />} />
+                    <Route path="/add-listing"  element={<AddListing />} />
+                    <Route path="/users"        element={<Users />} />
+                    <Route path="/logs"         element={<Logs />} />
+                    <Route path="/services"     element={<Services />} />
+                    <Route path="/proposals"    element={<Proposals />} />
+                    <Route path="/add-proposal" element={<AddProposal />} />
                   </Routes>
                 </Layout>
               } />
