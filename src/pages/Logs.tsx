@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, Search, X, Trash2, ScrollText, Plus, Pencil, RefreshCw, LogIn, Monitor, Smartphone, Globe } from 'lucide-react'
+import { ChevronDown, Search, X, ScrollText, Plus, Pencil, RefreshCw, LogIn, Monitor, Smartphone, Globe } from 'lucide-react'
 import { useLogs } from '@/context/LogsContext'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/lib/api'
@@ -179,7 +179,7 @@ function LogRow({ log }: { log: ActivityLog }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function Logs() {
   const { user } = useAuth()
-  const { logs, loading, clearLogs, refresh } = useLogs()
+  const { logs, loading, refresh } = useLogs()
   const isAdmin = user?.role === 'Admin'
   if (!isAdmin) return <Navigate to="/listings" replace />
 
@@ -193,8 +193,16 @@ export function Logs() {
   const [loginLoading, setLoginLoading]   = useState(false)
   const [loginSearch, setLoginSearch]     = useState('')
   const [loginFilterMethod, setLoginFilterMethod] = useState('all')
+  const [userMap, setUserMap]             = useState<Record<string, string>>({})
 
   useEffect(() => {
+    // Build id→name map from users table for records missing agentName
+    api.getUsers().then(data => {
+      const map: Record<string, string> = {}
+      ;(data as { id: string; name: string }[]).forEach(u => { map[u.id] = u.name })
+      setUserMap(map)
+    }).catch(() => {})
+
     setLoginLoading(true)
     api.getLoginHistory()
       .then(data => {
@@ -209,8 +217,9 @@ export function Logs() {
 
   const filteredLogin = loginLogs.filter(l => {
     if (loginFilterMethod !== 'all' && l.method !== loginFilterMethod) return false
+    const name = (l.agentName || userMap[l.agentId] || l.agentId).toLowerCase()
     const q = loginSearch.toLowerCase()
-    return !q || (l.agentName ?? l.agentId).toLowerCase().includes(q)
+    return !q || name.includes(q)
   })
 
   const filtered = logs.filter(l => {
@@ -334,13 +343,6 @@ export function Logs() {
           </button>
         )}
 
-        {logs.length > 0 && (
-          <button onClick={clearLogs}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold border"
-            style={{ borderColor: '#ef4444', color: '#ef4444', backgroundColor: 'transparent' }}>
-            <Trash2 size={12} />Clear All Logs
-          </button>
-        )}
       </div>
 
       {/* Table */}
@@ -462,17 +464,19 @@ export function Logs() {
                           <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>{formatTs(l.timestamp)}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                              style={{ backgroundColor: 'var(--primary)' }}>
-                              {(l.agentName || l.agentId).slice(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
-                                {l.agentName || l.agentId}
-                              </p>
-                            </div>
-                          </div>
+                          {(() => {
+                            const name = l.agentName || userMap[l.agentId] || l.agentId
+                            const initials = name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase() || name.slice(0, 2).toUpperCase()
+                            return (
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                                  style={{ backgroundColor: 'var(--primary)' }}>
+                                  {initials}
+                                </div>
+                                <p className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>{name}</p>
+                              </div>
+                            )
+                          })()}
                         </td>
                         <td className="px-4 py-3">{methodBadge(l.method)}</td>
                         <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>

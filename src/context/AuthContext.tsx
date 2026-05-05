@@ -99,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(u)
         setLoginMethod('password')
         setApiAgent(u.id, u.email)
+        // Record session restore as a login (session guard prevents duplicates)
+        recordLogin(u.id, u.name, 'manual').then(() => setLoginHistory(getStoredHistory()))
         setIsLoading(false)
         return
       } else {
