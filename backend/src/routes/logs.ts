@@ -79,11 +79,12 @@ router.get('/login', requireAuth, async (req: AuthRequest, res: Response) => {
 // POST /api/logs/login — record a login
 router.post('/login', async (req: AuthRequest, res: Response) => {
   try {
-    const { agentId, method, sessionId, ipAddress, userAgent } = req.body
+    const { agentId, agentName, method, sessionId, ipAddress, userAgent } = req.body
     if (!agentId) { res.status(400).json({ error: 'agentId is required' }); return }
 
     const item = {
       agentId,
+      agentName:  agentName ?? '',
       timestamp:  new Date().toISOString(),
       id:         uuid(),
       method:     method ?? 'manual',

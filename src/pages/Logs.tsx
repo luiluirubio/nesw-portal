@@ -1,10 +1,47 @@
-import { useState } from 'react'
-import { ChevronDown, Search, X, Trash2, ScrollText, Plus, Pencil, RefreshCw } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ChevronDown, Search, X, Trash2, ScrollText, Plus, Pencil, RefreshCw, LogIn, Monitor, Smartphone, Globe } from 'lucide-react'
 import { useLogs } from '@/context/LogsContext'
 import { useAuth } from '@/context/AuthContext'
+import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { ActivityLog, LogAction } from '@/types/activityLog'
 import { Navigate } from 'react-router-dom'
+
+interface LoginRecord {
+  id:        string
+  agentId:   string
+  agentName: string
+  method:    string
+  timestamp: string
+  sessionId: string
+  ipAddress: string
+  userAgent: string
+}
+
+function deviceIcon(ua: string) {
+  if (/mobile|android|iphone/i.test(ua)) return <Smartphone size={13} />
+  return <Monitor size={13} />
+}
+
+function methodBadge(method: string) {
+  if (method === 'microsoft_sso') return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700">
+      <Globe size={11} />Microsoft 365
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
+      <LogIn size={11} />Email / Password
+    </span>
+  )
+}
+
+function formatTs(iso: string) {
+  return new Date(iso).toLocaleString('en-PH', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  })
+}
 
 function timeAgo(iso: string) {
   const diff  = Date.now() - new Date(iso).getTime()
@@ -15,13 +52,6 @@ function timeAgo(iso: string) {
   if (mins  < 60) return `${mins}m ago`
   if (hours < 24) return `${hours}h ago`
   return `${days}d ago`
-}
-
-function formatTs(iso: string) {
-  return new Date(iso).toLocaleString('en-PH', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true,
-  })
 }
 
 function ActionBadge({ action }: { action: LogAction }) {
@@ -153,9 +183,35 @@ export function Logs() {
   const isAdmin = user?.role === 'Admin'
   if (!isAdmin) return <Navigate to="/listings" replace />
 
+  const [tab, setTab] = useState<'activity' | 'login'>('activity')
   const [search, setSearch]           = useState('')
   const [filterAction, setFilterAction] = useState<LogAction | 'all'>('all')
   const [filterAgent, setFilterAgent]   = useState('all')
+
+  // ── Login history ────────────────────────────────────────────────────────
+  const [loginLogs, setLoginLogs]         = useState<LoginRecord[]>([])
+  const [loginLoading, setLoginLoading]   = useState(false)
+  const [loginSearch, setLoginSearch]     = useState('')
+  const [loginFilterMethod, setLoginFilterMethod] = useState('all')
+
+  useEffect(() => {
+    setLoginLoading(true)
+    api.getLoginHistory()
+      .then(data => {
+        const sorted = (data as LoginRecord[]).sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+        setLoginLogs(sorted)
+      })
+      .catch(() => {})
+      .finally(() => setLoginLoading(false))
+  }, [])
+
+  const filteredLogin = loginLogs.filter(l => {
+    if (loginFilterMethod !== 'all' && l.method !== loginFilterMethod) return false
+    const q = loginSearch.toLowerCase()
+    return !q || (l.agentName ?? l.agentId).toLowerCase().includes(q)
+  })
 
   const filtered = logs.filter(l => {
     if (filterAction !== 'all' && l.action !== filterAction) return false
@@ -172,9 +228,9 @@ export function Logs() {
     <div className="space-y-5">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Activity Logs</h1>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Logs</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-            Full audit trail of property creations and edits
+            Audit trail — property changes and user login history
           </p>
         </div>
         <button onClick={refresh} disabled={loading}
@@ -185,6 +241,33 @@ export function Logs() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-[var(--radius-sm)] w-fit"
+        style={{ backgroundColor: 'var(--accent)' }}>
+        {([
+          { key: 'activity', label: 'Activity Logs',  icon: ScrollText, count: logs.length },
+          { key: 'login',    label: 'Login History',  icon: LogIn,       count: loginLogs.length },
+        ] as const).map(({ key, label, icon: Icon, count }) => (
+          <button key={key} onClick={() => setTab(key)}
+            className="flex items-center gap-2 px-4 py-2 rounded-sm text-xs font-semibold transition-all"
+            style={{
+              backgroundColor: tab === key ? 'var(--background)' : 'transparent',
+              color:           tab === key ? 'var(--foreground)' : 'var(--muted-foreground)',
+              boxShadow:       tab === key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            }}>
+            <Icon size={13} />
+            {label}
+            {count > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-xs"
+                style={{ backgroundColor: tab === key ? 'var(--primary)' : 'var(--muted)', color: tab === key ? 'white' : 'var(--muted-foreground)' }}>
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'activity' && (<>
       {/* KPI strip */}
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -300,8 +383,129 @@ export function Logs() {
 
       {filtered.length > 0 && (
         <p className="text-xs pb-4" style={{ color: 'var(--muted-foreground)' }}>
-          Showing {filtered.length} of {logs.length} log entries · Stored locally up to 500 records
+          Showing {filtered.length} of {logs.length} log entries
         </p>
+      )}
+      </>)}
+
+      {/* ── LOGIN HISTORY TAB ── */}
+      {tab === 'login' && (
+        <div className="space-y-4">
+          {/* KPI */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Total Logins',    value: loginLogs.length },
+              { label: 'Microsoft 365',   value: loginLogs.filter(l => l.method === 'microsoft_sso').length },
+              { label: 'Email/Password',  value: loginLogs.filter(l => l.method === 'manual').length },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-[var(--radius)] border p-4 flex items-center gap-3"
+                style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-violet-50">
+                  <LogIn size={16} style={{ color: '#8b5cf6' }} />
+                </div>
+                <div>
+                  <p className="text-2xl font-black" style={{ color: 'var(--foreground)' }}>{value}</p>
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
+              <input value={loginSearch} onChange={e => setLoginSearch(e.target.value)}
+                placeholder="Search user…"
+                className="pl-8 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none w-48"
+                style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
+              {loginSearch && <button onClick={() => setLoginSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2"><X size={13} style={{ color: 'var(--muted-foreground)' }} /></button>}
+            </div>
+            <div className="relative">
+              <select value={loginFilterMethod} onChange={e => setLoginFilterMethod(e.target.value)}
+                className="appearance-none pl-3 pr-8 py-2 text-sm rounded-[var(--radius-sm)] focus:outline-none cursor-pointer"
+                style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)', minWidth: '160px' }}>
+                <option value="all">All Methods</option>
+                <option value="microsoft_sso">Microsoft 365</option>
+                <option value="manual">Email / Password</option>
+              </select>
+              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted-foreground)' }} />
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="rounded-[var(--radius)] border overflow-hidden"
+            style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+            {loginLoading ? (
+              <div className="py-16 flex items-center justify-center gap-3">
+                <RefreshCw size={18} className="animate-spin" style={{ color: 'var(--muted-foreground)' }} />
+                <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>Loading login history…</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
+                      {['Date & Time', 'User', 'Method', 'Source', 'Device'].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                          style={{ color: 'var(--muted-foreground)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLogin.map((l, i) => (
+                      <tr key={l.id ?? i} className="border-b transition-colors"
+                        style={{ borderColor: 'var(--border)' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <p className="text-xs font-medium" style={{ color: 'var(--foreground)' }}>{formatTs(l.timestamp)}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                              style={{ backgroundColor: 'var(--primary)' }}>
+                              {(l.agentName || l.agentId).slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
+                                {l.agentName || l.agentId}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">{methodBadge(l.method)}</td>
+                        <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                          {l.ipAddress}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5" style={{ color: 'var(--muted-foreground)' }}>
+                            {deviceIcon(l.userAgent)}
+                            <span className="text-xs truncate max-w-40" title={l.userAgent}>
+                              {l.userAgent
+                                ? (/chrome/i.test(l.userAgent) ? 'Chrome' : /firefox/i.test(l.userAgent) ? 'Firefox' : /safari/i.test(l.userAgent) ? 'Safari' : /edge/i.test(l.userAgent) ? 'Edge' : 'Browser')
+                                : '—'}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredLogin.length === 0 && !loginLoading && (
+                      <tr><td colSpan={5} className="py-16 text-center text-sm" style={{ color: 'var(--muted-foreground)' }}>
+                        No login records found.
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          {filteredLogin.length > 0 && (
+            <p className="text-xs pb-4" style={{ color: 'var(--muted-foreground)' }}>
+              Showing {filteredLogin.length} of {loginLogs.length} login records
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

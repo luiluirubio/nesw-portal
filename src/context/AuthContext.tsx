@@ -47,7 +47,7 @@ function parseJwt(token: string): { sub: string; name: string; email: string; ro
   } catch { return null }
 }
 
-async function recordLogin(agentId: string, method: LoginMethod) {
+async function recordLogin(agentId: string, agentName: string, method: LoginMethod) {
   if (sessionStorage.getItem(SESSION_LOGGED)) return
   sessionStorage.setItem(SESSION_LOGGED, '1')
   const record: LoginRecord = {
@@ -69,7 +69,7 @@ async function recordLogin(agentId: string, method: LoginMethod) {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : { 'X-Agent-Id': agentId }),
       },
-      body: JSON.stringify({ agentId, method, sessionId: record.sessionId, ipAddress: record.ipAddress, userAgent: record.userAgent }),
+      body: JSON.stringify({ agentId, agentName, method, sessionId: record.sessionId, ipAddress: record.ipAddress, userAgent: record.userAgent }),
     }).catch(() => {})
   }
 }
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setMsAccount(acc)
           setLoginMethod('sso')
           setApiAgent(acc.localAccountId, acc.username)
-          recordLogin(acc.localAccountId, 'microsoft_sso').then(() =>
+          recordLogin(acc.localAccountId, acc.name ?? acc.username, 'microsoft_sso').then(() =>
             setLoginHistory(getStoredHistory())
           )
         }
@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(u)
       setLoginMethod('password')
       setApiAgent(u.id, u.email)
-      recordLogin(u.id, 'manual').then(() => setLoginHistory(getStoredHistory()))
+      recordLogin(u.id, u.name, 'manual').then(() => setLoginHistory(getStoredHistory()))
       return {}
     } catch (err) {
       return { error: (err as Error).message }
