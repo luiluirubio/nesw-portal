@@ -7,8 +7,8 @@ import uploadRouter    from './routes/upload'
 import draftsRouter    from './routes/drafts'
 import authRouter      from './routes/auth'
 import usersRouter     from './routes/users'
-import servicesRouter  from './routes/services'
-import proposalsRouter from './routes/proposals'
+import servicesRouter  from './routes/services'   // v2
+import proposalsRouter from './routes/proposals'  // v2
 
 const app = express()
 
