@@ -44,7 +44,6 @@ function StepIndicator({ current }: { current: number }) {
               )} style={{
                 backgroundColor: done || active ? 'var(--primary)' : 'var(--background)',
                 borderColor:     !done && !active ? 'var(--border)' : undefined,
-                ringColor:       active ? 'var(--primary)' : undefined,
               }}>
                 {done
                   ? <CheckCircle size={16} className="text-white" />
