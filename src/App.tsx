@@ -14,6 +14,8 @@ import { Logs } from '@/pages/Logs'
 import { Services } from '@/pages/Services'
 import { Proposals } from '@/pages/Proposals'
 import { AddProposal } from '@/pages/AddProposal'
+import { Billing } from '@/pages/Billing'
+import { AddBilling } from '@/pages/AddBilling'
 
 export default function App() {
   return (
@@ -35,8 +37,11 @@ export default function App() {
                     <Route path="/users"        element={<Users />} />
                     <Route path="/logs"         element={<Logs />} />
                     <Route path="/services"     element={<Services />} />
-                    <Route path="/proposals"    element={<Proposals />} />
-                    <Route path="/add-proposal" element={<AddProposal />} />
+                    <Route path="/proposals"         element={<Proposals />} />
+                    <Route path="/add-proposal"      element={<AddProposal />} />
+                    <Route path="/billing"            element={<Billing />} />
+                    <Route path="/add-billing"        element={<AddBilling />} />
+                    <Route path="/billing/:id/edit"   element={<AddBilling />} />
                   </Routes>
                 </Layout>
               } />

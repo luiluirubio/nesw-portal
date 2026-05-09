@@ -94,6 +94,12 @@ export const api = {
   createProposal: (body: unknown)            => request<unknown>('/api/proposals', { method: 'POST', body: JSON.stringify(body) }),
   updateProposal: (id: string, body: unknown) => request<unknown>(`/api/proposals/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
 
+  // Billing
+  getBillings:   ()                          => request<unknown[]>('/api/billing'),
+  getBilling:    (id: string)               => request<unknown>(`/api/billing/${id}`),
+  createBilling: (body: unknown)            => request<unknown>('/api/billing', { method: 'POST', body: JSON.stringify(body) }),
+  updateBilling: (id: string, body: unknown) => request<unknown>(`/api/billing/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+
   // Health
   health: () => request<{ status: string; stage: string; ts: string }>('/api/health'),
 }

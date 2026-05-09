@@ -9,6 +9,7 @@ import authRouter      from './routes/auth'
 import usersRouter     from './routes/users'
 import servicesRouter  from './routes/services'   // v2
 import proposalsRouter from './routes/proposals'  // v2
+import billingRouter   from './routes/billing'
 
 const app = express()
 
@@ -37,6 +38,7 @@ app.use('/api/upload',     uploadRouter)
 app.use('/api/drafts',     draftsRouter)
 app.use('/api/services',   servicesRouter)
 app.use('/api/proposals',  proposalsRouter)
+app.use('/api/billing',    billingRouter)
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }))
 

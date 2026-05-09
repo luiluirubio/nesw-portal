@@ -213,6 +213,18 @@ resources:
           - AttributeName: id
             KeyType: HASH
 
+    BillingsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: nesw-billings-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+
     FilesBucket:
       Type: AWS::S3::Bucket
       Properties:

@@ -17,6 +17,7 @@ export const Tables = {
   users:        `nesw-users-${stage}`,
   services:     `nesw-services-${stage}`,
   proposals:    `nesw-proposals-${stage}`,
+  billings:     `nesw-billings-${stage}`,
 }
 
 export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand, QueryCommand }

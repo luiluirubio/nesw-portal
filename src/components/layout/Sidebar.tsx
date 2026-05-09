@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase } from 'lucide-react'
+import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase, Receipt } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
@@ -129,6 +129,9 @@ export function Sidebar() {
 
         <SectionLabel label="PROPOSALS" collapsed={collapsed} />
         <NavItem to="/proposals" icon={FileText} label="Proposals" collapsed={collapsed} end onNavigate={closeMobile} />
+
+        <SectionLabel label="BILLING" collapsed={collapsed} />
+        <NavItem to="/billing" icon={Receipt} label="Billing" collapsed={collapsed} end onNavigate={closeMobile} />
 
         {isAdmin && (
           <>
