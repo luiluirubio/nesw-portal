@@ -104,6 +104,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const allowed = [
       'status', 'clientName', 'clientCompany', 'clientAddress', 'servicePurpose',
       'items', 'discount', 'subtotal', 'total', 'terms', 'dateIssued',
+      ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),
     ]
     const exprParts: string[] = ['#ua = :ua']
     const names: Record<string, string>  = { '#ua': 'updatedAt' }
