@@ -3,6 +3,17 @@ import bcrypt from 'bcryptjs'
 import { db, Tables, QueryCommand } from '../db/dynamo'
 import { signToken } from '../middleware/auth'
 
+async function getUserByEmail(email: string) {
+  const result = await db.send(new QueryCommand({
+    TableName:                 Tables.users,
+    IndexName:                 'ByEmail',
+    KeyConditionExpression:    'email = :e',
+    ExpressionAttributeValues: { ':e': email.toLowerCase().trim() },
+    Limit: 1,
+  }))
+  return result.Items?.[0] ?? null
+}
+
 const router = Router()
 
 // POST /api/auth/login — email + password
@@ -53,6 +64,23 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Login failed' })
+  }
+})
+
+// GET /api/auth/profile — M365 SSO: look up user by email to get canonical ID + role
+// Called by frontend after MSAL login with X-Agent-Email header
+router.get('/profile', async (req: Request, res: Response) => {
+  const email = (req.headers['x-agent-email'] as string | undefined)?.toLowerCase().trim()
+  if (!email) { res.status(400).json({ error: 'X-Agent-Email header required' }); return }
+  try {
+    const user = await getUserByEmail(email)
+    if (!user) { res.status(404).json({ error: 'User not found' }); return }
+    if (user.status === 'inactive') { res.status(403).json({ error: 'Account deactivated' }); return }
+    const { passwordHash: _, ...safeUser } = user
+    res.json(safeUser)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch profile' })
   }
 })
 

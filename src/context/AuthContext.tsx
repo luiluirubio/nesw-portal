@@ -110,26 +110,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // ── Try MSAL (M365 SSO) ─────────────────────────────────────────────
     getAccount()
-      .then(acc => {
-        if (acc) {
-          const u: AuthUser = {
-            id:        acc.localAccountId,
-            name:      acc.name ?? acc.username,
-            email:     acc.username,
-            role:      'Agent',
-            branch:    '',
-            licenseNo: '',
-            status:    'active',
-            msAccount: acc,
+      .then(async acc => {
+        if (!acc) return
+        // Look up canonical profile from users table by email so the ID and
+        // role match what was set when the account was created (email/password
+        // login and M365 login would otherwise produce different user IDs).
+        let id   = acc.localAccountId
+        let name = acc.name ?? acc.username
+        let role: 'Admin' | 'Agent' = 'Agent'
+        let branch    = ''
+        let licenseNo = ''
+        try {
+          const apiBase = import.meta.env.VITE_API_URL ?? ''
+          const profileRes = await fetch(`${apiBase}/api/auth/profile`, {
+            headers: { 'X-Agent-Email': acc.username },
+          })
+          if (profileRes.ok) {
+            const profile = await profileRes.json() as {
+              id: string; name: string; role: 'Admin' | 'Agent'
+              branch: string; licenseNo: string
+            }
+            id        = profile.id
+            name      = profile.name
+            role      = profile.role
+            branch    = profile.branch ?? ''
+            licenseNo = profile.licenseNo ?? ''
           }
-          setUser(u)
-          setMsAccount(acc)
-          setLoginMethod('sso')
-          setApiAgent(acc.localAccountId, acc.username)
-          recordLogin(acc.localAccountId, acc.name ?? acc.username, 'microsoft_sso').then(() =>
-            setLoginHistory(getStoredHistory())
-          )
+        } catch { /* non-critical — fall back to Azure AD values */ }
+
+        const u: AuthUser = {
+          id, name, email: acc.username,
+          role, branch, licenseNo,
+          status: 'active',
+          msAccount: acc,
         }
+        setUser(u)
+        setMsAccount(acc)
+        setLoginMethod('sso')
+        setApiAgent(id, acc.username)
+        recordLogin(id, name, 'microsoft_sso').then(() =>
+          setLoginHistory(getStoredHistory())
+        )
       })
       .catch(() => {})
       .finally(() => setIsLoading(false))
