@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, FileText, Download, Eye, PenLine, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
-import { cn, formatPHP } from '@/lib/utils'
+import { cn, formatPHP, formatDate } from '@/lib/utils'
 import type { Proposal, ProposalStatus } from '@/types/proposal'
 import { generateProposalPDF } from '@/lib/proposalPdf'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
@@ -16,9 +16,6 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   declined: 'bg-red-100 text-red-600',
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
-}
 
 export function Proposals() {
   const navigate = useNavigate()

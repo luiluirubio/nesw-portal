@@ -2,11 +2,8 @@ import { useState, useEffect } from 'react'
 import { Plus, Pencil, ToggleLeft, ToggleRight, Users2, X, Search } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
-import { cn } from '@/lib/utils'
+import { cn, inputCls, inputStyle } from '@/lib/utils'
 import type { Client, ClientStatus } from '@/types/client'
-
-const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
-const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (

@@ -39,7 +39,7 @@ export async function fetchDrafts(type?: AnyDraft['draftType']): Promise<AnyDraf
     const map: Record<string, AnyDraft> = {}
     cloud.forEach(d => { map[d.id] = d })
     wabSet(map)
-    return type ? cloud.filter(d => (d as { draftType?: string }).draftType === type) : cloud
+    return type ? cloud.filter(d => d.draftType === type) : cloud
   } catch {
     const all = Object.values(wabGet()).sort(
       (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()

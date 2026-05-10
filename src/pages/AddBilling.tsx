@@ -4,11 +4,12 @@ import { Plus, Trash2, Download, Save, ArrowLeft } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { toaster } from '@/components/ui/toast'
-import { cn, formatPHP } from '@/lib/utils'
+import { cn, formatPHP, inputCls, inputStyle } from '@/lib/utils'
 import { generateBillingPDF } from '@/lib/billingPdf'
 import type { Billing, BillingItem, BillingItemType } from '@/types/billing'
 import type { Booking } from '@/types/booking'
 import type { Client } from '@/types/client'
+// Client type used for constructing ClientSelector value shape from stored fields
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBillingDraftId } from '@/lib/drafts'
 import type { BillingDraft } from '@/types/draft'
 import { ClientSelector } from '@/components/ClientSelector'
@@ -28,9 +29,6 @@ function Field({ label, required, children }: {
     </div>
   )
 }
-
-const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
-const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
 
 function emptyItem(): BillingItem {
   return { description: '', subDescription: '', amount: 0, type: 'debit' }
@@ -56,10 +54,9 @@ export function AddBilling() {
 
   const [saving, setSaving]      = useState(false)
   const [bookings, setBookings]  = useState<Booking[]>([])
-  const [selectedBooking, setSelectedBooking] = useState(preBookingId)
+  // Single source of truth for the linked booking
   const [linkedBookingId, setLinkedBookingId] = useState(preBookingId)
   const [linkedBookingNo, setLinkedBookingNo] = useState(preBookingNo)
-  const [selectedClient, setSelectedClient]   = useState<Client | null>(null)
   const [clientId,   setClientId]   = useState('')
   const [clientCode, setClientCode] = useState('')
 
@@ -87,7 +84,6 @@ export function AddBilling() {
     if (!draftParam || isEdit) return
     fetchDraft<BillingDraft>(draftParam).then(d => {
       if (d) {
-        setSelectedBooking(d.selectedBooking)
         setLinkedBookingId(d.linkedBookingId)
         setLinkedBookingNo(d.linkedBookingNo)
         setClientName(d.clientName)
@@ -108,11 +104,11 @@ export function AddBilling() {
     saveDraftCloud({
       id: draftId, agentId: user.id, agentName: user.name,
       draftType: 'billing', savedAt: new Date().toISOString(),
-      selectedBooking, linkedBookingId, linkedBookingNo,
+      linkedBookingId, linkedBookingId, linkedBookingNo,
       clientName, clientCompany, clientAddress, servicePurpose,
       dateIssued, items, discount, terms,
     })
-  }, [draftId, user, isEdit, submitted, loadingDraft, selectedBooking, linkedBookingId, linkedBookingNo, clientName, clientCompany, clientAddress, servicePurpose, dateIssued, items, discount, terms])
+  }, [draftId, user, isEdit, submitted, loadingDraft, linkedBookingId, linkedBookingId, linkedBookingNo, clientName, clientCompany, clientAddress, servicePurpose, dateIssued, items, discount, terms])
 
   useEffect(() => {
     if (isEdit || submitted || loadingDraft) return
@@ -135,7 +131,7 @@ export function AddBilling() {
         setItems(b.items?.length ? b.items.map(it => ({ ...it, type: it.type ?? 'debit' })) : [emptyItem()])
         setDiscount(b.discount)
         setTerms(b.terms || DEFAULT_TERMS)
-        if (b.bookingId) { setSelectedBooking(b.bookingId); setLinkedBookingId(b.bookingId); setLinkedBookingNo(b.bookingNo ?? '') }
+        if (b.bookingId) { setLinkedBookingId(b.bookingId); setLinkedBookingNo(b.bookingNo ?? '') }
       })
       .catch(() => toaster.create({ title: 'Failed to load billing', type: 'error' }))
   }, [id, isEdit])
@@ -166,8 +162,8 @@ export function AddBilling() {
   }, [bookings, isEdit])
 
   useEffect(() => {
-    if (selectedBooking && !isEdit) fillFromBooking(selectedBooking)
-  }, [selectedBooking, fillFromBooking, isEdit])
+    if (linkedBookingId && !isEdit) fillFromBooking(linkedBookingId)
+  }, [linkedBookingId, fillFromBooking, isEdit])
 
   // Computed totals
   const totalDebits  = items.filter(it => it.type !== 'credit').reduce((s, it) => s + (Number(it.amount) || 0), 0)
@@ -291,7 +287,7 @@ export function AddBilling() {
                   {linkedBookingNo}
                 </div>
               ) : (
-                <select value={selectedBooking} onChange={e => setSelectedBooking(e.target.value)}
+                <select value={linkedBookingId} onChange={e => setLinkedBookingId(e.target.value)}
                   className={inputCls} style={inputStyle}>
                   <option value="">— select a booking —</option>
                   {bookings.map(b => (
@@ -303,18 +299,11 @@ export function AddBilling() {
               )}
             </Field>
 
-            {/* Client reference — auto-filled from booking, can also search */}
             <ClientSelector
-              value={selectedClient}
-              onSelect={c => {
-                setSelectedClient(c)
-                setClientId(c.id)
-                setClientCode(c.clientCode)
-                setClientName(c.name)
-                setClientCompany(c.company || '')
-              }}
-              onClear={() => { setSelectedClient(null); setClientId(''); setClientCode('') }}
-              disabled={!!linkedBookingId && !!clientId}
+              value={clientId ? { id: clientId, clientCode, name: clientName, company: clientCompany, email: '', phone: '', address: '', notes: '', status: 'active', agentId: '', agentName: '', createdAt: '', updatedAt: '' } : null}
+              onSelect={c => { setClientId(c.id); setClientCode(c.clientCode); setClientName(c.name); setClientCompany(c.company || '') }}
+              onClear={() => { setClientId(''); setClientCode('') }}
+              disabled={!!linkedBookingId}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

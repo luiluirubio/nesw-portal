@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, BookOpen, Plus, Download } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
-import { cn, formatPHP } from '@/lib/utils'
+import { cn, formatPHP, formatDate } from '@/lib/utils'
 import type { Booking, BookingStatus } from '@/types/booking'
 import type { Billing, BillingStatus } from '@/types/billing'
 import { generateBillingPDF } from '@/lib/billingPdf'
@@ -22,9 +22,6 @@ const BILLING_STATUS_STYLE: Record<BillingStatus, string> = {
   cancelled: 'bg-red-100 text-red-600',
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
-}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   if (!value) return null

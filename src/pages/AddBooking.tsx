@@ -4,7 +4,7 @@ import { ArrowLeft, Save } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { toaster } from '@/components/ui/toast'
-import { cn } from '@/lib/utils'
+import { cn, inputCls, inputStyle } from '@/lib/utils'
 import type { Proposal } from '@/types/proposal'
 import type { Booking } from '@/types/booking'
 import type { Client } from '@/types/client'
@@ -12,8 +12,6 @@ import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBookingDraftId } 
 import type { BookingDraft } from '@/types/draft'
 import { ClientSelector } from '@/components/ClientSelector'
 
-const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
-const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (

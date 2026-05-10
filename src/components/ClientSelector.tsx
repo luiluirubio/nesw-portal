@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, X, Plus, UserCheck } from 'lucide-react'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, inputCls, inputStyle } from '@/lib/utils'
 import type { Client } from '@/types/client'
 
 interface ClientSelectorProps {
@@ -16,9 +16,6 @@ interface ClientSelectorProps {
   label?:    string
 }
 
-const inputCls   = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
-const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
-
 export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Client' }: ClientSelectorProps) {
   const [clients,  setClients]  = useState<Client[]>([])
   const [query,    setQuery]    = useState('')
@@ -26,14 +23,9 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
   const [creating, setCreating] = useState(false)
   const [saving,   setSaving]   = useState(false)
 
-  // New client form state
-  const [newName,    setNewName]    = useState('')
-  const [newCompany, setNewCompany] = useState('')
-  const [newEmail,   setNewEmail]   = useState('')
-  const [newPhone,   setNewPhone]   = useState('')
-  const [newAddress, setNewAddress] = useState('')
-  const [newNotes,   setNewNotes]   = useState('')
-  const [nameErr,    setNameErr]    = useState('')
+  const [newForm, setNewForm] = useState({ name: '', company: '', email: '', phone: '', address: '', notes: '' })
+  const [nameErr, setNameErr] = useState('')
+  const setNew = (k: keyof typeof newForm) => (v: string) => setNewForm(f => ({ ...f, [k]: v }))
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -74,23 +66,21 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
   }
 
   async function handleCreate() {
-    if (!newName.trim()) { setNameErr('Name is required'); return }
+    if (!newForm.name.trim()) { setNameErr('Name is required'); return }
     setNameErr('')
     setSaving(true)
     try {
       const created = await api.createClient({
-        name:    newName.trim(),
-        company: newCompany.trim(),
-        email:   newEmail.trim(),
-        phone:   newPhone.trim(),
-        address: newAddress.trim(),
-        notes:   newNotes.trim(),
+        name:    newForm.name.trim(),
+        company: newForm.company.trim(),
+        email:   newForm.email.trim(),
+        phone:   newForm.phone.trim(),
+        address: newForm.address.trim(),
+        notes:   newForm.notes.trim(),
       }) as Client
       setClients(cs => [created, ...cs])
       selectClient(created)
-      // Reset new-client form
-      setNewName(''); setNewCompany(''); setNewEmail('')
-      setNewPhone(''); setNewAddress(''); setNewNotes('')
+      setNewForm({ name: '', company: '', email: '', phone: '', address: '', notes: '' })
     } catch (err) {
       setNameErr((err as Error).message)
     } finally {
@@ -98,7 +88,6 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
     }
   }
 
-  // ── Selected state ──────────────────────────────────────────────────────────
   if (value && !open) {
     return (
       <div>
@@ -202,23 +191,23 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
 
           <div className="space-y-2">
             <div>
-              <input value={newName} onChange={e => { setNewName(e.target.value); setNameErr('') }}
+              <input value={newForm.name} onChange={e => { setNew('name')(e.target.value); setNameErr('') }}
                 placeholder="Full name / contact person *"
                 className={inputCls} style={inputStyle} />
               {nameErr && <p className="text-xs text-red-500 mt-0.5">{nameErr}</p>}
             </div>
-            <input value={newCompany} onChange={e => setNewCompany(e.target.value)}
+            <input value={newForm.company} onChange={e => setNew('company')(e.target.value)}
               placeholder="Company (optional)"
               className={inputCls} style={inputStyle} />
             <div className="grid grid-cols-2 gap-2">
-              <input value={newEmail} onChange={e => setNewEmail(e.target.value)}
+              <input value={newForm.email} onChange={e => setNew('email')(e.target.value)}
                 placeholder="Email" type="email"
                 className={inputCls} style={inputStyle} />
-              <input value={newPhone} onChange={e => setNewPhone(e.target.value)}
+              <input value={newForm.phone} onChange={e => setNew('phone')(e.target.value)}
                 placeholder="Phone"
                 className={inputCls} style={inputStyle} />
             </div>
-            <input value={newAddress} onChange={e => setNewAddress(e.target.value)}
+            <input value={newForm.address} onChange={e => setNew('address')(e.target.value)}
               placeholder="Address (optional)"
               className={inputCls} style={inputStyle} />
           </div>

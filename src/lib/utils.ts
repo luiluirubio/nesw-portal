@@ -22,3 +22,11 @@ export function daysSince(dateStr: string): number {
 export function formatSqm(sqm: number): string {
   return `${sqm.toLocaleString()} sqm`
 }
+
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// Shared form input styling — used across add/edit form pages
+export const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
+export const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' } as const

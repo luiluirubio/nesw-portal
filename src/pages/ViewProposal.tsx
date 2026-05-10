@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Download, Pencil, BookmarkPlus, FileText } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
-import { cn, formatPHP } from '@/lib/utils'
+import { cn, formatPHP, formatDate } from '@/lib/utils'
 import type { Proposal, ProposalStatus } from '@/types/proposal'
 import { generateProposalPDF } from '@/lib/proposalPdf'
 
@@ -14,9 +14,6 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
   declined: 'bg-red-100 text-red-600',
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
-}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   if (!value) return null
