@@ -94,6 +94,18 @@ export const api = {
   createProposal: (body: unknown)            => request<unknown>('/api/proposals', { method: 'POST', body: JSON.stringify(body) }),
   updateProposal: (id: string, body: unknown) => request<unknown>(`/api/proposals/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
 
+  // Clients
+  getClients:    (activeOnly?: boolean)      => request<unknown[]>(`/api/clients${activeOnly ? '?status=active' : ''}`),
+  getClient:     (id: string)               => request<unknown>(`/api/clients/${id}`),
+  createClient:  (body: unknown)            => request<unknown>('/api/clients', { method: 'POST', body: JSON.stringify(body) }),
+  updateClient:  (id: string, body: unknown) => request<unknown>(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+
+  // Bookings
+  getBookings:   ()                          => request<unknown[]>('/api/bookings'),
+  getBooking:    (id: string)               => request<unknown>(`/api/bookings/${id}`),
+  createBooking: (body: unknown)            => request<unknown>('/api/bookings', { method: 'POST', body: JSON.stringify(body) }),
+  updateBooking: (id: string, body: unknown) => request<unknown>(`/api/bookings/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+
   // Billing
   getBillings:   ()                          => request<unknown[]>('/api/billing'),
   getBilling:    (id: string)               => request<unknown>(`/api/billing/${id}`),

@@ -18,6 +18,8 @@ export const Tables = {
   services:     `nesw-services-${stage}`,
   proposals:    `nesw-proposals-${stage}`,
   billings:     `nesw-billings-${stage}`,
+  clients:      `nesw-clients-${stage}`,
+  bookings:     `nesw-bookings-${stage}`,
 }
 
 export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand, QueryCommand }

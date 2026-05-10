@@ -53,7 +53,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const {
       clientName, clientCompany, clientAddress, servicePurpose,
       items, discount, subtotal, total, terms, dateIssued,
-      proposalId, proposalNo,
+      bookingId, bookingNo, proposalId, proposalNo,
     } = req.body
 
     if (!clientName || !items?.length) {
@@ -67,6 +67,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       agentId:        req.userId ?? '',
       agentName:      req.userName ?? '',
       status:         'draft',
+      bookingId:      (bookingId as string)  ?? '',
+      bookingNo:      (bookingNo as string)  ?? '',
       proposalId:     (proposalId as string) ?? '',
       proposalNo:     (proposalNo as string) ?? '',
       clientName:     clientName as string,
@@ -104,6 +106,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const allowed = [
       'status', 'clientName', 'clientCompany', 'clientAddress', 'servicePurpose',
       'items', 'discount', 'subtotal', 'total', 'terms', 'dateIssued',
+      'bookingId', 'bookingNo',
       ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),
     ]
     const exprParts: string[] = ['#ua = :ua']

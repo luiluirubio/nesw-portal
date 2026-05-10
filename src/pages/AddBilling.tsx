@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, Download, Save, ArrowLeft } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
 import { generateBillingPDF } from '@/lib/billingPdf'
-import type { Billing, BillingItem } from '@/types/billing'
+import type { Billing, BillingItem, BillingItemType } from '@/types/billing'
 import type { Proposal } from '@/types/proposal'
+import type { Booking } from '@/types/booking'
 
 const DEFAULT_TERMS =
   "For your convenience, we'll prepare everything for release and provide the final appraisal reports as soon as full payment has been received."
@@ -29,22 +30,34 @@ const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transi
 const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
 
 function emptyItem(): BillingItem {
-  return { description: '', subDescription: '', amount: 0 }
+  return { description: '', subDescription: '', amount: 0, type: 'debit' }
 }
 
 export function AddBilling() {
-  const navigate    = useNavigate()
-  const { id }      = useParams<{ id: string }>()
-  const { user }    = useAuth()
-  const isEdit      = Boolean(id)
+  const navigate      = useNavigate()
+  const { id }        = useParams<{ id: string }>()
+  const [params]      = useSearchParams()
+  const { user }      = useAuth()
+  const isEdit        = Boolean(id)
+
+  // Pre-fill from booking URL params (from ViewBooking "New Billing" button)
+  const preBookingId   = params.get('bookingId')   ?? ''
+  const preBookingNo   = params.get('bookingNo')   ?? ''
+  const preClientName  = params.get('clientName')  ?? ''
 
   const [saving, setSaving]       = useState(false)
   const [proposals, setProposals] = useState<Proposal[]>([])
-  const [source, setSource]       = useState<'new' | 'proposal'>('new')
+  const [bookings,  setBookings]  = useState<Booking[]>([])
+  const [source, setSource]       = useState<'booking' | 'proposal' | 'new'>(
+    preBookingId ? 'booking' : 'new'
+  )
+  const [selectedBooking,  setSelectedBooking]  = useState(preBookingId)
   const [selectedProposal, setSelectedProposal] = useState('')
+  const [linkedBookingId,  setLinkedBookingId]  = useState(preBookingId)
+  const [linkedBookingNo,  setLinkedBookingNo]  = useState(preBookingNo)
 
   // Form state
-  const [clientName,     setClientName]     = useState('')
+  const [clientName,     setClientName]     = useState(preClientName)
   const [clientCompany,  setClientCompany]  = useState('')
   const [clientAddress,  setClientAddress]  = useState('')
   const [servicePurpose, setServicePurpose] = useState('')
@@ -54,11 +67,14 @@ export function AddBilling() {
   const [terms,          setTerms]          = useState(DEFAULT_TERMS)
   const [existingBilling, setExistingBilling] = useState<Billing | null>(null)
 
-  // Load proposals for linking
+  // Load proposals and bookings for linking
   useEffect(() => {
     api.getProposals()
       .then(data => setProposals(data as Proposal[]))
-      .catch(() => {/* non-critical */})
+      .catch(() => {})
+    api.getBookings()
+      .then(data => setBookings(data as Booking[]))
+      .catch(() => {})
   }, [])
 
   // Load existing billing when editing
@@ -73,16 +89,32 @@ export function AddBilling() {
         setClientAddress(b.clientAddress)
         setServicePurpose(b.servicePurpose)
         setDateIssued(b.dateIssued || new Date().toISOString().slice(0, 10))
-        setItems(b.items?.length ? b.items : [emptyItem()])
+        setItems(b.items?.length ? b.items.map(it => ({ ...it, type: it.type ?? 'debit' })) : [emptyItem()])
         setDiscount(b.discount)
         setTerms(b.terms || DEFAULT_TERMS)
-        if (b.proposalId) {
-          setSource('proposal')
-          setSelectedProposal(b.proposalId)
-        }
+        if (b.bookingId) { setSource('booking'); setSelectedBooking(b.bookingId); setLinkedBookingId(b.bookingId); setLinkedBookingNo(b.bookingNo ?? '') }
+        else if (b.proposalId) { setSource('proposal'); setSelectedProposal(b.proposalId) }
       })
       .catch(() => toaster.create({ title: 'Failed to load billing', type: 'error' }))
   }, [id, isEdit])
+
+  // Auto-fill from booking
+  const fillFromBooking = useCallback((bookingId: string) => {
+    const bkg = bookings.find(x => x.id === bookingId)
+    if (!bkg) return
+    setClientName(bkg.clientName)
+    setClientCompany(bkg.clientCompany || '')
+    setClientAddress(bkg.clientAddress || '')
+    setLinkedBookingId(bkg.id)
+    setLinkedBookingNo(bkg.bookingNo)
+    setServicePurpose(bkg.scopeNotes || '')
+    setItems(bkg.services.map(svc => ({
+      description:    svc.name,
+      subDescription: svc.notes || '',
+      amount:         svc.unitPrice * (svc.qty || 1),
+      type:           'debit' as BillingItemType,
+    })))
+  }, [bookings])
 
   // Auto-fill from proposal
   const fillFromProposal = useCallback((proposalId: string) => {
@@ -92,27 +124,32 @@ export function AddBilling() {
     setClientCompany(p.clientCompany || '')
     setClientAddress(p.clientAddress || '')
     setDiscount(p.discount || 0)
-    // Build items from proposal services
     setItems(p.services.map(svc => ({
       description:    svc.name,
       subDescription: svc.notes || '',
       amount:         svc.unitPrice * (svc.qty || 1),
+      type:           'debit' as BillingItemType,
     })))
   }, [proposals])
 
   useEffect(() => {
-    if (source === 'proposal' && selectedProposal && !isEdit) {
-      fillFromProposal(selectedProposal)
-    }
+    if (source === 'booking' && selectedBooking && !isEdit) fillFromBooking(selectedBooking)
+  }, [source, selectedBooking, fillFromBooking, isEdit])
+
+  useEffect(() => {
+    if (source === 'proposal' && selectedProposal && !isEdit) fillFromProposal(selectedProposal)
   }, [source, selectedProposal, fillFromProposal, isEdit])
 
   // Computed totals
-  const subtotal = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0)
-  const discountAmt = discount > 0 ? (subtotal * discount) / 100 : 0
-  const total = subtotal - discountAmt
+  const totalDebits  = items.filter(it => it.type !== 'credit').reduce((s, it) => s + (Number(it.amount) || 0), 0)
+  const totalCredits = items.filter(it => it.type === 'credit').reduce((s, it) => s + (Number(it.amount) || 0), 0)
+  const subtotal     = totalDebits
+  const discountAmt  = discount > 0 ? (subtotal * discount) / 100 : 0
+  const netBalance   = totalDebits - discountAmt - totalCredits
+  const total        = netBalance
 
   // Item helpers
-  function updateItem(idx: number, field: keyof BillingItem, value: string | number) {
+  function updateItem(idx: number, field: keyof BillingItem, value: string | number | BillingItemType) {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
   }
   function addItem() { setItems(prev => [...prev, emptyItem()]) }
@@ -121,22 +158,14 @@ export function AddBilling() {
   }
 
   async function buildPayload() {
-    const linked = source === 'proposal'
-      ? proposals.find(p => p.id === selectedProposal)
-      : null
+    const linkedProposal = source === 'proposal' ? proposals.find(p => p.id === selectedProposal) : null
     return {
-      clientName,
-      clientCompany,
-      clientAddress,
-      servicePurpose,
-      dateIssued,
-      items,
-      discount,
-      subtotal,
-      total,
-      terms,
-      proposalId:  linked?.id  ?? '',
-      proposalNo:  linked?.proposalNo ?? '',
+      clientName, clientCompany, clientAddress, servicePurpose, dateIssued,
+      items, discount, subtotal, total, terms,
+      bookingId:  linkedBookingId || '',
+      bookingNo:  linkedBookingNo || '',
+      proposalId: linkedProposal?.id ?? '',
+      proposalNo: linkedProposal?.proposalNo ?? '',
     }
   }
 
@@ -228,8 +257,8 @@ export function AddBilling() {
                 <p className="text-xs font-medium mb-2" style={{ color: 'var(--muted-foreground)' }}>
                   Create from
                 </p>
-                <div className="flex gap-2">
-                  {(['new', 'proposal'] as const).map(s => (
+                <div className="flex gap-2 flex-wrap">
+                  {([['booking', 'From Booking'], ['proposal', 'From Proposal'], ['new', 'New / Manual']] as const).map(([s, label]) => (
                     <button key={s} onClick={() => setSource(s)}
                       className={cn('px-4 py-1.5 rounded-full text-xs font-medium border transition-colors')}
                       style={{
@@ -237,11 +266,26 @@ export function AddBilling() {
                         color: source === s ? 'var(--primary-foreground)' : 'var(--foreground)',
                         borderColor: source === s ? 'var(--primary)' : 'var(--border)',
                       }}>
-                      {s === 'new' ? 'New / Manual' : 'From Proposal'}
+                      {label}
                     </button>
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* Booking selector */}
+            {source === 'booking' && !isEdit && (
+              <Field label="Select Booking" required>
+                <select value={selectedBooking} onChange={e => setSelectedBooking(e.target.value)}
+                  className={inputCls} style={inputStyle}>
+                  <option value="">— choose a booking —</option>
+                  {bookings.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.bookingNo} — {b.clientName} ({b.status})
+                    </option>
+                  ))}
+                </select>
+              </Field>
             )}
 
             {/* Proposal selector */}
@@ -308,18 +352,37 @@ export function AddBilling() {
                 <div key={idx} className="rounded-lg border p-4 space-y-3 relative"
                   style={{ borderColor: 'var(--border)', backgroundColor: 'var(--accent)' }}>
 
-                  {/* Row number + remove */}
-                  <div className="flex items-center justify-between">
+                  {/* Row header: number + D/C toggle + remove */}
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold" style={{ color: 'var(--muted-foreground)' }}>
                       Item {idx + 1}
                     </span>
-                    {items.length > 1 && (
-                      <button onClick={() => removeItem(idx)}
-                        className="p-1 rounded transition-colors hover:bg-red-100"
-                        style={{ color: 'var(--muted-foreground)' }}>
-                        <Trash2 size={13} />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {/* Debit / Credit toggle */}
+                      <div className="flex rounded-lg overflow-hidden border text-xs font-semibold"
+                        style={{ borderColor: 'var(--border)' }}>
+                        {(['debit', 'credit'] as BillingItemType[]).map(t => (
+                          <button key={t} type="button"
+                            onClick={() => updateItem(idx, 'type', t)}
+                            className="px-3 py-1 transition-colors"
+                            style={{
+                              backgroundColor: item.type === t
+                                ? (t === 'debit' ? 'var(--primary)' : 'rgb(234 179 8)')
+                                : 'var(--background)',
+                              color: item.type === t ? 'white' : 'var(--muted-foreground)',
+                            }}>
+                            {t === 'debit' ? 'D' : 'C'}
+                          </button>
+                        ))}
+                      </div>
+                      {items.length > 1 && (
+                        <button onClick={() => removeItem(idx)}
+                          className="p-1 rounded transition-colors hover:bg-red-100"
+                          style={{ color: 'var(--muted-foreground)' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -331,7 +394,7 @@ export function AddBilling() {
                           className={inputCls} style={{ ...inputStyle, backgroundColor: 'var(--background)' }} />
                       </Field>
                     </div>
-                    <Field label="Amount (PHP)">
+                    <Field label={item.type === 'credit' ? 'Amount Received (PHP)' : 'Amount (PHP)'}>
                       <input type="number" min={0} value={item.amount || ''}
                         onChange={e => updateItem(idx, 'amount', Number(e.target.value))}
                         placeholder="0"
@@ -351,29 +414,46 @@ export function AddBilling() {
             {/* Totals summary */}
             <div className="rounded-lg border p-4 space-y-2" style={{ borderColor: 'var(--border)' }}>
               <div className="flex justify-between text-sm" style={{ color: 'var(--muted-foreground)' }}>
-                <span>Subtotal</span>
-                <span>{formatPHP(subtotal)}</span>
+                <span>Total Debits (Charges)</span>
+                <span>{formatPHP(totalDebits)}</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <label className="text-sm shrink-0" style={{ color: 'var(--muted-foreground)' }}>
-                  Discount %
-                </label>
-                <input type="number" min={0} max={100} value={discount || ''}
-                  onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-20 px-2 py-1 rounded-lg border text-sm text-right outline-none"
-                  style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
-                {discount > 0 && (
+              {discount > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm shrink-0" style={{ color: 'var(--muted-foreground)' }}>Discount</span>
+                  <input type="number" min={0} max={100} value={discount || ''}
+                    onChange={e => setDiscount(Number(e.target.value))}
+                    className="w-16 px-2 py-1 rounded-lg border text-sm text-right outline-none"
+                    style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
+                  <span className="text-xs">%</span>
                   <span className="text-sm ml-auto" style={{ color: 'var(--muted-foreground)' }}>
                     − {formatPHP(discountAmt)}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
+
+              {!discount && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Discount %</span>
+                  <input type="number" min={0} max={100} value=""
+                    onChange={e => setDiscount(Number(e.target.value))}
+                    placeholder="0"
+                    className="w-16 px-2 py-1 rounded-lg border text-sm text-right outline-none"
+                    style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
+                </div>
+              )}
+
+              {totalCredits > 0 && (
+                <div className="flex justify-between text-sm" style={{ color: 'rgb(234 179 8)' }}>
+                  <span>Total Credits (Payments Received)</span>
+                  <span>({formatPHP(totalCredits)})</span>
+                </div>
+              )}
 
               <div className="flex justify-between text-base font-bold pt-2 border-t"
                 style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
-                <span>Total Amount Due</span>
-                <span style={{ color: 'var(--primary)' }}>{formatPHP(total)}</span>
+                <span>Net Balance Due</span>
+                <span style={{ color: 'var(--primary)' }}>{formatPHP(netBalance)}</span>
               </div>
               <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>VAT Exclusive</p>
             </div>

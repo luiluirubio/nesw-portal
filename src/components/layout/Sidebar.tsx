@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase, Receipt } from 'lucide-react'
+import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase, Receipt, BookOpen, Users2, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
@@ -124,11 +124,17 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'md:px-2 md:space-y-1 px-3 space-y-0.5' : 'px-3 space-y-0.5')}>
+        <SectionLabel label="MASTER DATA" collapsed={collapsed} />
+        <NavItem to="/clients" icon={Users2} label="Clients" collapsed={collapsed} end onNavigate={closeMobile} />
+
         <SectionLabel label="LISTINGS" collapsed={collapsed} />
         <NavItem to="/listings" icon={Building2} label="All Listings" collapsed={collapsed} end onNavigate={closeMobile} />
 
         <SectionLabel label="PROPOSALS" collapsed={collapsed} />
         <NavItem to="/proposals" icon={FileText} label="Proposals" collapsed={collapsed} end onNavigate={closeMobile} />
+
+        <SectionLabel label="BOOKINGS" collapsed={collapsed} />
+        <NavItem to="/bookings" icon={BookOpen} label="Bookings" collapsed={collapsed} end onNavigate={closeMobile} />
 
         <SectionLabel label="BILLING" collapsed={collapsed} />
         <NavItem to="/billing" icon={Receipt} label="Billing" collapsed={collapsed} end onNavigate={closeMobile} />

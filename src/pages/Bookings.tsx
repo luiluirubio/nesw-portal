@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Receipt, Download, Pencil } from 'lucide-react'
+import { Plus, BookOpen, Eye } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
-import type { Billing, BillingStatus } from '@/types/billing'
-import { generateBillingPDF } from '@/lib/billingPdf'
+import type { Booking, BookingStatus } from '@/types/booking'
 
-const STATUS_STYLE: Record<BillingStatus, string> = {
-  draft:     'bg-gray-100 text-gray-600',
-  sent:      'bg-blue-100 text-blue-700',
-  paid:      'bg-green-100 text-green-700',
+const STATUS_STYLE: Record<BookingStatus, string> = {
+  active:    'bg-green-100 text-green-700',
+  completed: 'bg-blue-100 text-blue-700',
   cancelled: 'bg-red-100 text-red-600',
 }
 
@@ -18,43 +16,34 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-export function Billing() {
+export function Bookings() {
   const navigate = useNavigate()
-  const [billings, setBillings] = useState<Billing[]>([])
+  const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading]   = useState(true)
-  const [filter, setFilter]     = useState<BillingStatus | 'all'>('all')
+  const [filter, setFilter]     = useState<BookingStatus | 'all'>('all')
 
   useEffect(() => {
-    api.getBillings()
-      .then(data => setBillings(data as Billing[]))
-      .catch(() => toaster.create({ title: 'Failed to load billings', type: 'error' }))
+    api.getBookings()
+      .then(data => setBookings(data as Booking[]))
+      .catch(() => toaster.create({ title: 'Failed to load bookings', type: 'error' }))
       .finally(() => setLoading(false))
   }, [])
 
-  const filtered = filter === 'all' ? billings : billings.filter(b => b.status === filter)
+  const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status === filter)
 
-  async function handleStatusChange(b: Billing, status: BillingStatus) {
+  async function handleStatusChange(b: Booking, status: BookingStatus) {
     try {
-      await api.updateBilling(b.id, { status })
-      setBillings(bs => bs.map(x => x.id === b.id ? { ...x, status } : x))
+      await api.updateBooking(b.id, { status })
+      setBookings(bs => bs.map(x => x.id === b.id ? { ...x, status } : x))
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
     }
   }
 
-  async function handleDownload(b: Billing) {
-    try {
-      await generateBillingPDF(b)
-    } catch {
-      toaster.create({ title: 'Failed to generate PDF', type: 'error' })
-    }
-  }
-
-  const tabs: { label: string; value: BillingStatus | 'all' }[] = [
+  const tabs: { label: string; value: BookingStatus | 'all' }[] = [
     { label: 'All',       value: 'all' },
-    { label: 'Draft',     value: 'draft' },
-    { label: 'Sent',      value: 'sent' },
-    { label: 'Paid',      value: 'paid' },
+    { label: 'Active',    value: 'active' },
+    { label: 'Completed', value: 'completed' },
     { label: 'Cancelled', value: 'cancelled' },
   ]
 
@@ -64,18 +53,18 @@ export function Billing() {
       <div className="flex items-center justify-between px-6 py-4 border-b shrink-0"
         style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-3">
-          <Receipt size={20} style={{ color: 'var(--primary)' }} />
+          <BookOpen size={20} style={{ color: 'var(--primary)' }} />
           <div>
-            <h1 className="text-lg font-bold" style={{ color: 'var(--foreground)' }}>Billing</h1>
+            <h1 className="text-lg font-bold" style={{ color: 'var(--foreground)' }}>Bookings</h1>
             <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              {billings.length} billing statement{billings.length !== 1 ? 's' : ''}
+              {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
-        <button onClick={() => navigate('/add-billing')}
+        <button onClick={() => navigate('/add-booking')}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
           style={{ backgroundColor: 'var(--primary)' }}>
-          <Plus size={15} /> New Billing
+          <Plus size={15} /> New Booking
         </button>
       </div>
 
@@ -92,7 +81,7 @@ export function Billing() {
             {t.label}
             {t.value !== 'all' && (
               <span className="ml-1 opacity-70">
-                ({billings.filter(b => b.status === t.value).length})
+                ({bookings.filter(b => b.status === t.value).length})
               </span>
             )}
           </button>
@@ -103,16 +92,16 @@ export function Billing() {
       <div className="flex-1 overflow-auto px-6 py-4">
         {loading ? (
           <div className="flex items-center justify-center h-40" style={{ color: 'var(--muted-foreground)' }}>
-            Loading billings…
+            Loading bookings…
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-2"
             style={{ color: 'var(--muted-foreground)' }}>
-            <Receipt size={32} className="opacity-30" />
-            <p className="text-sm">No billing statements yet</p>
-            <button onClick={() => navigate('/add-billing')}
+            <BookOpen size={32} className="opacity-30" />
+            <p className="text-sm">No bookings yet</p>
+            <button onClick={() => navigate('/add-booking')}
               className="text-xs font-medium" style={{ color: 'var(--primary)' }}>
-              + Create your first billing
+              + Create your first booking
             </button>
           </div>
         ) : (
@@ -123,10 +112,10 @@ export function Billing() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--muted-foreground)' }}>
-                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Billing #</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Booking #</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Client</th>
-                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Booking / Purpose</th>
-                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Date Issued</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Proposal #</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Start Date</th>
                     <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide">Total</th>
                     <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide">Status</th>
                     <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide">Actions</th>
@@ -135,52 +124,41 @@ export function Billing() {
                 <tbody>
                   {filtered.map((b, i) => (
                     <tr key={b.id}
-                      className="border-t transition-colors hover:bg-[var(--accent)]"
-                      style={{ borderColor: 'var(--border)', backgroundColor: i % 2 === 0 ? 'var(--background)' : 'transparent' }}>
+                      className="border-t transition-colors hover:bg-[var(--accent)] cursor-pointer"
+                      style={{ borderColor: 'var(--border)', backgroundColor: i % 2 === 0 ? 'var(--background)' : 'transparent' }}
+                      onClick={() => navigate(`/bookings/${b.id}`)}>
                       <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>
-                        {b.billingNo}
+                        {b.bookingNo}
                       </td>
                       <td className="px-4 py-3">
                         <p className="font-medium" style={{ color: 'var(--foreground)' }}>{b.clientName}</p>
                         {b.clientCompany && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{b.clientCompany}</p>}
                       </td>
-                      <td className="px-4 py-3 max-w-[180px]">
-                        {b.bookingNo
-                          ? <p className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>{b.bookingNo}</p>
-                          : <p className="text-xs truncate" style={{ color: 'var(--muted-foreground)' }}>{b.servicePurpose || '—'}</p>
-                        }
+                      <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                        {b.proposalNo || '—'}
                       </td>
                       <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                        {b.dateIssued ? formatDate(b.dateIssued) : formatDate(b.createdAt)}
+                        {b.startDate ? formatDate(b.startDate) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--foreground)' }}>
-                        {formatPHP(b.total)}
+                        {formatPHP(b.totalAmount)}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                         <select
                           value={b.status}
-                          onChange={e => handleStatusChange(b, e.target.value as BillingStatus)}
-                          className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border-0 cursor-pointer', STATUS_STYLE[b.status])}
-                          onClick={e => e.stopPropagation()}>
-                          <option value="draft">Draft</option>
-                          <option value="sent">Sent</option>
-                          <option value="paid">Paid</option>
+                          onChange={e => handleStatusChange(b, e.target.value as BookingStatus)}
+                          className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border-0 cursor-pointer', STATUS_STYLE[b.status])}>
+                          <option value="active">Active</option>
+                          <option value="completed">Completed</option>
                           <option value="cancelled">Cancelled</option>
                         </select>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => navigate(`/billing/${b.id}/edit`)}
-                            title="Edit"
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-center">
+                          <button onClick={() => navigate(`/bookings/${b.id}`)} title="View"
                             className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
                             style={{ color: 'var(--muted-foreground)' }}>
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => handleDownload(b)}
-                            title="Download PDF"
-                            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
-                            style={{ color: 'var(--muted-foreground)' }}>
-                            <Download size={14} />
+                            <Eye size={14} />
                           </button>
                         </div>
                       </td>
@@ -193,11 +171,12 @@ export function Billing() {
             {/* Mobile cards */}
             <div className="md:hidden flex flex-col gap-3">
               {filtered.map(b => (
-                <div key={b.id} className="rounded-xl border p-4"
-                  style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+                <div key={b.id} className="rounded-xl border p-4 cursor-pointer"
+                  style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
+                  onClick={() => navigate(`/bookings/${b.id}`)}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <p className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>{b.billingNo}</p>
+                      <p className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>{b.bookingNo}</p>
                       <p className="font-semibold text-sm mt-0.5" style={{ color: 'var(--foreground)' }}>{b.clientName}</p>
                       {b.clientCompany && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{b.clientCompany}</p>}
                     </div>
@@ -205,26 +184,11 @@ export function Billing() {
                       {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
                     </span>
                   </div>
-                  {b.servicePurpose && (
-                    <p className="text-xs mb-2 truncate" style={{ color: 'var(--muted-foreground)' }}>{b.servicePurpose}</p>
-                  )}
                   <div className="flex items-center justify-between text-sm">
                     <span style={{ color: 'var(--muted-foreground)' }}>
-                      {b.items.length} item{b.items.length !== 1 ? 's' : ''} · {b.dateIssued ? formatDate(b.dateIssued) : formatDate(b.createdAt)}
+                      {b.proposalNo} · {b.startDate ? formatDate(b.startDate) : 'No start date'}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold" style={{ color: 'var(--foreground)' }}>{formatPHP(b.total)}</span>
-                      <button onClick={() => navigate(`/billing/${b.id}/edit`)}
-                        className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
-                        style={{ color: 'var(--muted-foreground)' }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => handleDownload(b)}
-                        className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
-                        style={{ color: 'var(--muted-foreground)' }}>
-                        <Download size={14} />
-                      </button>
-                    </div>
+                    <span className="font-bold" style={{ color: 'var(--foreground)' }}>{formatPHP(b.totalAmount)}</span>
                   </div>
                 </div>
               ))}

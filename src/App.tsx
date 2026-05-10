@@ -14,8 +14,13 @@ import { Logs } from '@/pages/Logs'
 import { Services } from '@/pages/Services'
 import { Proposals } from '@/pages/Proposals'
 import { AddProposal } from '@/pages/AddProposal'
+import { Clients } from '@/pages/Clients'
 import { Billing } from '@/pages/Billing'
 import { AddBilling } from '@/pages/AddBilling'
+import { Bookings } from '@/pages/Bookings'
+import { AddBooking } from '@/pages/AddBooking'
+import { ViewBooking } from '@/pages/ViewBooking'
+import { ViewProposal } from '@/pages/ViewProposal'
 
 export default function App() {
   return (
@@ -37,8 +42,13 @@ export default function App() {
                     <Route path="/users"        element={<Users />} />
                     <Route path="/logs"         element={<Logs />} />
                     <Route path="/services"     element={<Services />} />
+                    <Route path="/clients"            element={<Clients />} />
                     <Route path="/proposals"         element={<Proposals />} />
+                    <Route path="/proposals/:id"     element={<ViewProposal />} />
                     <Route path="/add-proposal"      element={<AddProposal />} />
+                    <Route path="/bookings"           element={<Bookings />} />
+                    <Route path="/add-booking"        element={<AddBooking />} />
+                    <Route path="/bookings/:id"       element={<ViewBooking />} />
                     <Route path="/billing"            element={<Billing />} />
                     <Route path="/add-billing"        element={<AddBilling />} />
                     <Route path="/billing/:id/edit"   element={<AddBilling />} />

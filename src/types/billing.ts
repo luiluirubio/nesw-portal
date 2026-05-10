@@ -1,9 +1,11 @@
-export type BillingStatus = 'draft' | 'sent' | 'paid' | 'cancelled'
+export type BillingStatus   = 'draft' | 'sent' | 'paid' | 'cancelled'
+export type BillingItemType = 'debit' | 'credit'
 
 export interface BillingItem {
   description:    string
   subDescription: string
   amount:         number
+  type:           BillingItemType  // debit = charge to client, credit = payment received
 }
 
 export interface Billing {
@@ -12,6 +14,8 @@ export interface Billing {
   agentId:        string
   agentName:      string
   status:         BillingStatus
+  bookingId?:     string
+  bookingNo?:     string
   proposalId?:    string
   proposalNo?:    string
   clientName:     string

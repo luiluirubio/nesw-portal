@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Download } from 'lucide-react'
+import { Plus, FileText, Download, Eye } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
@@ -167,6 +167,12 @@ export function Proposals() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => navigate(`/proposals/${p.id}`)}
+                            title="View"
+                            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
+                            style={{ color: 'var(--muted-foreground)' }}>
+                            <Eye size={14} />
+                          </button>
                           <button onClick={() => handleDownload(p)}
                             title="Download PDF"
                             className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
@@ -200,6 +206,11 @@ export function Proposals() {
                     <span style={{ color: 'var(--muted-foreground)' }}>{p.services.length} services · {formatDate(p.createdAt)}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-bold" style={{ color: 'var(--foreground)' }}>{formatPHP(p.total)}</span>
+                      <button onClick={() => navigate(`/proposals/${p.id}`)}
+                        className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
+                        style={{ color: 'var(--muted-foreground)' }}>
+                        <Eye size={14} />
+                      </button>
                       <button onClick={() => handleDownload(p)}
                         className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
                         style={{ color: 'var(--muted-foreground)' }}>
