@@ -9,7 +9,6 @@ import { generateBillingPDF } from '@/lib/billingPdf'
 import type { Billing, BillingItem, BillingItemType } from '@/types/billing'
 import type { Booking } from '@/types/booking'
 import type { Client } from '@/types/client'
-// Client type used for constructing ClientSelector value shape from stored fields
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBillingDraftId } from '@/lib/drafts'
 import type { BillingDraft } from '@/types/draft'
 import { ClientSelector } from '@/components/ClientSelector'
@@ -104,11 +103,11 @@ export function AddBilling() {
     saveDraftCloud({
       id: draftId, agentId: user.id, agentName: user.name,
       draftType: 'billing', savedAt: new Date().toISOString(),
-      linkedBookingId, linkedBookingId, linkedBookingNo,
+      linkedBookingId, linkedBookingNo,
       clientName, clientCompany, clientAddress, servicePurpose,
       dateIssued, items, discount, terms,
     })
-  }, [draftId, user, isEdit, submitted, loadingDraft, linkedBookingId, linkedBookingId, linkedBookingNo, clientName, clientCompany, clientAddress, servicePurpose, dateIssued, items, discount, terms])
+  }, [draftId, user, isEdit, submitted, loadingDraft, linkedBookingId, linkedBookingNo, clientName, clientCompany, clientAddress, servicePurpose, dateIssued, items, discount, terms])
 
   useEffect(() => {
     if (isEdit || submitted || loadingDraft) return

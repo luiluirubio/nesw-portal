@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, X, Plus, UserCheck } from 'lucide-react'
 import { api } from '@/lib/api'
-import { cn, inputCls, inputStyle } from '@/lib/utils'
+import { inputCls, inputStyle } from '@/lib/utils'
 import type { Client } from '@/types/client'
 
 interface ClientSelectorProps {

@@ -48,7 +48,6 @@ export interface BookingDraft extends BaseDraft {
 // ── Billing draft ─────────────────────────────────────────────────────────────
 export interface BillingDraft extends BaseDraft {
   draftType:      'billing'
-  selectedBooking: string
   linkedBookingId: string
   linkedBookingNo: string
   clientName:      string
@@ -62,12 +61,9 @@ export interface BillingDraft extends BaseDraft {
 }
 
 // ── Listing draft (existing) ──────────────────────────────────────────────────
-export interface ListingDraft {
-  id: string
-  agentId: string
-  agentName: string
+export interface ListingDraft extends BaseDraft {
+  draftType: 'listing'
   lastStep: number
-  savedAt: string
   form: {
     title: string
     type: PropertyType
