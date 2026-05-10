@@ -62,14 +62,14 @@ export function AddBooking() {
 
   const selectedProposal = proposals.find(p => p.id === selectedProposalId)
 
-  async function handleSave() {
+  async function handleSave(asDraft = true) {
     if (!clientName.trim()) {
       toaster.create({ title: 'Client name is required', type: 'error' }); return
     }
     setSaving(true)
     try {
       const payload = {
-        proposalId:    selectedProposal?.id     ?? '',
+        proposalId:    selectedProposal?.id        ?? '',
         proposalNo:    selectedProposal?.proposalNo ?? '',
         clientName,
         clientCompany,
@@ -81,15 +81,16 @@ export function AddBooking() {
         totalAmount:   selectedProposal?.total    ?? 0,
         startDate,
         notes,
+        status:        asDraft ? 'draft' : 'active',
       }
       const booking = await api.createBooking(payload) as Booking
 
-      // Mark proposal as accepted if it isn't already
-      if (selectedProposal && selectedProposal.status !== 'accepted') {
+      // When activating, mark linked proposal as accepted
+      if (!asDraft && selectedProposal && selectedProposal.status !== 'accepted') {
         await api.updateProposal(selectedProposal.id, { status: 'accepted' }).catch(() => {})
       }
 
-      toaster.create({ title: `Booking ${booking.bookingNo} created`, type: 'success' })
+      toaster.create({ title: `Booking ${booking.bookingNo} ${asDraft ? 'saved as draft' : 'activated'}`, type: 'success' })
       navigate(`/bookings/${booking.id}`)
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
@@ -118,12 +119,20 @@ export function AddBooking() {
           </button>
           <h1 className="text-lg font-bold" style={{ color: 'var(--foreground)' }}>New Booking</h1>
         </div>
-        <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: 'var(--primary)' }}>
-          <Save size={15} />
-          {saving ? 'Creating…' : 'Create Booking'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => handleSave(true)} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--accent)]"
+            style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+            <Save size={15} />
+            {saving ? 'Saving…' : 'Save Draft'}
+          </button>
+          <button onClick={() => handleSave(false)} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'var(--primary)' }}>
+            <Save size={15} />
+            {saving ? 'Saving…' : 'Save & Activate'}
+          </button>
+        </div>
       </div>
 
       {/* Form */}
@@ -220,11 +229,17 @@ export function AddBooking() {
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
               Cancel
             </button>
-            <button onClick={handleSave} disabled={saving}
+            <button onClick={() => handleSave(true)} disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--accent)]"
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+              <Save size={15} />
+              {saving ? 'Saving…' : 'Save Draft'}
+            </button>
+            <button onClick={() => handleSave(false)} disabled={saving}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: 'var(--primary)' }}>
               <Save size={15} />
-              {saving ? 'Creating…' : 'Create Booking'}
+              {saving ? 'Saving…' : 'Save & Activate'}
             </button>
           </div>
         </div>

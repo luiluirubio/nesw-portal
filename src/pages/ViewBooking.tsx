@@ -9,6 +9,7 @@ import type { Billing, BillingStatus } from '@/types/billing'
 import { generateBillingPDF } from '@/lib/billingPdf'
 
 const BOOKING_STATUS_STYLE: Record<BookingStatus, string> = {
+  draft:     'bg-gray-100 text-gray-600',
   active:    'bg-green-100 text-green-700',
   completed: 'bg-blue-100 text-blue-700',
   cancelled: 'bg-red-100 text-red-600',

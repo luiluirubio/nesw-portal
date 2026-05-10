@@ -7,6 +7,7 @@ import { cn, formatPHP } from '@/lib/utils'
 import type { Booking, BookingStatus } from '@/types/booking'
 
 const STATUS_STYLE: Record<BookingStatus, string> = {
+  draft:     'bg-gray-100 text-gray-600',
   active:    'bg-green-100 text-green-700',
   completed: 'bg-blue-100 text-blue-700',
   cancelled: 'bg-red-100 text-red-600',
@@ -42,6 +43,7 @@ export function Bookings() {
 
   const tabs: { label: string; value: BookingStatus | 'all' }[] = [
     { label: 'All',       value: 'all' },
+    { label: 'Draft',     value: 'draft' },
     { label: 'Active',    value: 'active' },
     { label: 'Completed', value: 'completed' },
     { label: 'Cancelled', value: 'cancelled' },
@@ -148,6 +150,7 @@ export function Bookings() {
                           value={b.status}
                           onChange={e => handleStatusChange(b, e.target.value as BookingStatus)}
                           className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border-0 cursor-pointer', STATUS_STYLE[b.status])}>
+                          <option value="draft">Draft</option>
                           <option value="active">Active</option>
                           <option value="completed">Completed</option>
                           <option value="cancelled">Cancelled</option>

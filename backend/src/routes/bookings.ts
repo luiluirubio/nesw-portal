@@ -51,7 +51,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const {
       proposalId, proposalNo, clientName, clientCompany, clientEmail,
       clientPhone, clientAddress, scopeNotes, services, totalAmount,
-      startDate, notes,
+      startDate, notes, status,
     } = req.body
 
     if (!clientName) { res.status(400).json({ error: 'clientName is required' }); return }
@@ -62,7 +62,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       bookingNo,
       agentId:       req.userId ?? '',
       agentName:     req.userName ?? '',
-      status:        'active',
+      status:        (status as string) ?? 'draft',
       proposalId:    (proposalId as string) ?? '',
       proposalNo:    (proposalNo as string) ?? '',
       clientName:    clientName as string,
