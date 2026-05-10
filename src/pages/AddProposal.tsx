@@ -11,8 +11,10 @@ import { cn, formatPHP } from '@/lib/utils'
 import { generateProposalPDF } from '@/lib/proposalPdf'
 import type { Service } from '@/types/service'
 import type { Proposal, ProposalService } from '@/types/proposal'
+import type { Client } from '@/types/client'
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateProposalDraftId } from '@/lib/drafts'
 import type { ProposalDraft } from '@/types/draft'
+import { ClientSelector } from '@/components/ClientSelector'
 
 const DEFAULT_TERMS = `1. Prices are in Philippine Peso (₱) and are exclusive of applicable taxes unless stated.
 2. Quotation is valid for the number of days specified from the date of issue.
@@ -120,9 +122,11 @@ export function AddProposal() {
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Step 1
+  // Step 1 — client
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [client, setClient] = useState({
     name: '', company: '', email: '', phone: '', address: '', notes: '',
+    clientId: '', clientCode: '',
   })
 
   // Step 2
@@ -287,6 +291,8 @@ export function AddProposal() {
     setSubmitting(true)
     try {
       const result = await api.createProposal({
+        clientId:      client.clientId,
+        clientCode:    client.clientCode,
         clientName:    client.name,
         clientCompany: client.company,
         clientEmail:   client.email,
@@ -332,6 +338,18 @@ export function AddProposal() {
     const set = (k: keyof typeof client) => (v: string) => setClient(c => ({ ...c, [k]: v }))
     return (
       <div className="flex flex-col gap-4">
+
+        {/* Client lookup / create */}
+        <ClientSelector
+          value={selectedClient}
+          onSelect={c => {
+            setSelectedClient(c)
+            setClient({ name: c.name, company: c.company ?? '', email: c.email ?? '', phone: c.phone ?? '', address: c.address ?? '', notes: c.notes ?? '', clientId: c.id, clientCode: c.clientCode })
+            setErrors(e => ({ ...e, name: '' }))
+          }}
+          onClear={() => { setSelectedClient(null); setClient(prev => ({ ...prev, clientId: '', clientCode: '' })) }}
+        />
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Client Name" required error={errors.name}>
             <TextInput value={client.name} onChange={set('name')} placeholder="Juan dela Cruz" error={!!errors.name} />

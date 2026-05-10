@@ -5,17 +5,15 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+const BOOKING_BASE = 8000000
+
 async function nextBookingNo(): Promise<string> {
-  const year = new Date().getFullYear()
   const result = await db.send(new ScanCommand({ TableName: Tables.bookings, ProjectionExpression: 'bookingNo' }))
-  const existing = (result.Items ?? [])
-    .map(i => i.bookingNo as string)
-    .filter(n => n?.startsWith(`BKG-${year}-`))
-  const max = existing.reduce((acc, n) => {
-    const num = parseInt(n.split('-')[2] ?? '0', 10)
-    return num > acc ? num : acc
-  }, 0)
-  return `BKG-${year}-${String(max + 1).padStart(3, '0')}`
+  const max = (result.Items ?? [])
+    .map(i => parseInt(i.bookingNo as string, 10))
+    .filter(n => !isNaN(n) && n >= BOOKING_BASE && n < BOOKING_BASE + 1_000_000)
+    .reduce((acc, n) => n > acc ? n : acc, BOOKING_BASE)
+  return String(max + 1)
 }
 
 // GET /api/bookings
@@ -51,7 +49,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const {
       proposalId, proposalNo, clientName, clientCompany, clientEmail,
       clientPhone, clientAddress, scopeNotes, services, totalAmount,
-      startDate, notes, status,
+      startDate, notes, status, clientId, clientCode,
     } = req.body
 
     if (!clientName) { res.status(400).json({ error: 'clientName is required' }); return }
@@ -70,6 +68,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       clientEmail:   (clientEmail as string) ?? '',
       clientPhone:   (clientPhone as string) ?? '',
       clientAddress: (clientAddress as string) ?? '',
+      clientId:      (clientId as string)    ?? '',
+      clientCode:    (clientCode as string)  ?? '',
       scopeNotes:    (scopeNotes as string) ?? '',
       services:      services ?? [],
       totalAmount:   Number(totalAmount ?? 0),
@@ -98,7 +98,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     const allowed = [
-      'status', 'scopeNotes', 'notes', 'startDate',
+      'status', 'scopeNotes', 'notes', 'startDate', 'clientId', 'clientCode',
       ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),
     ]
     const exprParts: string[] = ['#ua = :ua']

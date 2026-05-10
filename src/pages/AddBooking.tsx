@@ -7,8 +7,10 @@ import { toaster } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import type { Proposal } from '@/types/proposal'
 import type { Booking } from '@/types/booking'
+import type { Client } from '@/types/client'
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBookingDraftId } from '@/lib/drafts'
 import type { BookingDraft } from '@/types/draft'
+import { ClientSelector } from '@/components/ClientSelector'
 
 const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
 const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
@@ -36,9 +38,12 @@ export function AddBooking() {
   const [loadingDraft, setLoadingDraft] = useState(!!params.get('draft'))
   const [submitted,    setSubmitted]    = useState(false)
 
-  const [saving, setSaving]       = useState(false)
-  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [saving, setSaving]         = useState(false)
+  const [proposals, setProposals]   = useState<Proposal[]>([])
   const [selectedProposalId, setSelectedProposalId] = useState(preselectedId)
+  const [selectedClient, setSelectedClient]         = useState<Client | null>(null)
+  const [clientId,   setClientId]   = useState('')
+  const [clientCode, setClientCode] = useState('')
 
   const [clientName,    setClientName]    = useState('')
   const [clientCompany, setClientCompany] = useState('')
@@ -100,6 +105,8 @@ export function AddBooking() {
     setClientPhone(p.clientPhone || '')
     setClientAddress(p.clientAddress || '')
     setScopeNotes(p.clientNotes || '')
+    if (p.clientId)   setClientId(p.clientId)
+    if (p.clientCode) setClientCode(p.clientCode)
   }, [proposals])
 
   useEffect(() => {
@@ -117,6 +124,8 @@ export function AddBooking() {
       const payload = {
         proposalId:    selectedProposal?.id        ?? '',
         proposalNo:    selectedProposal?.proposalNo ?? '',
+        clientId,
+        clientCode,
         clientName,
         clientCompany,
         clientEmail,
@@ -221,6 +230,23 @@ export function AddBooking() {
             <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>
               Client Information
             </h2>
+
+            {/* Client master data lookup */}
+            <ClientSelector
+              value={selectedClient}
+              onSelect={c => {
+                setSelectedClient(c)
+                setClientId(c.id)
+                setClientCode(c.clientCode)
+                setClientName(c.name)
+                setClientCompany(c.company || '')
+                setClientEmail(c.email || '')
+                setClientPhone(c.phone || '')
+                setClientAddress(c.address || '')
+              }}
+              onClear={() => { setSelectedClient(null); setClientId(''); setClientCode('') }}
+            />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <Field label="Client Name" required>

@@ -5,17 +5,15 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+const PROPOSAL_BASE = 6000000
+
 async function nextProposalNo(): Promise<string> {
-  const year = new Date().getFullYear()
   const result = await db.send(new ScanCommand({ TableName: Tables.proposals, ProjectionExpression: 'proposalNo' }))
-  const existing = (result.Items ?? [])
-    .map(i => i.proposalNo as string)
-    .filter(n => n?.startsWith(`QUO-${year}-`))
-  const max = existing.reduce((acc, n) => {
-    const num = parseInt(n.split('-')[2] ?? '0', 10)
-    return num > acc ? num : acc
-  }, 0)
-  return `QUO-${year}-${String(max + 1).padStart(3, '0')}`
+  const max = (result.Items ?? [])
+    .map(i => parseInt(i.proposalNo as string, 10))
+    .filter(n => !isNaN(n) && n >= PROPOSAL_BASE && n < PROPOSAL_BASE + 1_000_000)
+    .reduce((acc, n) => n > acc ? n : acc, PROPOSAL_BASE)
+  return String(max + 1)
 }
 
 // GET /api/proposals — all (admin) or by agentId
@@ -53,6 +51,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const {
       clientName, clientCompany, clientEmail, clientPhone, clientAddress, clientNotes,
       services, discount, validityDays, terms, subtotal, total,
+      clientId, clientCode,
     } = req.body
 
     if (!clientName || !services?.length) {
@@ -72,6 +71,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       clientPhone:   (clientPhone as string) ?? '',
       clientAddress: (clientAddress as string) ?? '',
       clientNotes:   (clientNotes as string) ?? '',
+      clientId:      (clientId as string)    ?? '',
+      clientCode:    (clientCode as string)  ?? '',
       services:      services ?? [],
       discount:      Number(discount ?? 0),
       validityDays:  Number(validityDays ?? 30),
@@ -99,7 +100,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const allowed = [
       'status', 'clientName', 'clientCompany', 'clientEmail', 'clientPhone',
       'clientAddress', 'clientNotes', 'services', 'discount', 'validityDays',
-      'terms', 'subtotal', 'total',
+      'terms', 'subtotal', 'total', 'clientId', 'clientCode',
       ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),
     ]
     const exprParts: string[] = ['#ua = :ua']

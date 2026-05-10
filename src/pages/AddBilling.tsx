@@ -8,8 +8,10 @@ import { cn, formatPHP } from '@/lib/utils'
 import { generateBillingPDF } from '@/lib/billingPdf'
 import type { Billing, BillingItem, BillingItemType } from '@/types/billing'
 import type { Booking } from '@/types/booking'
+import type { Client } from '@/types/client'
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBillingDraftId } from '@/lib/drafts'
 import type { BillingDraft } from '@/types/draft'
+import { ClientSelector } from '@/components/ClientSelector'
 
 const DEFAULT_TERMS =
   "For your convenience, we'll prepare everything for release and provide the final appraisal reports as soon as full payment has been received."
@@ -57,6 +59,9 @@ export function AddBilling() {
   const [selectedBooking, setSelectedBooking] = useState(preBookingId)
   const [linkedBookingId, setLinkedBookingId] = useState(preBookingId)
   const [linkedBookingNo, setLinkedBookingNo] = useState(preBookingNo)
+  const [selectedClient, setSelectedClient]   = useState<Client | null>(null)
+  const [clientId,   setClientId]   = useState('')
+  const [clientCode, setClientCode] = useState('')
 
   // Form state
   const [clientName,     setClientName]     = useState(preClientName)
@@ -145,6 +150,8 @@ export function AddBilling() {
     setLinkedBookingId(bkg.id)
     setLinkedBookingNo(bkg.bookingNo)
     setServicePurpose(bkg.scopeNotes || '')
+    if (bkg.clientId)   setClientId(bkg.clientId)
+    if (bkg.clientCode) setClientCode(bkg.clientCode)
     if (!isEdit) {
       setItems(bkg.services.length
         ? bkg.services.map(svc => ({
@@ -181,6 +188,7 @@ export function AddBilling() {
 
   async function buildPayload() {
     return {
+      clientId, clientCode,
       clientName, clientCompany, clientAddress, servicePurpose, dateIssued,
       items, discount, subtotal, total, terms,
       bookingId: linkedBookingId || '',
@@ -294,6 +302,20 @@ export function AddBilling() {
                 </select>
               )}
             </Field>
+
+            {/* Client reference — auto-filled from booking, can also search */}
+            <ClientSelector
+              value={selectedClient}
+              onSelect={c => {
+                setSelectedClient(c)
+                setClientId(c.id)
+                setClientCode(c.clientCode)
+                setClientName(c.name)
+                setClientCompany(c.company || '')
+              }}
+              onClear={() => { setSelectedClient(null); setClientId(''); setClientCode('') }}
+              disabled={!!linkedBookingId && !!clientId}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Client Name" required>

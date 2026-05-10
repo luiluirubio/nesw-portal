@@ -18,6 +18,8 @@ export interface Billing {
   bookingNo?:     string
   proposalId?:    string
   proposalNo?:    string
+  clientId?:      string
+  clientCode?:    string
   clientName:     string
   clientCompany:  string
   clientAddress:  string

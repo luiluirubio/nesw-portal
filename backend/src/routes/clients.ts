@@ -5,16 +5,15 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+const CLIENT_BASE = 5000000
+
 async function nextClientCode(): Promise<string> {
   const result = await db.send(new ScanCommand({ TableName: Tables.clients, ProjectionExpression: 'clientCode' }))
-  const existing = (result.Items ?? [])
-    .map(i => i.clientCode as string)
-    .filter(c => c?.startsWith('CLT-'))
-  const max = existing.reduce((acc, c) => {
-    const num = parseInt(c.split('-')[1] ?? '0', 10)
-    return num > acc ? num : acc
-  }, 0)
-  return `CLT-${String(max + 1).padStart(4, '0')}`
+  const max = (result.Items ?? [])
+    .map(i => parseInt(i.clientCode as string, 10))
+    .filter(n => !isNaN(n) && n >= CLIENT_BASE && n < CLIENT_BASE + 1_000_000)
+    .reduce((acc, n) => n > acc ? n : acc, CLIENT_BASE)
+  return String(max + 1)
 }
 
 // GET /api/clients
