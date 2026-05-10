@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Download, Eye } from 'lucide-react'
+import { Plus, FileText, Download, Eye, PenLine, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
 import type { Proposal, ProposalStatus } from '@/types/proposal'
 import { generateProposalPDF } from '@/lib/proposalPdf'
+import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
+import type { ProposalDraft } from '@/types/draft'
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft:    'bg-gray-100 text-gray-600',
@@ -23,12 +25,14 @@ export function Proposals() {
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [loading, setLoading]     = useState(true)
   const [filter, setFilter]       = useState<ProposalStatus | 'all'>('all')
+  const [drafts, setDrafts]       = useState<ProposalDraft[]>([])
 
   useEffect(() => {
     api.getProposals()
       .then(data => setProposals(data as Proposal[]))
       .catch(() => toaster.create({ title: 'Failed to load proposals', type: 'error' }))
       .finally(() => setLoading(false))
+    fetchDrafts('proposal').then(d => setDrafts(d as ProposalDraft[])).catch(() => {})
   }, [])
 
   const filtered = filter === 'all' ? proposals : proposals.filter(p => p.status === filter)
@@ -101,6 +105,58 @@ export function Proposals() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-6 py-4">
+
+        {/* Draft Proposals Banner */}
+        {drafts.length > 0 && (
+          <div className="rounded-xl border overflow-hidden mb-4" style={{ borderColor: '#f59e0b', backgroundColor: '#fffbeb' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: '#fde68a', backgroundColor: '#fef3c7' }}>
+              <PenLine size={14} style={{ color: '#b45309' }} />
+              <p className="text-xs font-bold" style={{ color: '#b45309' }}>
+                {drafts.length} Incomplete Proposal{drafts.length > 1 ? 's' : ''} — Draft
+              </p>
+              <span className="text-xs" style={{ color: '#92400e' }}>· Auto-saved. Continue where you left off.</span>
+            </div>
+            <div className="divide-y" style={{ borderColor: '#fde68a' }}>
+              {drafts.map(d => {
+                const stepLabel = ['Client Details', 'Select Services', 'Pricing', 'Review'][d.lastStep - 1] ?? `Step ${d.lastStep}`
+                const diff = Date.now() - new Date(d.savedAt).getTime()
+                const mins = Math.floor(diff / 60000), hrs = Math.floor(mins / 60)
+                const savedAgo = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago`
+                return (
+                  <div key={d.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: '#92400e' }}>
+                        {d.client?.name || 'Untitled Proposal'}
+                      </p>
+                      <p className="text-xs" style={{ color: '#b45309' }}>
+                        Stopped at <strong>{stepLabel}</strong> · Saved {savedAgo}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-800">
+                        Step {d.lastStep}/4
+                      </span>
+                      <button onClick={() => navigate(`/add-proposal?draft=${d.id}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white hover:opacity-90"
+                        style={{ backgroundColor: '#b45309' }}>
+                        <PenLine size={12} /> Continue
+                      </button>
+                      <button onClick={() => { deleteDraftCloud(d.id); setDrafts(ds => ds.filter(x => x.id !== d.id)) }}
+                        title="Discard draft"
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: '#b45309' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fde68a')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center h-40" style={{ color: 'var(--muted-foreground)' }}>
             Loading proposals…

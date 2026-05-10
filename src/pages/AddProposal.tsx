@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   User, ListChecks, DollarSign, Eye,
   CheckCircle, ArrowLeft, ArrowRight, Download, Save,
@@ -11,6 +11,8 @@ import { cn, formatPHP } from '@/lib/utils'
 import { generateProposalPDF } from '@/lib/proposalPdf'
 import type { Service } from '@/types/service'
 import type { Proposal, ProposalService } from '@/types/proposal'
+import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateProposalDraftId } from '@/lib/drafts'
+import type { ProposalDraft } from '@/types/draft'
 
 const DEFAULT_TERMS = `1. Prices are in Philippine Peso (₱) and are exclusive of applicable taxes unless stated.
 2. Quotation is valid for the number of days specified from the date of issue.
@@ -106,6 +108,14 @@ function TextInput({ value, onChange, placeholder, type = 'text', error }: {
 export function AddProposal() {
   const navigate = useNavigate()
   const { user }  = useAuth()
+  const [searchParams] = useSearchParams()
+
+  // Draft ID — stable for this session
+  const draftIdRef      = useRef<string>(searchParams.get('draft') ?? generateProposalDraftId())
+  const draftId         = draftIdRef.current
+  const [loadingDraft, setLoadingDraft] = useState(!!searchParams.get('draft'))
+  const [submitted, setSubmitted]       = useState(false)
+
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -125,6 +135,53 @@ export function AddProposal() {
   const [discount, setDiscount]   = useState('0')
   const [validity, setValidity]   = useState('30')
   const [terms, setTerms]         = useState(DEFAULT_TERMS)
+
+  // Load draft on resume
+  useEffect(() => {
+    const id = searchParams.get('draft')
+    if (!id) return
+    fetchDraft<ProposalDraft>(id).then(d => {
+      if (d) {
+        setStep(d.lastStep)
+        setClient(d.client)
+        setSelectedIds(new Set(d.selectedIds))
+        setLineItems(d.lineItems)
+        setDiscount(d.discount)
+        setValidity(d.validity)
+        setTerms(d.terms)
+      }
+    }).finally(() => setLoadingDraft(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save on any field change (debounced 800ms)
+  const autoSave = useCallback(() => {
+    if (!user || submitted || loadingDraft) return
+    saveDraftCloud({
+      id:        draftId,
+      agentId:   user.id,
+      agentName: user.name,
+      draftType: 'proposal',
+      savedAt:   new Date().toISOString(),
+      lastStep:  step,
+      client,
+      selectedIds: Array.from(selectedIds),
+      lineItems,
+      discount,
+      validity,
+      terms,
+    })
+  }, [draftId, user, step, client, selectedIds, lineItems, discount, validity, terms, submitted, loadingDraft])
+
+  useEffect(() => {
+    if (submitted || loadingDraft) return
+    const t = setTimeout(autoSave, 800)
+    return () => clearTimeout(t)
+  }, [autoSave, submitted, loadingDraft])
+
+  useEffect(() => {
+    if (!submitted && !loadingDraft) autoSave()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
 
   useEffect(() => {
     setLoadingCatalog(true)
@@ -243,6 +300,8 @@ export function AddProposal() {
         subtotal,
         total,
       }) as Proposal
+      setSubmitted(true)
+      deleteDraftCloud(draftId)
       toaster.create({ title: `Proposal ${result.proposalNo} saved`, type: 'success' })
       setTimeout(() => navigate('/proposals'), 1200)
     } catch (err) {

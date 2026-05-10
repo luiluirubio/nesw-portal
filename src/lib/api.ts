@@ -59,7 +59,7 @@ export const api = {
   // Drafts
   getDrafts:   ()                     => request<ListingDraft[]>('/api/drafts'),
   getDraft:    (id: string)           => request<ListingDraft>(`/api/drafts/${id}`),
-  saveDraft:   (body: Partial<ListingDraft>) => request<ListingDraft>('/api/drafts', { method: 'POST', body: JSON.stringify(body) }),
+  saveDraft:   (body: unknown) => request<unknown>('/api/drafts', { method: 'POST', body: JSON.stringify(body) }),
   deleteDraft: (id: string)           => request<void>(`/api/drafts/${id}`, { method: 'DELETE' }),
 
   // File upload

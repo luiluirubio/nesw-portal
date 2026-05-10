@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, Download, Save, ArrowLeft } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -8,6 +8,8 @@ import { cn, formatPHP } from '@/lib/utils'
 import { generateBillingPDF } from '@/lib/billingPdf'
 import type { Billing, BillingItem, BillingItemType } from '@/types/billing'
 import type { Booking } from '@/types/booking'
+import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBillingDraftId } from '@/lib/drafts'
+import type { BillingDraft } from '@/types/draft'
 
 const DEFAULT_TERMS =
   "For your convenience, we'll prepare everything for release and provide the final appraisal reports as soon as full payment has been received."
@@ -44,6 +46,12 @@ export function AddBilling() {
   const preBookingNo   = params.get('bookingNo')   ?? ''
   const preClientName  = params.get('clientName')  ?? ''
 
+  // Draft (only for new billings, not edits)
+  const draftIdRef    = useRef<string>(params.get('draft') ?? generateBillingDraftId())
+  const draftId       = draftIdRef.current
+  const [loadingDraft, setLoadingDraft] = useState(!isEdit && !!params.get('draft'))
+  const [submitted,    setSubmitted]    = useState(false)
+
   const [saving, setSaving]      = useState(false)
   const [bookings, setBookings]  = useState<Booking[]>([])
   const [selectedBooking, setSelectedBooking] = useState(preBookingId)
@@ -67,6 +75,45 @@ export function AddBilling() {
       .then(data => setBookings(data as Booking[]))
       .catch(() => {})
   }, [])
+
+  // Load draft on resume (new billing only)
+  useEffect(() => {
+    const draftParam = params.get('draft')
+    if (!draftParam || isEdit) return
+    fetchDraft<BillingDraft>(draftParam).then(d => {
+      if (d) {
+        setSelectedBooking(d.selectedBooking)
+        setLinkedBookingId(d.linkedBookingId)
+        setLinkedBookingNo(d.linkedBookingNo)
+        setClientName(d.clientName)
+        setClientCompany(d.clientCompany)
+        setClientAddress(d.clientAddress)
+        setServicePurpose(d.servicePurpose)
+        setDateIssued(d.dateIssued)
+        setItems(d.items?.length ? d.items : [emptyItem()])
+        setDiscount(d.discount)
+        setTerms(d.terms)
+      }
+    }).finally(() => setLoadingDraft(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save on any field change (new billings only)
+  const autoSave = useCallback(() => {
+    if (!user || isEdit || submitted || loadingDraft) return
+    saveDraftCloud({
+      id: draftId, agentId: user.id, agentName: user.name,
+      draftType: 'billing', savedAt: new Date().toISOString(),
+      selectedBooking, linkedBookingId, linkedBookingNo,
+      clientName, clientCompany, clientAddress, servicePurpose,
+      dateIssued, items, discount, terms,
+    })
+  }, [draftId, user, isEdit, submitted, loadingDraft, selectedBooking, linkedBookingId, linkedBookingNo, clientName, clientCompany, clientAddress, servicePurpose, dateIssued, items, discount, terms])
+
+  useEffect(() => {
+    if (isEdit || submitted || loadingDraft) return
+    const t = setTimeout(autoSave, 800)
+    return () => clearTimeout(t)
+  }, [autoSave, isEdit, submitted, loadingDraft])
 
   // Load existing billing when editing
   useEffect(() => {
@@ -162,6 +209,8 @@ export function AddBilling() {
       } else {
         saved = await api.createBilling(payload) as Billing
       }
+      setSubmitted(true)
+      if (!isEdit) deleteDraftCloud(draftId)
       toaster.create({ title: isEdit ? 'Billing updated' : 'Billing created', type: 'success' })
       if (andPrint) {
         await generateBillingPDF({

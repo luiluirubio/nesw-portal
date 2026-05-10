@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Receipt, Download, Pencil } from 'lucide-react'
+import { Plus, Receipt, Download, Pencil, PenLine, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
 import type { Billing, BillingStatus } from '@/types/billing'
 import { generateBillingPDF } from '@/lib/billingPdf'
+import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
+import type { BillingDraft } from '@/types/draft'
 
 const STATUS_STYLE: Record<BillingStatus, string> = {
   draft:     'bg-gray-100 text-gray-600',
@@ -23,12 +25,14 @@ export function Billing() {
   const [billings, setBillings] = useState<Billing[]>([])
   const [loading, setLoading]   = useState(true)
   const [filter, setFilter]     = useState<BillingStatus | 'all'>('all')
+  const [drafts, setDrafts]     = useState<BillingDraft[]>([])
 
   useEffect(() => {
     api.getBillings()
       .then(data => setBillings(data as Billing[]))
       .catch(() => toaster.create({ title: 'Failed to load billings', type: 'error' }))
       .finally(() => setLoading(false))
+    fetchDrafts('billing').then(d => setDrafts(d as BillingDraft[])).catch(() => {})
   }, [])
 
   const filtered = filter === 'all' ? billings : billings.filter(b => b.status === filter)
@@ -101,6 +105,53 @@ export function Billing() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-6 py-4">
+
+        {/* Draft Billings Banner */}
+        {drafts.length > 0 && (
+          <div className="rounded-xl border overflow-hidden mb-4" style={{ borderColor: '#f59e0b', backgroundColor: '#fffbeb' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: '#fde68a', backgroundColor: '#fef3c7' }}>
+              <PenLine size={14} style={{ color: '#b45309' }} />
+              <p className="text-xs font-bold" style={{ color: '#b45309' }}>
+                {drafts.length} Incomplete Billing{drafts.length > 1 ? 's' : ''} — Draft
+              </p>
+              <span className="text-xs" style={{ color: '#92400e' }}>· Auto-saved. Continue where you left off.</span>
+            </div>
+            <div className="divide-y" style={{ borderColor: '#fde68a' }}>
+              {drafts.map(d => {
+                const diff = Date.now() - new Date(d.savedAt).getTime()
+                const mins = Math.floor(diff / 60000), hrs = Math.floor(mins / 60)
+                const savedAgo = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago`
+                return (
+                  <div key={d.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: '#92400e' }}>
+                        {d.clientName || 'Untitled Billing'}
+                        {d.linkedBookingNo && <span className="font-mono ml-2 text-xs">({d.linkedBookingNo})</span>}
+                      </p>
+                      <p className="text-xs" style={{ color: '#b45309' }}>Saved {savedAgo}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => navigate(`/add-billing?draft=${d.id}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white hover:opacity-90"
+                        style={{ backgroundColor: '#b45309' }}>
+                        <PenLine size={12} /> Continue
+                      </button>
+                      <button onClick={() => { deleteDraftCloud(d.id); setDrafts(ds => ds.filter(x => x.id !== d.id)) }}
+                        title="Discard draft"
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: '#b45309' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fde68a')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center h-40" style={{ color: 'var(--muted-foreground)' }}>
             Loading billings…

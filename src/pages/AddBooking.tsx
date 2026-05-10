@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Save } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/context/AuthContext'
 import { toaster } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import type { Proposal } from '@/types/proposal'
 import type { Booking } from '@/types/booking'
+import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBookingDraftId } from '@/lib/drafts'
+import type { BookingDraft } from '@/types/draft'
 
 const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
 const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }
@@ -24,7 +27,14 @@ function Field({ label, required, children }: { label: string; required?: boolea
 export function AddBooking() {
   const navigate        = useNavigate()
   const [params]        = useSearchParams()
+  const { user }        = useAuth()
   const preselectedId   = params.get('proposalId') ?? ''
+
+  // Draft
+  const draftIdRef    = useRef<string>(params.get('draft') ?? generateBookingDraftId())
+  const draftId       = draftIdRef.current
+  const [loadingDraft, setLoadingDraft] = useState(!!params.get('draft'))
+  const [submitted,    setSubmitted]    = useState(false)
 
   const [saving, setSaving]       = useState(false)
   const [proposals, setProposals] = useState<Proposal[]>([])
@@ -38,6 +48,42 @@ export function AddBooking() {
   const [scopeNotes,    setScopeNotes]    = useState('')
   const [startDate,     setStartDate]     = useState(new Date().toISOString().slice(0, 10))
   const [notes,         setNotes]         = useState('')
+
+  // Load draft on resume
+  useEffect(() => {
+    const id = params.get('draft')
+    if (!id) return
+    fetchDraft<BookingDraft>(id).then(d => {
+      if (d) {
+        setSelectedProposalId(d.selectedProposalId)
+        setClientName(d.clientName)
+        setClientCompany(d.clientCompany)
+        setClientEmail(d.clientEmail)
+        setClientPhone(d.clientPhone)
+        setClientAddress(d.clientAddress)
+        setScopeNotes(d.scopeNotes)
+        setStartDate(d.startDate)
+        setNotes(d.notes)
+      }
+    }).finally(() => setLoadingDraft(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save (debounced 800ms)
+  const autoSave = useCallback(() => {
+    if (!user || submitted || loadingDraft) return
+    saveDraftCloud({
+      id: draftId, agentId: user.id, agentName: user.name,
+      draftType: 'booking', savedAt: new Date().toISOString(),
+      selectedProposalId, clientName, clientCompany, clientEmail,
+      clientPhone, clientAddress, scopeNotes, startDate, notes,
+    })
+  }, [draftId, user, submitted, loadingDraft, selectedProposalId, clientName, clientCompany, clientEmail, clientPhone, clientAddress, scopeNotes, startDate, notes])
+
+  useEffect(() => {
+    if (submitted || loadingDraft) return
+    const t = setTimeout(autoSave, 800)
+    return () => clearTimeout(t)
+  }, [autoSave, submitted, loadingDraft])
 
   useEffect(() => {
     api.getProposals()
@@ -90,6 +136,8 @@ export function AddBooking() {
         await api.updateProposal(selectedProposal.id, { status: 'accepted' }).catch(() => {})
       }
 
+      setSubmitted(true)
+      deleteDraftCloud(draftId)
       toaster.create({ title: `Booking ${booking.bookingNo} ${asDraft ? 'saved as draft' : 'activated'}`, type: 'success' })
       navigate(`/bookings/${booking.id}`)
     } catch (err) {
