@@ -16,6 +16,7 @@ import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP } from '@/lib/utils'
 import { phLgusSorted } from '@/data/philippines'
 import { saveDraftCloud, deleteDraftCloud, fetchDraft, generateDraftId } from '@/lib/drafts'
+import type { ListingDraft } from '@/types/draft'
 import type { PropertyType, ListingType } from '@/types/property'
 
 const EMAIL_DOMAINS = ['gmail.com','yahoo.com','outlook.com','hotmail.com','neswcorp.com','icloud.com','live.com','yahoo.com.ph']
@@ -136,7 +137,7 @@ export function AddListing() {
   useEffect(() => {
     const id = searchParams.get('draft')
     if (!id) return
-    fetchDraft(id).then(d => {
+    fetchDraft<ListingDraft>(id).then(d => {
       if (d) {
         setStep(d.lastStep)
         setForm({

@@ -15,12 +15,14 @@ export interface ProposalDraft extends BaseDraft {
   draftType: 'proposal'
   lastStep: number
   client: {
-    clientName:    string
-    clientCompany: string
-    clientEmail:   string
-    clientPhone:   string
-    clientAddress: string
-    clientNotes:   string
+    name:      string
+    company:   string
+    email:     string
+    phone:     string
+    address:   string
+    notes:     string
+    clientId:  string
+    clientCode: string
   }
   selectedIds: string[]
   lineItems:   Record<string, { qty: number; unitPrice: number; notes: string }>

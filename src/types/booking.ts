@@ -18,8 +18,8 @@ export interface Booking {
   status:       BookingStatus
   proposalId:   string
   proposalNo:   string
-  clientId:     string
-  clientCode:   string
+  clientId?:    string
+  clientCode?:  string
   clientName:   string
   clientCompany: string
   clientEmail:  string

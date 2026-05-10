@@ -16,8 +16,8 @@ export interface Proposal {
   agentId:       string
   agentName:     string
   status:        ProposalStatus
-  clientId:      string
-  clientCode:    string
+  clientId?:     string
+  clientCode?:   string
   clientName:    string
   clientCompany: string
   clientEmail:   string

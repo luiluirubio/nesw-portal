@@ -715,7 +715,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
   }, [user])
 
   useEffect(() => {
-    if (user) fetchDrafts().then(setDrafts).catch(() => {})
+    if (user) fetchDrafts('listing').then(d => setDrafts(d as ListingDraft[])).catch(() => {})
   }, [user])
 
   function removeDraft(id: string) {
