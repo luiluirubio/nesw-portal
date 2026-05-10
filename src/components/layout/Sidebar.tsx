@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase, Receipt, BookOpen, Users2, Database } from 'lucide-react'
+import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase, Receipt, BookOpen, Users2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
