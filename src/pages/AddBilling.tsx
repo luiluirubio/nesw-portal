@@ -7,7 +7,6 @@ import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
 import { generateBillingPDF } from '@/lib/billingPdf'
 import type { Billing, BillingItem, BillingItemType } from '@/types/billing'
-import type { Proposal } from '@/types/proposal'
 import type { Booking } from '@/types/booking'
 
 const DEFAULT_TERMS =
@@ -45,16 +44,11 @@ export function AddBilling() {
   const preBookingNo   = params.get('bookingNo')   ?? ''
   const preClientName  = params.get('clientName')  ?? ''
 
-  const [saving, setSaving]       = useState(false)
-  const [proposals, setProposals] = useState<Proposal[]>([])
-  const [bookings,  setBookings]  = useState<Booking[]>([])
-  const [source, setSource]       = useState<'booking' | 'proposal' | 'new'>(
-    preBookingId ? 'booking' : 'new'
-  )
-  const [selectedBooking,  setSelectedBooking]  = useState(preBookingId)
-  const [selectedProposal, setSelectedProposal] = useState('')
-  const [linkedBookingId,  setLinkedBookingId]  = useState(preBookingId)
-  const [linkedBookingNo,  setLinkedBookingNo]  = useState(preBookingNo)
+  const [saving, setSaving]      = useState(false)
+  const [bookings, setBookings]  = useState<Booking[]>([])
+  const [selectedBooking, setSelectedBooking] = useState(preBookingId)
+  const [linkedBookingId, setLinkedBookingId] = useState(preBookingId)
+  const [linkedBookingNo, setLinkedBookingNo] = useState(preBookingNo)
 
   // Form state
   const [clientName,     setClientName]     = useState(preClientName)
@@ -67,11 +61,8 @@ export function AddBilling() {
   const [terms,          setTerms]          = useState(DEFAULT_TERMS)
   const [existingBilling, setExistingBilling] = useState<Billing | null>(null)
 
-  // Load proposals and bookings for linking
+  // Load bookings for linking
   useEffect(() => {
-    api.getProposals()
-      .then(data => setProposals(data as Proposal[]))
-      .catch(() => {})
     api.getBookings()
       .then(data => setBookings(data as Booking[]))
       .catch(() => {})
@@ -92,8 +83,7 @@ export function AddBilling() {
         setItems(b.items?.length ? b.items.map(it => ({ ...it, type: it.type ?? 'debit' })) : [emptyItem()])
         setDiscount(b.discount)
         setTerms(b.terms || DEFAULT_TERMS)
-        if (b.bookingId) { setSource('booking'); setSelectedBooking(b.bookingId); setLinkedBookingId(b.bookingId); setLinkedBookingNo(b.bookingNo ?? '') }
-        else if (b.proposalId) { setSource('proposal'); setSelectedProposal(b.proposalId) }
+        if (b.bookingId) { setSelectedBooking(b.bookingId); setLinkedBookingId(b.bookingId); setLinkedBookingNo(b.bookingNo ?? '') }
       })
       .catch(() => toaster.create({ title: 'Failed to load billing', type: 'error' }))
   }, [id, isEdit])
@@ -108,37 +98,22 @@ export function AddBilling() {
     setLinkedBookingId(bkg.id)
     setLinkedBookingNo(bkg.bookingNo)
     setServicePurpose(bkg.scopeNotes || '')
-    setItems(bkg.services.map(svc => ({
-      description:    svc.name,
-      subDescription: svc.notes || '',
-      amount:         svc.unitPrice * (svc.qty || 1),
-      type:           'debit' as BillingItemType,
-    })))
-  }, [bookings])
-
-  // Auto-fill from proposal
-  const fillFromProposal = useCallback((proposalId: string) => {
-    const p = proposals.find(x => x.id === proposalId)
-    if (!p) return
-    setClientName(p.clientName)
-    setClientCompany(p.clientCompany || '')
-    setClientAddress(p.clientAddress || '')
-    setDiscount(p.discount || 0)
-    setItems(p.services.map(svc => ({
-      description:    svc.name,
-      subDescription: svc.notes || '',
-      amount:         svc.unitPrice * (svc.qty || 1),
-      type:           'debit' as BillingItemType,
-    })))
-  }, [proposals])
+    if (!isEdit) {
+      setItems(bkg.services.length
+        ? bkg.services.map(svc => ({
+            description:    svc.name,
+            subDescription: svc.notes || '',
+            amount:         svc.unitPrice * (svc.qty || 1),
+            type:           'debit' as BillingItemType,
+          }))
+        : [emptyItem()]
+      )
+    }
+  }, [bookings, isEdit])
 
   useEffect(() => {
-    if (source === 'booking' && selectedBooking && !isEdit) fillFromBooking(selectedBooking)
-  }, [source, selectedBooking, fillFromBooking, isEdit])
-
-  useEffect(() => {
-    if (source === 'proposal' && selectedProposal && !isEdit) fillFromProposal(selectedProposal)
-  }, [source, selectedProposal, fillFromProposal, isEdit])
+    if (selectedBooking && !isEdit) fillFromBooking(selectedBooking)
+  }, [selectedBooking, fillFromBooking, isEdit])
 
   // Computed totals
   const totalDebits  = items.filter(it => it.type !== 'credit').reduce((s, it) => s + (Number(it.amount) || 0), 0)
@@ -158,18 +133,18 @@ export function AddBilling() {
   }
 
   async function buildPayload() {
-    const linkedProposal = source === 'proposal' ? proposals.find(p => p.id === selectedProposal) : null
     return {
       clientName, clientCompany, clientAddress, servicePurpose, dateIssued,
       items, discount, subtotal, total, terms,
-      bookingId:  linkedBookingId || '',
-      bookingNo:  linkedBookingNo || '',
-      proposalId: linkedProposal?.id ?? '',
-      proposalNo: linkedProposal?.proposalNo ?? '',
+      bookingId: linkedBookingId || '',
+      bookingNo: linkedBookingNo || '',
     }
   }
 
   async function handleSave(andPrint = false) {
+    if (!linkedBookingId) {
+      toaster.create({ title: 'Please select a booking', type: 'error' }); return
+    }
     if (!clientName.trim()) {
       toaster.create({ title: 'Client name is required', type: 'error' }); return
     }
@@ -251,57 +226,25 @@ export function AddBilling() {
               Billing Header
             </h2>
 
-            {/* Source toggle */}
-            {!isEdit && (
-              <div>
-                <p className="text-xs font-medium mb-2" style={{ color: 'var(--muted-foreground)' }}>
-                  Create from
-                </p>
-                <div className="flex gap-2 flex-wrap">
-                  {([['booking', 'From Booking'], ['proposal', 'From Proposal'], ['new', 'New / Manual']] as const).map(([s, label]) => (
-                    <button key={s} onClick={() => setSource(s)}
-                      className={cn('px-4 py-1.5 rounded-full text-xs font-medium border transition-colors')}
-                      style={{
-                        backgroundColor: source === s ? 'var(--primary)' : 'var(--accent)',
-                        color: source === s ? 'var(--primary-foreground)' : 'var(--foreground)',
-                        borderColor: source === s ? 'var(--primary)' : 'var(--border)',
-                      }}>
-                      {label}
-                    </button>
-                  ))}
+            {/* Booking selector — always required */}
+            <Field label="Booking" required>
+              {isEdit && linkedBookingNo ? (
+                <div className="px-3 py-2 rounded-lg text-sm font-mono font-semibold"
+                  style={{ backgroundColor: 'var(--accent)', color: 'var(--primary)' }}>
+                  {linkedBookingNo}
                 </div>
-              </div>
-            )}
-
-            {/* Booking selector */}
-            {source === 'booking' && !isEdit && (
-              <Field label="Select Booking" required>
+              ) : (
                 <select value={selectedBooking} onChange={e => setSelectedBooking(e.target.value)}
                   className={inputCls} style={inputStyle}>
-                  <option value="">— choose a booking —</option>
+                  <option value="">— select a booking —</option>
                   {bookings.map(b => (
                     <option key={b.id} value={b.id}>
                       {b.bookingNo} — {b.clientName} ({b.status})
                     </option>
                   ))}
                 </select>
-              </Field>
-            )}
-
-            {/* Proposal selector */}
-            {source === 'proposal' && !isEdit && (
-              <Field label="Select Proposal" required>
-                <select value={selectedProposal} onChange={e => setSelectedProposal(e.target.value)}
-                  className={inputCls} style={inputStyle}>
-                  <option value="">— choose a proposal —</option>
-                  {proposals.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.proposalNo} — {p.clientName} ({p.services.length} service{p.services.length !== 1 ? 's' : ''})
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
+              )}
+            </Field>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Client Name" required>

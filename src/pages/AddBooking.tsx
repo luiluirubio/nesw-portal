@@ -66,9 +66,6 @@ export function AddBooking() {
     if (!clientName.trim()) {
       toaster.create({ title: 'Client name is required', type: 'error' }); return
     }
-    if (!selectedProposalId) {
-      toaster.create({ title: 'Please link a proposal', type: 'error' }); return
-    }
     setSaving(true)
     try {
       const payload = {
@@ -137,9 +134,9 @@ export function AddBooking() {
           <section className="rounded-xl border p-5 space-y-4"
             style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
             <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>
-              Link to Proposal
+              Link to Proposal <span className="text-xs font-normal normal-case" style={{ color: 'var(--muted-foreground)' }}>(optional)</span>
             </h2>
-            <Field label="Select Proposal" required>
+            <Field label="Select Proposal">
               <select value={selectedProposalId}
                 onChange={e => setSelectedProposalId(e.target.value)}
                 className={inputCls} style={inputStyle}>

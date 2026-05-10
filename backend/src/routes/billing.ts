@@ -59,6 +59,9 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     if (!clientName || !items?.length) {
       res.status(400).json({ error: 'clientName and items are required' }); return
     }
+    if (!bookingId) {
+      res.status(400).json({ error: 'bookingId is required' }); return
+    }
 
     const billingNo = await nextBillingNo()
     const item = {
