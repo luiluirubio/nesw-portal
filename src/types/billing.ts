@@ -29,7 +29,10 @@ export interface Billing {
   subtotal:       number
   total:          number
   terms:          string
-  dateIssued:     string
-  createdAt:      string
-  updatedAt:      string
+  dateIssued:       string
+  createdAt:        string
+  updatedAt:        string
+  paymentQrId?:     string
+  paymentQrString?: string
+  paymentStatus?:   'unpaid' | 'paid' | 'expired'
 }

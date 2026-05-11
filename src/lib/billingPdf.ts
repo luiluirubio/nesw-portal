@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import QRCode from 'qrcode'
 import type { Billing } from '@/types/billing'
 
 // ── Colours (shared with proposalPdf) ────────────────────────────────────────
@@ -274,15 +275,32 @@ export async function generateBillingPDF(billing: Billing) {
   y += 14
 
   // ── PAYMENT DETAILS & TERMS ───────────────────────────────────────────────────
-  y = checkBreak(doc, y, 45, margin)
+  y = checkBreak(doc, y, 55, margin)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...NAVY)
   doc.text('PAYMENT DETAILS & TERMS', margin, y)
   y += 5
 
-  const payW   = (cw - 6) / 2
-  const termsX = margin + payW + 6
+  // Three-column layout when QR exists: bank | terms | QR
+  // Two-column layout without QR: bank | terms
+  const hasQR  = !!billing.paymentQrString
+  const qrSize = 38  // mm square
+
+  // Generate QR data URL if available
+  let qrDataUrl: string | null = null
+  if (hasQR && billing.paymentQrString) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(billing.paymentQrString, {
+        width: 200, margin: 1, color: { dark: '#1b3864', light: '#ffffff' },
+      })
+    } catch { /* skip QR if generation fails */ }
+  }
+
+  const contentW = hasQR ? cw - qrSize - 6 : cw
+  const payW     = (contentW - 6) / 2
+  const termsX   = margin + payW + 6
+  const qrX      = pw - margin - qrSize
 
   // Left header — bank
   doc.setFillColor(...NAVY)
@@ -302,7 +320,7 @@ export async function generateBillingPDF(billing: Billing) {
 
   y += 10
 
-  // Bank rows (fixed indexOf bug — use forEach index)
+  // Bank rows
   const bankRows = [
     ['Account Name', 'NESW Property & Planning Consultancy'],
     ['Metrobank',    '2923 2925 57869'],
@@ -327,6 +345,27 @@ export async function generateBillingPDF(billing: Billing) {
     doc.setTextColor(...BODY)
     const tLines = doc.splitTextToSize(sanitize(termsText), payW - 8) as string[]
     doc.text(tLines, termsX + 4, y)
+  }
+
+  // QR code block
+  if (qrDataUrl) {
+    doc.setFillColor(248, 250, 255)
+    doc.roundedRect(qrX - 2, y - 12, qrSize + 4, qrSize + 18, 2, 2, 'F')
+    doc.setDrawColor(...LGRAY)
+    doc.setLineWidth(0.2)
+    doc.roundedRect(qrX - 2, y - 12, qrSize + 4, qrSize + 18, 2, 2, 'S')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...NAVY)
+    doc.text('SCAN TO PAY', qrX + qrSize / 2, y - 7, { align: 'center' })
+
+    doc.addImage(qrDataUrl, 'PNG', qrX, y - 4, qrSize, qrSize)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...MUTED)
+    doc.text('QR Ph · InstaPay / PESONet', qrX + qrSize / 2, y + qrSize - 2, { align: 'center' })
   }
 
   y += Math.max(bankRows.length * 7, 22) + 10

@@ -97,7 +97,7 @@ function BillingDetailPanel({
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
           {/* Status changer */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>Status</span>
             <select
               value={billing.status}
@@ -109,7 +109,45 @@ function BillingDetailPanel({
               <option value="paid">Paid</option>
               <option value="cancelled">Cancelled</option>
             </select>
+            {billing.paymentQrString && (
+              <span className={cn(
+                'px-2 py-0.5 rounded-full text-xs font-semibold',
+                billing.paymentStatus === 'paid'    ? 'bg-green-100 text-green-700' :
+                billing.paymentStatus === 'expired' ? 'bg-gray-100 text-gray-500'  :
+                                                      'bg-blue-100 text-blue-700'
+              )}>
+                QR {billing.paymentStatus === 'paid' ? 'Paid' : billing.paymentStatus === 'expired' ? 'Expired' : 'Unpaid'}
+              </span>
+            )}
           </div>
+
+          {/* QR Code */}
+          {billing.paymentQrString && billing.paymentStatus !== 'paid' && (
+            <section>
+              <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>
+                Scan to Pay — QR Ph
+              </p>
+              <div className="flex items-start gap-4 rounded-xl border p-4"
+                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(billing.paymentQrString)}`}
+                  alt="Payment QR"
+                  className="w-24 h-24 rounded-lg shrink-0"
+                />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>
+                    InstaPay / PESONet
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                    Scan with any Philippine banking app to pay {formatPHP(billing.total)}.
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                    This QR code is included in the downloaded PDF.
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Client */}
           <section>

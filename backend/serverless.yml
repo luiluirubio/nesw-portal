@@ -19,8 +19,10 @@ provider:
     # JWT_SECRET must be set via CI secret. Falls back to a dev-only default
     # when the env var is absent (not when it's empty — CI must always supply it).
     JWT_SECRET:  ${env:JWT_SECRET, 'nesw-portal-dev-secret-change-in-ci'}
-    COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID, ''}
-    COGNITO_CLIENT_ID:    ${env:COGNITO_CLIENT_ID, ''}
+    COGNITO_USER_POOL_ID:    ${env:COGNITO_USER_POOL_ID, ''}
+    COGNITO_CLIENT_ID:       ${env:COGNITO_CLIENT_ID, ''}
+    XENDIT_SECRET_KEY:       ${env:XENDIT_SECRET_KEY, ''}
+    XENDIT_WEBHOOK_TOKEN:    ${env:XENDIT_WEBHOOK_TOKEN, ''}
   iam:
     role:
       statements:
