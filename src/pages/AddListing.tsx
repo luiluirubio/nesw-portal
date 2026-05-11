@@ -168,6 +168,7 @@ export function AddListing() {
       id:        draftId,
       agentId:   user.id,
       agentName: user.name,
+      draftType: 'listing',
       lastStep:  step,
       savedAt:   new Date().toISOString(),
       form,
