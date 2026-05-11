@@ -204,15 +204,20 @@ export async function generateProposalPDF(proposal: Proposal) {
   doc.setTextColor(...NAVY)
   doc.text('ENGAGEMENT PROPOSAL', pw - margin, y + 5, { align: 'right' })
 
-  doc.setFont('helvetica', 'italic')
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
+  doc.setTextColor(...NAVY)
+  doc.text(proposal.proposalNo, pw - margin, y + 11, { align: 'right' })
+
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(8.5)
   doc.setTextColor(...BODY)
-  doc.text(subtitle, pw - margin, y + 11, { align: 'right' })
+  doc.text(subtitle, pw - margin, y + 16, { align: 'right' })
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8.5)
   doc.setTextColor(...MUTED)
-  doc.text(`Date: ${longDate(proposal.createdAt)}`, pw - margin, y + 17, { align: 'right' })
+  doc.text(`Date: ${longDate(proposal.createdAt)}`, pw - margin, y + 21, { align: 'right' })
 
   y += 22
 
@@ -239,7 +244,7 @@ export async function generateProposalPDF(proposal: Proposal) {
     margin: { left: margin, right: margin },
     body: clientRows,
     theme: 'plain',
-    styles: { fontSize: 9, cellPadding: { top: 2.8, bottom: 2.8, left: 4, right: 4 } },
+    styles: { fontSize: 9, cellPadding: { top: 1.8, bottom: 1.8, left: 4, right: 4 } },
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 55, textColor: BODY },
       1: { textColor: BODY },
@@ -350,7 +355,7 @@ export async function generateProposalPDF(proposal: Proposal) {
     serviceRows.push([
       { content: 'Discount', styles: { textColor: ORANGE } },
       { content: '', styles: {} },
-      { content: `− ${php(proposal.discount)}`, styles: { halign: 'right', textColor: ORANGE } },
+      { content: `- ${php(proposal.discount)}`, styles: { halign: 'right', textColor: ORANGE } },
     ])
   }
 
@@ -406,9 +411,11 @@ export async function generateProposalPDF(proposal: Proposal) {
   for (const line of termsList) {
     y = checkBreak(doc, y, 8, margin)
     const clean   = line.replace(/^\d+\.\s*/, '').trim()
-    const wrapped = doc.splitTextToSize(`•   ${clean}`, cw) as string[]
-    doc.text(wrapped, margin, y)
-    y += wrapped.length * 4.8 + 1.5   // extra gap between items
+    const textX   = margin + 5
+    const wrapped = doc.splitTextToSize(clean, cw - 5) as string[]
+    doc.text('•', margin, y)
+    doc.text(wrapped, textX, y)
+    y += wrapped.length * 4.8 + 1.5
   }
   y += 8
 
