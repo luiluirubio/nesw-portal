@@ -2,12 +2,13 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { AlertTriangle } from 'lucide-react'
 
 interface ConfirmDialogProps {
-  open:          boolean
-  title:         string
-  description:   string
-  confirmLabel?: string
-  onConfirm:     () => void
-  onCancel:      () => void
+  open:            boolean
+  title:           string
+  description:     string
+  confirmLabel?:   string
+  confirmVariant?: 'danger' | 'primary'
+  onConfirm:       () => void
+  onCancel:        () => void
 }
 
 export function ConfirmDialog({
@@ -15,6 +16,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = 'Delete',
+  confirmVariant = 'danger',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -63,7 +65,7 @@ export function ConfirmDialog({
             </button>
             <button
               onClick={() => { onConfirm(); }}
-              className="flex-1 py-2.5 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-colors hover:opacity-90 bg-red-500">
+              className={`flex-1 py-2.5 rounded-[var(--radius-sm)] text-sm font-bold text-white transition-colors hover:opacity-90 ${confirmVariant === 'primary' ? 'bg-[var(--primary)]' : 'bg-red-500'}`}>
               {confirmLabel}
             </button>
           </div>

@@ -15,18 +15,26 @@ export interface ProposalDraft extends BaseDraft {
   draftType: 'proposal'
   lastStep: number
   client: {
-    name:      string
-    company:   string
-    email:     string
-    phone:     string
-    address:   string
-    notes:     string
-    clientId:  string
-    clientCode: string
+    name:        string
+    company:     string
+    email:       string
+    phone:       string
+    mobile:      string
+    countryCode: string
+    street:      string
+    barangay:    string
+    city:        string
+    province:    string
+    notes:       string
+    clientId:    string
+    clientCode:  string
+    // backwards compat for old drafts
+    address?:    string
   }
   selectedIds: string[]
   lineItems:   Record<string, { qty: number; unitPrice: number; notes: string }>
-  discount:    string
+  discountPct: string
+  discount?:   string  // backwards compat
   validity:    string
   terms:       string
 }

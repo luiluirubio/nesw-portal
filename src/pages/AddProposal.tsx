@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   User, ListChecks, DollarSign, Eye,
@@ -15,6 +15,97 @@ import type { Client } from '@/types/client'
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateProposalDraftId } from '@/lib/drafts'
 import type { ProposalDraft } from '@/types/draft'
 import { ClientSelector } from '@/components/ClientSelector'
+import { ComboBox } from '@/components/ui/combo-box'
+import type { ComboBoxOption } from '@/components/ui/combo-box'
+import { phLgusSorted } from '@/data/philippines'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+
+// ── Email domain suggestions ──────────────────────────────────────────────────
+const EMAIL_DOMAINS = ['@gmail.com', '@yahoo.com', '@outlook.com', '@hotmail.com', '@icloud.com', '@neswcorp.com']
+
+function EmailInput({ value, onChange, error, placeholder }: {
+  value: string; onChange: (v: string) => void; error?: boolean; placeholder?: string
+}) {
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShowSuggestions(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function handleChange(v: string) {
+    onChange(v)
+    const atIdx = v.indexOf('@')
+    const afterAt = atIdx >= 0 ? v.slice(atIdx + 1) : ''
+    setShowSuggestions(atIdx >= 0 && !afterAt.includes('.'))
+  }
+
+  const atIdx   = value.indexOf('@')
+  const prefix  = atIdx >= 0 ? value.slice(0, atIdx) : value
+  const filtered = showSuggestions
+    ? EMAIL_DOMAINS.filter(d => d.toLowerCase().includes(atIdx >= 0 ? value.slice(atIdx).toLowerCase() : ''))
+    : []
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        type="email"
+        value={value}
+        onChange={e => handleChange(e.target.value)}
+        onFocus={() => { const ai = value.indexOf('@'); if (ai >= 0 && !value.slice(ai+1).includes('.')) setShowSuggestions(true) }}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2"
+        style={{ borderColor: error ? '#ef4444' : 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
+      />
+      {showSuggestions && filtered.length > 0 && (
+        <div className="absolute z-40 left-0 right-0 mt-1 rounded-lg border shadow-lg overflow-hidden"
+          style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+          {filtered.map(domain => (
+            <button key={domain} type="button"
+              onMouseDown={e => { e.preventDefault(); onChange(prefix + domain); setShowSuggestions(false) }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--accent)] transition-colors"
+              style={{ color: 'var(--foreground)' }}>
+              <span style={{ color: 'var(--muted-foreground)' }}>{prefix}</span>
+              <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{domain}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Country codes ─────────────────────────────────────────────────────────────
+const COUNTRY_CODES = [
+  { code: '+63', label: '🇵🇭 +63' },
+  { code: '+1',  label: '🇺🇸 +1'  },
+  { code: '+44', label: '🇬🇧 +44' },
+  { code: '+65', label: '🇸🇬 +65' },
+  { code: '+61', label: '🇦🇺 +61' },
+  { code: '+81', label: '🇯🇵 +81' },
+  { code: '+82', label: '🇰🇷 +82' },
+  { code: '+86', label: '🇨🇳 +86' },
+  { code: '+971',label: '🇦🇪 +971'},
+]
+
+// ── Validation helpers ────────────────────────────────────────────────────────
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+function isValidPHPhone(phone: string): boolean {
+  const c = phone.replace(/[\s\-().]/g, '')
+  return /^(09\d{9}|\+639\d{9}|0\d{9})$/.test(c)
+}
+function isValidMobile(mobile: string, countryCode: string): boolean {
+  if (!mobile.trim()) return true
+  const c = mobile.replace(/\s/g, '')
+  if (countryCode === '+63') return /^9\d{9}$/.test(c)
+  return /^\d{6,12}$/.test(c)
+}
 
 const DEFAULT_TERMS = `1. Prices are in Philippine Peso (₱) and are exclusive of applicable taxes unless stated.
 2. Quotation is valid for the number of days specified from the date of issue.
@@ -125,9 +216,11 @@ export function AddProposal() {
   // Step 1 — client
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [client, setClient] = useState({
-    name: '', company: '', email: '', phone: '', address: '', notes: '',
-    clientId: '', clientCode: '',
+    name: '', company: '', email: '', phone: '', mobile: '', countryCode: '+63',
+    street: '', barangay: '', city: '', province: '',
+    notes: '', clientId: '', clientCode: '',
   })
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   // Step 2
   const [catalog, setCatalog]           = useState<Service[]>([])
@@ -136,9 +229,15 @@ export function AddProposal() {
 
   // Step 3
   const [lineItems, setLineItems] = useState<Record<string, { qty: number; unitPrice: number; notes: string }>>({})
-  const [discount, setDiscount]   = useState('0')
+  const [discountPct, setDiscountPct] = useState('0')
   const [validity, setValidity]   = useState('30')
   const [terms, setTerms]         = useState(DEFAULT_TERMS)
+
+  // City ComboBox options (memoised)
+  const cityOptions = useMemo<ComboBoxOption[]>(
+    () => phLgusSorted.map(l => ({ value: `${l.name}|||${l.province}`, label: l.name, sublabel: l.province })),
+    []
+  )
 
   // Load draft on resume
   useEffect(() => {
@@ -147,10 +246,10 @@ export function AddProposal() {
     fetchDraft<ProposalDraft>(id).then(d => {
       if (d) {
         setStep(d.lastStep)
-        setClient(d.client)
+        setClient(prev => ({ ...prev, ...d.client }))
         setSelectedIds(new Set(d.selectedIds))
         setLineItems(d.lineItems)
-        setDiscount(d.discount)
+        setDiscountPct(d.discountPct ?? '0')
         setValidity(d.validity)
         setTerms(d.terms)
       }
@@ -170,11 +269,11 @@ export function AddProposal() {
       client,
       selectedIds: Array.from(selectedIds),
       lineItems,
-      discount,
+      discountPct,
       validity,
       terms,
     })
-  }, [draftId, user, step, client, selectedIds, lineItems, discount, validity, terms, submitted, loadingDraft])
+  }, [draftId, user, step, client, selectedIds, lineItems, discountPct, validity, terms, submitted, loadingDraft])
 
   useEffect(() => {
     if (submitted || loadingDraft) return
@@ -217,16 +316,19 @@ export function AddProposal() {
     const li = lineItems[id]
     return sum + (li ? li.qty * li.unitPrice : 0)
   }, 0)
-  const discountAmt = Number(discount) || 0
+  const discountAmt = subtotal * (Math.min(100, Math.max(0, Number(discountPct) || 0)) / 100)
   const total       = Math.max(0, subtotal - discountAmt)
 
   // ── Validation ───────────────────────────────────────────────────────────────
   function validate(s: number) {
     const e: Record<string, string> = {}
     if (s === 1) {
-      if (!client.name.trim())  e.name  = 'Client name is required'
-      if (!client.email.trim()) e.email = 'Email is required'
-      if (!client.phone.trim()) e.phone = 'Phone is required'
+      if (!client.name.trim())                               e.name   = 'Client name is required'
+      if (client.email.trim() && !isValidEmail(client.email)) e.email = 'Enter a valid email address'
+      if (!client.phone.trim())                              e.phone  = 'Phone is required'
+      else if (!isValidPHPhone(client.phone))                e.phone  = 'Enter a valid Philippine phone number (e.g. 09171234567)'
+      if (client.mobile.trim() && !isValidMobile(client.mobile, client.countryCode))
+        e.mobile = client.countryCode === '+63' ? 'Enter 10 digits starting with 9 (e.g. 9171234567)' : 'Enter a valid mobile number'
     }
     if (s === 2) {
       if (selectedIds.size === 0) e.services = 'Select at least one service'
@@ -274,7 +376,7 @@ export function AddProposal() {
       clientCompany: client.company,
       clientEmail:   client.email,
       clientPhone:   client.phone,
-      clientAddress: client.address,
+      clientAddress: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
       clientNotes:   client.notes,
       services:      buildServices(),
       discount:      discountAmt,
@@ -296,8 +398,10 @@ export function AddProposal() {
         clientName:    client.name,
         clientCompany: client.company,
         clientEmail:   client.email,
-        clientPhone:   client.phone,
-        clientAddress: client.address,
+        clientPhone:   `${client.countryCode} ${client.mobile}`.trim() !== client.phone
+          ? `${client.phone}${client.mobile ? ` / Mobile: ${client.countryCode} ${client.mobile}` : ''}`
+          : client.phone,
+        clientAddress: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
         clientNotes:   client.notes,
         services:      buildServices(),
         discount:      discountAmt,
@@ -344,7 +448,13 @@ export function AddProposal() {
           value={selectedClient}
           onSelect={c => {
             setSelectedClient(c)
-            setClient({ name: c.name, company: c.company ?? '', email: c.email ?? '', phone: c.phone ?? '', address: c.address ?? '', notes: c.notes ?? '', clientId: c.id, clientCode: c.clientCode })
+            setClient(prev => ({
+              ...prev,
+              name: c.name, company: c.company ?? '', email: c.email ?? '',
+              phone: c.phone ?? '', mobile: '', countryCode: '+63',
+              street: c.address ?? '', barangay: '', city: '', province: '',
+              notes: c.notes ?? '', clientId: c.id, clientCode: c.clientCode,
+            }))
             setErrors(e => ({ ...e, name: '' }))
           }}
           onClear={() => { setSelectedClient(null); setClient(prev => ({ ...prev, clientId: '', clientCode: '' })) }}
@@ -357,16 +467,62 @@ export function AddProposal() {
           <Field label="Company / Organization">
             <TextInput value={client.company} onChange={set('company')} placeholder="ABC Corporation (optional)" />
           </Field>
-          <Field label="Email" required error={errors.email}>
-            <TextInput value={client.email} onChange={set('email')} placeholder="juan@example.com" type="email" error={!!errors.email} />
+          <Field label="Email" error={errors.email}>
+            <EmailInput value={client.email} onChange={set('email')} placeholder="juan@example.com" error={!!errors.email} />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </Field>
           <Field label="Phone" required error={errors.phone}>
-            <TextInput value={client.phone} onChange={set('phone')} placeholder="+63 917 xxx xxxx" error={!!errors.phone} />
+            <TextInput value={client.phone} onChange={set('phone')} placeholder="09171234567" error={!!errors.phone} />
+            {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
           </Field>
         </div>
-        <Field label="Address">
-          <TextInput value={client.address} onChange={set('address')} placeholder="Street, Barangay, City, Province" />
+
+        {/* Mobile with country code */}
+        <Field label="Mobile Number" error={errors.mobile}>
+          <div className="flex gap-2">
+            <select
+              value={client.countryCode}
+              onChange={e => setClient(c => ({ ...c, countryCode: e.target.value }))}
+              className="shrink-0 px-2 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+              {COUNTRY_CODES.map(cc => (
+                <option key={cc.code} value={cc.code}>{cc.label}</option>
+              ))}
+            </select>
+            <TextInput value={client.mobile} onChange={set('mobile')} placeholder="9171234567" error={!!errors.mobile} />
+          </div>
+          {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
         </Field>
+
+        {/* Structured address */}
+        <Field label="Street / House No.">
+          <TextInput value={client.street} onChange={set('street')} placeholder="e.g. Lot 12 Blk 5, Sampaguita St." />
+        </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Barangay">
+            <TextInput value={client.barangay} onChange={set('barangay')} placeholder="e.g. Barangay Plainview" />
+          </Field>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>
+              City / Municipality
+            </label>
+            <ComboBox
+              value={client.city ? `${client.city}|||${client.province}` : ''}
+              onChange={(_val, opt) => {
+                if (!opt) { setClient(c => ({ ...c, city: '', province: '' })); return }
+                const [city, province] = opt.value.split('|||')
+                setClient(c => ({ ...c, city: city ?? '', province: province ?? '' }))
+              }}
+              options={cityOptions}
+              placeholder="Search city or municipality…"
+            />
+          </div>
+          <Field label="Province">
+            <input value={client.province} readOnly placeholder="Auto-filled from city"
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--accent)', color: 'var(--foreground)', cursor: 'default' }} />
+          </Field>
+        </div>
         <Field label="Notes / Property Description">
           <textarea
             value={client.notes}
@@ -499,14 +655,23 @@ export function AddProposal() {
               <span style={{ color: 'var(--foreground)' }}>{formatPHP(subtotal)}</span>
             </div>
             <div className="flex items-center justify-between text-sm gap-3">
-              <span style={{ color: 'var(--muted-foreground)' }}>Discount (₱)</span>
-              <input
-                type="number" min="0" value={discount}
-                onChange={e => setDiscount(e.target.value)}
-                className="w-28 text-right px-2 py-1 rounded border text-sm outline-none"
-                style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
-              />
+              <span style={{ color: 'var(--muted-foreground)' }}>Discount (%)</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number" min="0" max="100" value={discountPct}
+                  onChange={e => setDiscountPct(e.target.value)}
+                  className="w-20 text-right px-2 py-1 rounded border text-sm outline-none"
+                  style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
+                />
+                <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>%</span>
+              </div>
             </div>
+            {discountAmt > 0 && (
+              <div className="flex justify-between text-sm" style={{ color: 'var(--muted-foreground)' }}>
+                <span>Discount amount</span>
+                <span className="text-red-500">− {formatPHP(discountAmt)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-base font-bold border-t pt-2"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
               <span>Total</span>
@@ -546,7 +711,11 @@ export function AddProposal() {
           <p className="text-sm mt-1" style={{ color: 'var(--muted-foreground)' }}>
             {[client.email, client.phone].filter(Boolean).join(' · ')}
           </p>
-          {client.address && <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{client.address}</p>}
+          {[client.street, client.barangay, client.city, client.province].filter(Boolean).join(', ') && (
+            <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+              {[client.street, client.barangay, client.city, client.province].filter(Boolean).join(', ')}
+            </p>
+          )}
         </div>
 
         {/* Services summary */}
@@ -609,14 +778,24 @@ export function AddProposal() {
           <button onClick={handleDownload}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-colors hover:bg-[var(--accent)]"
             style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
-            <Download size={16} /> Download PDF
+            <Download size={16} /> View Draft Proposal
           </button>
-          <button onClick={handleSave} disabled={submitting}
+          <button onClick={() => setConfirmOpen(true)} disabled={submitting}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             style={{ backgroundColor: 'var(--primary)' }}>
-            <Save size={16} /> {submitting ? 'Saving…' : 'Save Proposal'}
+            <Save size={16} /> {submitting ? 'Submitting…' : 'Submit Proposal'}
           </button>
         </div>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          title="Submit Proposal?"
+          description="Once submitted, this proposal will be saved and assigned a proposal number. Are you sure you want to proceed?"
+          confirmLabel="Submit"
+          confirmVariant="primary"
+          onConfirm={() => { setConfirmOpen(false); handleSave() }}
+          onCancel={() => setConfirmOpen(false)}
+        />
       </div>
     )
   }

@@ -69,7 +69,7 @@ export function Proposals() {
           <div>
             <h1 className="text-lg font-bold" style={{ color: 'var(--foreground)' }}>Proposals</h1>
             <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              {proposals.length} proposal{proposals.length !== 1 ? 's' : ''}
+              {proposals.length} proposal{proposals.length !== 1 ? 's' : ''} · newest first
             </p>
           </div>
         </div>
@@ -79,6 +79,45 @@ export function Proposals() {
           <Plus size={15} /> New Proposal
         </button>
       </div>
+
+      {/* Stat cards */}
+      {!loading && proposals.length > 0 && (() => {
+        const statuses: { value: ProposalStatus; label: string; color: string; bar: string }[] = [
+          { value: 'draft',    label: 'Draft',    color: '#6b7280', bar: 'bg-gray-400'  },
+          { value: 'sent',     label: 'Sent',     color: '#3b82f6', bar: 'bg-blue-500'  },
+          { value: 'accepted', label: 'Accepted', color: '#22c55e', bar: 'bg-green-500' },
+          { value: 'declined', label: 'Declined', color: '#ef4444', bar: 'bg-red-500'   },
+        ]
+        const total = proposals.length
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-4 border-b shrink-0"
+            style={{ borderColor: 'var(--border)' }}>
+            {statuses.map(s => {
+              const count = proposals.filter(p => p.status === s.value).length
+              const pct   = total > 0 ? Math.round((count / total) * 100) : 0
+              const active = filter === s.value
+              return (
+                <button key={s.value} onClick={() => setFilter(active ? 'all' : s.value)}
+                  className="rounded-xl border p-4 text-left transition-all hover:shadow-sm"
+                  style={{
+                    borderColor:     active ? s.color : 'var(--border)',
+                    backgroundColor: active ? `${s.color}10` : 'var(--background)',
+                  }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</span>
+                    <span className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>{pct}%</span>
+                  </div>
+                  <p className="text-2xl font-black mb-0.5" style={{ color: 'var(--foreground)' }}>{count}</p>
+                  <p className="text-xs mb-2" style={{ color: 'var(--muted-foreground)' }}>proposals</p>
+                  <div className="h-1 rounded-full" style={{ backgroundColor: 'var(--border)' }}>
+                    <div className={cn('h-1 rounded-full transition-all', s.bar)} style={{ width: `${pct}%` }} />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Status tabs */}
       <div className="flex gap-1 px-6 py-3 border-b overflow-x-auto shrink-0"
@@ -227,7 +266,7 @@ export function Proposals() {
                             <Eye size={14} />
                           </button>
                           <button onClick={() => handleDownload(p)}
-                            title="Download PDF"
+                            title="Download Proposal"
                             className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
                             style={{ color: 'var(--muted-foreground)' }}>
                             <Download size={14} />
