@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Download, Eye, PenLine, Trash2 } from 'lucide-react'
+import { Plus, FileText, Download, PenLine, Trash2, X, BookmarkPlus } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
@@ -8,6 +8,189 @@ import type { Proposal, ProposalStatus } from '@/types/proposal'
 import { generateProposalPDF } from '@/lib/proposalPdf'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
 import type { ProposalDraft } from '@/types/draft'
+
+// ── Slide-in Proposal Detail Panel ───────────────────────────────────────────
+function ProposalDetailPanel({
+  proposal,
+  onClose,
+  onStatusChange,
+  onNavigate,
+}: {
+  proposal: Proposal
+  onClose: () => void
+  onStatusChange: (p: Proposal, s: ProposalStatus) => void
+  onNavigate: (id: string) => void
+}) {
+  const STATUS_COLORS: Record<ProposalStatus, { bg: string; text: string }> = {
+    draft:    { bg: '#f3f4f6', text: '#4b5563' },
+    sent:     { bg: '#dbeafe', text: '#1d4ed8' },
+    accepted: { bg: '#dcfce7', text: '#15803d' },
+    declined: { bg: '#fee2e2', text: '#dc2626' },
+  }
+  const sc = STATUS_COLORS[proposal.status]
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+        style={{ animation: 'fadeIn 0.15s ease' }}
+        onClick={onClose} />
+
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[520px] md:w-[600px] flex flex-col shadow-2xl"
+        style={{ backgroundColor: 'var(--background)', animation: 'slideInRight 0.25s cubic-bezier(0.32,0.72,0,1)' }}>
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b shrink-0"
+          style={{ borderColor: 'var(--border)' }}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-base font-bold" style={{ color: 'var(--primary)' }}>
+                {proposal.proposalNo}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                style={{ backgroundColor: sc.bg, color: sc.text }}>
+                {proposal.status.charAt(0).toUpperCase() + proposal.status.slice(1)}
+              </span>
+            </div>
+            <p className="text-sm font-semibold mt-0.5 truncate" style={{ color: 'var(--foreground)' }}>
+              {proposal.clientName}
+            </p>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {formatDate(proposal.createdAt)}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => generateProposalPDF(proposal)}
+              title="Download Proposal"
+              className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+              <Download size={14} /> Download
+            </button>
+            {proposal.status === 'accepted' && (
+              <button onClick={() => onNavigate(proposal.id)}
+                title="Create Booking"
+                className="p-2 rounded-lg transition-colors font-medium text-xs flex items-center gap-1.5 border"
+                style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>
+                <BookmarkPlus size={14} /> Book
+              </button>
+            )}
+            <button onClick={onClose}
+              className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)]"
+              style={{ color: 'var(--muted-foreground)' }}>
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* Status changer */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>Status</span>
+            <select
+              value={proposal.status}
+              onChange={e => onStatusChange(proposal, e.target.value as ProposalStatus)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold border-0 cursor-pointer"
+              style={{ backgroundColor: sc.bg, color: sc.text }}>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="accepted">Accepted</option>
+              <option value="declined">Declined</option>
+            </select>
+          </div>
+
+          {/* Client */}
+          <section>
+            <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>Client</p>
+            <div className="rounded-xl border p-4 space-y-1"
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+              <p className="font-semibold" style={{ color: 'var(--foreground)' }}>{proposal.clientName}</p>
+              {proposal.clientCompany && <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{proposal.clientCompany}</p>}
+              {proposal.clientEmail && <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{proposal.clientEmail}</p>}
+              {proposal.clientPhone && <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{proposal.clientPhone}</p>}
+              {proposal.clientAddress && <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{proposal.clientAddress}</p>}
+              {proposal.clientNotes && (
+                <p className="text-sm mt-1 pt-1 border-t" style={{ color: 'var(--muted-foreground)', borderColor: 'var(--border)' }}>{proposal.clientNotes}</p>
+              )}
+            </div>
+          </section>
+
+          {/* Services */}
+          <section>
+            <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>
+              Services ({proposal.services.length})
+            </p>
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--accent)' }}>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold" style={{ color: 'var(--muted-foreground)' }}>Service</th>
+                    <th className="text-center px-3 py-2.5 text-xs font-semibold" style={{ color: 'var(--muted-foreground)' }}>Qty</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold" style={{ color: 'var(--muted-foreground)' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {proposal.services.map((svc, i) => (
+                    <tr key={i} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                      <td className="px-4 py-2.5">
+                        <p className="font-medium" style={{ color: 'var(--foreground)' }}>{svc.name}</p>
+                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.category}</p>
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-xs" style={{ color: 'var(--foreground)' }}>{svc.qty}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-xs" style={{ color: 'var(--foreground)' }}>
+                        {formatPHP(svc.unitPrice * svc.qty)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Pricing */}
+          <section>
+            <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>Pricing</p>
+            <div className="rounded-xl border p-4 space-y-1.5" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex justify-between text-sm" style={{ color: 'var(--muted-foreground)' }}>
+                <span>Subtotal</span><span style={{ color: 'var(--foreground)' }}>{formatPHP(proposal.subtotal)}</span>
+              </div>
+              {proposal.discount > 0 && (
+                <div className="flex justify-between text-sm" style={{ color: 'var(--muted-foreground)' }}>
+                  <span>Discount</span><span className="text-red-500">− {formatPHP(proposal.discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base font-bold pt-1.5 border-t"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+                <span>Total</span>
+                <span style={{ color: 'var(--primary)' }}>{formatPHP(proposal.total)}</span>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                Valid for {proposal.validityDays} days · VAT Exclusive
+              </p>
+            </div>
+          </section>
+
+          {/* Terms */}
+          {proposal.terms && (
+            <section>
+              <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>Terms & Conditions</p>
+              <p className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--muted-foreground)' }}>
+                {proposal.terms}
+              </p>
+            </section>
+          )}
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes fadeIn       { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity:.6 } to { transform: translateX(0); opacity:1 } }
+      `}</style>
+    </>
+  )
+}
 
 const STATUS_STYLE: Record<ProposalStatus, string> = {
   draft:    'bg-gray-100 text-gray-600',
@@ -19,10 +202,11 @@ const STATUS_STYLE: Record<ProposalStatus, string> = {
 
 export function Proposals() {
   const navigate = useNavigate()
-  const [proposals, setProposals] = useState<Proposal[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [filter, setFilter]       = useState<ProposalStatus | 'all'>('all')
-  const [drafts, setDrafts]       = useState<ProposalDraft[]>([])
+  const [proposals, setProposals]           = useState<Proposal[]>([])
+  const [loading, setLoading]               = useState(true)
+  const [filter, setFilter]                 = useState<ProposalStatus | 'all'>('all')
+  const [drafts, setDrafts]                 = useState<ProposalDraft[]>([])
+  const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null)
 
   useEffect(() => {
     api.getProposals()
@@ -37,7 +221,9 @@ export function Proposals() {
   async function handleStatusChange(p: Proposal, status: ProposalStatus) {
     try {
       await api.updateProposal(p.id, { status })
-      setProposals(ps => ps.map(x => x.id === p.id ? { ...x, status } : x))
+      const updated = { ...p, status }
+      setProposals(ps => ps.map(x => x.id === p.id ? updated : x))
+      if (selectedProposal?.id === p.id) setSelectedProposal(updated)
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
     }
@@ -227,8 +413,11 @@ export function Proposals() {
                 <tbody>
                   {filtered.map((p, i) => (
                     <tr key={p.id}
-                      className="border-t transition-colors hover:bg-[var(--accent)]"
-                      style={{ borderColor: 'var(--border)', backgroundColor: i % 2 === 0 ? 'var(--background)' : 'transparent' }}>
+                      className="border-t cursor-pointer transition-all"
+                      style={{ borderColor: 'var(--border)', backgroundColor: i % 2 === 0 ? 'var(--background)' : 'transparent' }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? 'var(--background)' : 'transparent')}
+                      onClick={() => setSelectedProposal(p)}>
                       <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>
                         {p.proposalNo}
                       </td>
@@ -242,12 +431,11 @@ export function Proposals() {
                       <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--foreground)' }}>
                         {formatPHP(p.total)}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                         <select
                           value={p.status}
                           onChange={e => handleStatusChange(p, e.target.value as ProposalStatus)}
-                          className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border-0 cursor-pointer', STATUS_STYLE[p.status])}
-                          onClick={e => e.stopPropagation()}>
+                          className={cn('px-2 py-0.5 rounded-full text-xs font-semibold border-0 cursor-pointer', STATUS_STYLE[p.status])}>
                           <option value="draft">Draft</option>
                           <option value="sent">Sent</option>
                           <option value="accepted">Accepted</option>
@@ -257,21 +445,13 @@ export function Proposals() {
                       <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>
                         {formatDate(p.createdAt)}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => navigate(`/proposals/${p.id}`)}
-                            title="View"
-                            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
-                            style={{ color: 'var(--muted-foreground)' }}>
-                            <Eye size={14} />
-                          </button>
-                          <button onClick={() => handleDownload(p)}
-                            title="Download Proposal"
-                            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
-                            style={{ color: 'var(--muted-foreground)' }}>
-                            <Download size={14} />
-                          </button>
-                        </div>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => handleDownload(p)}
+                          title="Download Proposal"
+                          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--border)]"
+                          style={{ color: 'var(--muted-foreground)' }}>
+                          <Download size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -282,8 +462,9 @@ export function Proposals() {
             {/* Mobile cards */}
             <div className="md:hidden flex flex-col gap-3">
               {filtered.map(p => (
-                <div key={p.id} className="rounded-xl border p-4"
-                  style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+                <div key={p.id} className="rounded-xl border p-4 cursor-pointer transition-colors active:opacity-80"
+                  style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
+                  onClick={() => setSelectedProposal(p)}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <p className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>{p.proposalNo}</p>
@@ -298,12 +479,7 @@ export function Proposals() {
                     <span style={{ color: 'var(--muted-foreground)' }}>{p.services.length} services · {formatDate(p.createdAt)}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-bold" style={{ color: 'var(--foreground)' }}>{formatPHP(p.total)}</span>
-                      <button onClick={() => navigate(`/proposals/${p.id}`)}
-                        className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
-                        style={{ color: 'var(--muted-foreground)' }}>
-                        <Eye size={14} />
-                      </button>
-                      <button onClick={() => handleDownload(p)}
+                      <button onClick={e => { e.stopPropagation(); handleDownload(p) }}
                         className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
                         style={{ color: 'var(--muted-foreground)' }}>
                         <Download size={14} />
@@ -316,6 +492,16 @@ export function Proposals() {
           </>
         )}
       </div>
+
+      {/* Slide-in detail drawer */}
+      {selectedProposal && (
+        <ProposalDetailPanel
+          proposal={selectedProposal}
+          onClose={() => setSelectedProposal(null)}
+          onStatusChange={handleStatusChange}
+          onNavigate={id => { setSelectedProposal(null); navigate(`/add-booking?proposalId=${id}`) }}
+        />
+      )}
     </div>
   )
 }
