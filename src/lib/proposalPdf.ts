@@ -128,6 +128,17 @@ function php(n: number) {
   return 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+// Replace chars outside Latin-1 printable range that break jsPDF Helvetica rendering
+function sanitize(s: string) {
+  return s
+    .replace(/±/g, '+/-')   // ±
+    .replace(/–/g, '-')     // –
+    .replace(/—/g, '--')    // —
+    .replace(/‘|’/g, "'")
+    .replace(/“|”/g, '"')
+    .replace(/[^\x00-\xFF]/g, '?')
+}
+
 function longDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
@@ -200,7 +211,7 @@ export async function generateProposalPDF(proposal: Proposal) {
 
   // "ENGAGEMENT PROPOSAL" right-aligned
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(12)
   doc.setTextColor(...NAVY)
   doc.text('ENGAGEMENT PROPOSAL', pw - margin, y + 5, { align: 'right' })
 
@@ -410,7 +421,7 @@ export async function generateProposalPDF(proposal: Proposal) {
 
   for (const line of termsList) {
     y = checkBreak(doc, y, 8, margin)
-    const clean   = line.replace(/^\d+\.\s*/, '').trim()
+    const clean   = sanitize(line.replace(/^\d+\.\s*/, '').trim())
     const textX   = margin + 5
     const wrapped = doc.splitTextToSize(clean, cw - 5) as string[]
     doc.text('•', margin, y)
