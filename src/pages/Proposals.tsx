@@ -61,7 +61,7 @@ function ProposalDetailPanel({
             </p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button onClick={() => generateProposalPDF(proposal)}
+            <button onClick={() => generateProposalPDF(proposal).catch(() => {})}
               title="Download Proposal"
               className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
@@ -229,8 +229,8 @@ export function Proposals() {
     }
   }
 
-  function handleDownload(p: Proposal) {
-    try { generateProposalPDF(p) }
+  async function handleDownload(p: Proposal) {
+    try { await generateProposalPDF(p) }
     catch { toaster.create({ title: 'Failed to generate PDF', type: 'error' }) }
   }
 

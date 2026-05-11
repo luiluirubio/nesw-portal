@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   User, ListChecks, DollarSign, Eye,
@@ -19,6 +19,11 @@ import { ComboBox } from '@/components/ui/combo-box'
 import type { ComboBoxOption } from '@/components/ui/combo-box'
 import { phLgusSorted } from '@/data/philippines'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+
+// Static — computed once at module load, not per render
+const CITY_OPTIONS: ComboBoxOption[] = phLgusSorted.map(l => ({
+  value: `${l.name}|||${l.province}`, label: l.name, sublabel: l.province,
+}))
 
 // ── Email domain suggestions ──────────────────────────────────────────────────
 const EMAIL_DOMAINS = ['@gmail.com', '@yahoo.com', '@outlook.com', '@hotmail.com', '@icloud.com', '@neswcorp.com']
@@ -95,10 +100,6 @@ const COUNTRY_CODES = [
 // ── Validation helpers ────────────────────────────────────────────────────────
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-}
-function isValidPHPhone(phone: string): boolean {
-  const c = phone.replace(/[\s\-().]/g, '')
-  return /^(09\d{9}|\+639\d{9}|0\d{9})$/.test(c)
 }
 function isValidMobile(mobile: string, countryCode: string): boolean {
   if (!mobile.trim()) return true
@@ -179,8 +180,8 @@ function Field({ label, required, error, children }: {
   )
 }
 
-function TextInput({ value, onChange, placeholder, type = 'text', error }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; error?: boolean
+function TextInput({ value, onChange, placeholder, type = 'text', error, maxLength }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; error?: boolean; maxLength?: number
 }) {
   return (
     <input
@@ -188,6 +189,7 @@ function TextInput({ value, onChange, placeholder, type = 'text', error }: {
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
+      maxLength={maxLength}
       className={cn(
         'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors',
         error ? 'border-red-400' : 'border-[var(--border)]'
@@ -216,7 +218,7 @@ export function AddProposal() {
   // Step 1 — client
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [client, setClient] = useState({
-    name: '', company: '', email: '', phone: '', mobile: '', countryCode: '+63',
+    name: '', company: '', email: '', mobile: '', countryCode: '+63',
     street: '', barangay: '', city: '', province: '',
     notes: '', clientId: '', clientCode: '',
   })
@@ -233,11 +235,6 @@ export function AddProposal() {
   const [validity, setValidity]   = useState('30')
   const [terms, setTerms]         = useState(DEFAULT_TERMS)
 
-  // City ComboBox options (memoised)
-  const cityOptions = useMemo<ComboBoxOption[]>(
-    () => phLgusSorted.map(l => ({ value: `${l.name}|||${l.province}`, label: l.name, sublabel: l.province })),
-    []
-  )
 
   // Load draft on resume
   useEffect(() => {
@@ -325,8 +322,6 @@ export function AddProposal() {
     if (s === 1) {
       if (!client.name.trim())                               e.name   = 'Client name is required'
       if (client.email.trim() && !isValidEmail(client.email)) e.email = 'Enter a valid email address'
-      if (!client.phone.trim())                              e.phone  = 'Phone is required'
-      else if (!isValidPHPhone(client.phone))                e.phone  = 'Enter a valid Philippine phone number (e.g. 09171234567)'
       if (client.mobile.trim() && !isValidMobile(client.mobile, client.countryCode))
         e.mobile = client.countryCode === '+63' ? 'Enter 10 digits starting with 9 (e.g. 9171234567)' : 'Enter a valid mobile number'
     }
@@ -375,7 +370,7 @@ export function AddProposal() {
       clientName:    client.name,
       clientCompany: client.company,
       clientEmail:   client.email,
-      clientPhone:   client.phone,
+      clientPhone:   client.mobile ? `${client.countryCode} ${client.mobile}` : '',
       clientAddress: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
       clientNotes:   client.notes,
       services:      buildServices(),
@@ -398,9 +393,7 @@ export function AddProposal() {
         clientName:    client.name,
         clientCompany: client.company,
         clientEmail:   client.email,
-        clientPhone:   `${client.countryCode} ${client.mobile}`.trim() !== client.phone
-          ? `${client.phone}${client.mobile ? ` / Mobile: ${client.countryCode} ${client.mobile}` : ''}`
-          : client.phone,
+        clientPhone:   client.mobile ? `${client.countryCode} ${client.mobile}` : '',
         clientAddress: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
         clientNotes:   client.notes,
         services:      buildServices(),
@@ -421,10 +414,10 @@ export function AddProposal() {
     }
   }
 
-  function handleDownload() {
+  async function handleDownload() {
     const draft = buildProposalForPdf('DRAFT', 'draft')
     try {
-      generateProposalPDF(draft)
+      await generateProposalPDF(draft)
     } catch {
       toaster.create({ title: 'Failed to generate PDF', type: 'error' })
     }
@@ -451,7 +444,7 @@ export function AddProposal() {
             setClient(prev => ({
               ...prev,
               name: c.name, company: c.company ?? '', email: c.email ?? '',
-              phone: c.phone ?? '', mobile: '', countryCode: '+63',
+              mobile: '', countryCode: '+63',
               street: c.address ?? '', barangay: '', city: '', province: '',
               notes: c.notes ?? '', clientId: c.id, clientCode: c.clientCode,
             }))
@@ -471,10 +464,6 @@ export function AddProposal() {
             <EmailInput value={client.email} onChange={set('email')} placeholder="juan@example.com" error={!!errors.email} />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </Field>
-          <Field label="Phone" required error={errors.phone}>
-            <TextInput value={client.phone} onChange={set('phone')} placeholder="09171234567" error={!!errors.phone} />
-            {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
-          </Field>
         </div>
 
         {/* Mobile with country code */}
@@ -489,7 +478,7 @@ export function AddProposal() {
                 <option key={cc.code} value={cc.code}>{cc.label}</option>
               ))}
             </select>
-            <TextInput value={client.mobile} onChange={set('mobile')} placeholder="9171234567" error={!!errors.mobile} />
+            <TextInput value={client.mobile} onChange={set('mobile')} placeholder="9171234567" error={!!errors.mobile} maxLength={10} />
           </div>
           {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
         </Field>
@@ -513,7 +502,7 @@ export function AddProposal() {
                 const [city, province] = opt.value.split('|||')
                 setClient(c => ({ ...c, city: city ?? '', province: province ?? '' }))
               }}
-              options={cityOptions}
+              options={CITY_OPTIONS}
               placeholder="Search city or municipality…"
             />
           </div>
@@ -709,7 +698,7 @@ export function AddProposal() {
           <p className="font-semibold" style={{ color: 'var(--foreground)' }}>{client.name}</p>
           {client.company && <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{client.company}</p>}
           <p className="text-sm mt-1" style={{ color: 'var(--muted-foreground)' }}>
-            {[client.email, client.phone].filter(Boolean).join(' · ')}
+            {[client.email, client.mobile ? `${client.countryCode} ${client.mobile}` : ''].filter(Boolean).join(' · ')}
           </p>
           {[client.street, client.barangay, client.city, client.province].filter(Boolean).join(', ') && (
             <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>

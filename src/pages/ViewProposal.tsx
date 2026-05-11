@@ -99,7 +99,7 @@ export function ViewProposal() {
               <BookmarkPlus size={14} /> Create Booking
             </button>
           )}
-          <button onClick={() => generateProposalPDF(proposal)}
+          <button onClick={() => generateProposalPDF(proposal).catch(() => {})}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: 'var(--primary)' }}>
             <Download size={14} /> Download Proposal

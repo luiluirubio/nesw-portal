@@ -2,21 +2,20 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Proposal } from '@/types/proposal'
 
-// ── Colours (matched from template) ───────────────────────────────────────────
-const NAVY   = [27,  56, 100] as [number, number, number]   // headings, table headers
-const BLUE   = [46,  93, 168] as [number, number, number]   // sub-headings A / B / C
-const GREEN  = [45, 130,  65] as [number, number, number]   // total / footer rows
-const BODY   = [50,  50,  50] as [number, number, number]   // regular text
-const MUTED  = [120, 120, 120] as [number, number, number]  // italic/captions
-const LGRAY  = [190, 190, 190] as [number, number, number]  // table borders / rules
-const BEIGE  = [255, 249, 220] as [number, number, number]  // note-box background
-const BGROW  = [240, 244, 252] as [number, number, number]  // alt row fill
-const GREEN_BG = [235, 248, 238] as [number, number, number]
-const WHITE  = [255, 255, 255] as [number, number, number]
+// ── Colours ───────────────────────────────────────────────────────────────────
+const NAVY    = [27,  56, 100] as [number, number, number]
+const BLUE    = [46,  93, 168] as [number, number, number]
+const ORANGE  = [230, 120,  20] as [number, number, number]
+const BODY    = [50,  50,  50] as [number, number, number]
+const MUTED   = [120, 120, 120] as [number, number, number]
+const LGRAY   = [190, 190, 190] as [number, number, number]
+const BEIGE   = [255, 249, 220] as [number, number, number]
+const BGROW   = [240, 244, 252] as [number, number, number]
+const WHITE   = [255, 255, 255] as [number, number, number]
 
 type DocAT = jsPDF & { lastAutoTable: { finalY: number } }
 
-// ── Documents required by service category (matches template exactly for Appraisal) ─
+// ── Documents required by service category ───────────────────────────────────
 const DOCS_MAP: Record<string, { section: string; items: string[] }[]> = {
   'Property Appraisal': [
     {
@@ -133,7 +132,6 @@ function longDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function sectionHead(doc: jsPDF, num: string, title: string, y: number, margin: number, pw: number): number {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10.5)
@@ -153,52 +151,88 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
   return y
 }
 
+async function loadLogoBase64(url: string): Promise<string | null> {
+  try {
+    const res  = await fetch(url)
+    const blob = await res.blob()
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload  = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
-export function generateProposalPDF(proposal: Proposal) {
-  const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const pw    = doc.internal.pageSize.getWidth()
+export async function generateProposalPDF(proposal: Proposal) {
+  const logoData = await loadLogoBase64('/nesw-logo-transparent.png')
+
+  const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pw     = doc.internal.pageSize.getWidth()
   const margin = 20
-  const cw    = pw - margin * 2   // content width
+  const cw     = pw - margin * 2
 
   const categories = Array.from(new Set(proposal.services.map(s => s.category)))
   const subtitle   = categories.length === 1 ? categories[0] : 'Professional Services'
 
-  let y = margin + 4
+  let y = margin
 
-  // ── HEADER ──────────────────────────────────────────────────────────────────
+  // ── LETTERHEAD ───────────────────────────────────────────────────────────────
+  // Logo (left)
+  if (logoData) {
+    doc.addImage(logoData, 'PNG', margin, y, 18, 18)
+  }
+  const textX = margin + (logoData ? 22 : 0)
+
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(20)
-  doc.setTextColor(...NAVY)
-  doc.text('ENGAGEMENT PROPOSAL', pw / 2, y, { align: 'center' })
-  y += 8
-
-  doc.setFont('helvetica', 'italic')
   doc.setFontSize(11)
   doc.setTextColor(...NAVY)
-  doc.text(subtitle, pw / 2, y, { align: 'center' })
-  y += 6
+  doc.text('NESW Property & Planning Consultancy', textX, y + 5)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9.5)
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  doc.text('PRC-Licensed Real Estate Brokerage and Appraisal', textX, y + 10)
+  doc.text('www.neswcorp.com', textX, y + 15)
+
+  // "ENGAGEMENT PROPOSAL" right-aligned
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.setTextColor(...NAVY)
+  doc.text('ENGAGEMENT PROPOSAL', pw - margin, y + 5, { align: 'right' })
+
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(9)
   doc.setTextColor(...BODY)
-  doc.text(`Date: ${longDate(proposal.createdAt)}`, pw / 2, y, { align: 'center' })
-  y += 3
+  doc.text(subtitle, pw - margin, y + 11, { align: 'right' })
 
-  doc.setDrawColor(...LGRAY)
-  doc.setLineWidth(0.5)
-  doc.line(margin, y + 1, pw - margin, y + 1)
-  y += 10
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...MUTED)
+  doc.text(`Date: ${longDate(proposal.createdAt)}`, pw - margin, y + 17, { align: 'right' })
 
-  // ── I. SUBJECT / CLIENT INFORMATION ─────────────────────────────────────────
+  y += 22
+
+  // Divider
+  doc.setFillColor(...NAVY)
+  doc.rect(margin, y, cw, 0.8, 'F')
+  y += 8
+
+  // ── I. CLIENT INFORMATION ────────────────────────────────────────────────────
   y = sectionHead(doc, 'I.', 'CLIENT INFORMATION', y, margin, pw)
   y += 2
 
   const clientRows: [string, string][] = [
-    ['Client Name',             proposal.clientName || '—'],
-    ['Company / Organization',  proposal.clientCompany || '—'],
-    ['Property Address',        proposal.clientAddress || '—'],
-    ['Purpose / Notes',         proposal.clientNotes || '—'],
+    ['Client Name',            proposal.clientName    || '—'],
+    ['Company / Organization', proposal.clientCompany || '—'],
+    ['Address',                proposal.clientAddress || '—'],
+    ['Purpose / Notes',        proposal.clientNotes   || '—'],
   ]
+  if (proposal.clientEmail) clientRows.splice(2, 0, ['Email', proposal.clientEmail])
+  if (proposal.clientPhone) clientRows.splice(3, 0, ['Mobile', proposal.clientPhone])
 
   autoTable(doc, {
     startY: y,
@@ -230,23 +264,12 @@ export function generateProposalPDF(proposal: Proposal) {
 
   for (const svc of proposal.services) {
     y = checkBreak(doc, y, 10, margin)
-
-    // Bullet + service name
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.setTextColor(...BODY)
     const nameLines = doc.splitTextToSize(`•   ${svc.name}`, cw - 4) as string[]
     doc.text(nameLines, margin, y)
-    y += nameLines.length * 4.5
-
-    if (svc.timeline) {
-      doc.setFont('helvetica', 'italic')
-      doc.setFontSize(8.5)
-      doc.setTextColor(...MUTED)
-      doc.text(`      Estimated Timeline: ${svc.timeline}`, margin, y)
-      y += 4.5
-    }
-    y += 1.5
+    y += nameLines.length * 4.5 + 1.5
   }
   y += 5
 
@@ -263,7 +286,7 @@ export function generateProposalPDF(proposal: Proposal) {
   doc.text(docIntroLines, margin, y)
   y += docIntroLines.length * 4.5 + 4
 
-  const primaryCat = categories[0]
+  const primaryCat  = categories[0]
   const docSections = DOCS_MAP[primaryCat] ?? DEFAULT_DOCS
 
   for (const sec of docSections) {
@@ -290,7 +313,7 @@ export function generateProposalPDF(proposal: Proposal) {
   y = checkBreak(doc, y, 18, margin)
   const noteText = 'Note: Photocopies are acceptable for submission. The appraiser may request original documents for verification purposes during the site inspection. Submission of complete documents at the start of the engagement ensures timely delivery of the report.'
   const noteLines = doc.splitTextToSize(noteText, cw - 10) as string[]
-  const noteH = noteLines.length * 4.2 + 9
+  const noteH     = noteLines.length * 4.2 + 9
   doc.setFillColor(...BEIGE)
   doc.roundedRect(margin, y, cw, noteH, 1.5, 1.5, 'F')
   doc.setDrawColor(210, 175, 60)
@@ -302,140 +325,74 @@ export function generateProposalPDF(proposal: Proposal) {
   doc.text(noteLines, margin + 5, y + 5)
   y += noteH + 10
 
-  // ── IV. SERVICE TIMELINE ─────────────────────────────────────────────────────
-  y = checkBreak(doc, y, 30, margin)
-  y = sectionHead(doc, 'IV.', 'SERVICE TIMELINE', y, margin, pw)
+  // ── IV. PROFESSIONAL FEE ─────────────────────────────────────────────────────
+  y = checkBreak(doc, y, 40, margin)
+  y = sectionHead(doc, 'IV.', 'PROFESSIONAL FEE', y, margin, pw)
   y += 3
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...BODY)
-  doc.text('The estimated turnaround time for the completion and delivery of services is:', margin, y)
-  y += 6
+  // Service line items
+  const serviceRows: (string | { content: string; styles: Record<string, unknown> })[][] =
+    proposal.services.map(svc => [
+      { content: svc.name, styles: { textColor: BODY } },
+      { content: `${svc.qty > 1 ? `${svc.qty} ×  ` : ''}${php(svc.unitPrice)}`, styles: { halign: 'right', textColor: MUTED } },
+      { content: php(svc.qty * svc.unitPrice), styles: { halign: 'right', fontStyle: 'bold', textColor: BODY } },
+    ])
 
-  const timelineBody = proposal.services.map(svc => [svc.name, svc.timeline || 'To be confirmed'])
-  const totalNote = 'Timeline begins on Day 1 upon receipt of signed engagement, downpayment, and complete documents. Delays in document submission may affect the delivery timeline.'
+  // Subtotal row
+  serviceRows.push([
+    { content: 'Subtotal', styles: { fontStyle: 'bold', textColor: BODY } },
+    { content: '', styles: {} },
+    { content: php(proposal.subtotal), styles: { halign: 'right', fontStyle: 'bold', textColor: BODY } },
+  ])
+
+  // Discount row (if any)
+  if (proposal.discount > 0) {
+    serviceRows.push([
+      { content: 'Discount', styles: { textColor: ORANGE } },
+      { content: '', styles: {} },
+      { content: `− ${php(proposal.discount)}`, styles: { halign: 'right', textColor: ORANGE } },
+    ])
+  }
 
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [['Service / Activity', 'Est. Timeline']],
-    body: [
-      ['Day 1', 'Signing of engagement & receipt of 50% downpayment; submission of required documents'],
-      ...timelineBody,
-      ['Final Step', 'Delivery of completed report / service upon receipt of 50% balance'],
-    ],
-    foot: [[
-      {
-        content: `Total: ${proposal.services.map(s => s.timeline).filter(Boolean).join(' | ') || 'As agreed'}`,
-        styles: { fontStyle: 'bold', textColor: GREEN, fillColor: GREEN_BG },
-      },
-      {
-        content: totalNote,
-        styles: { fontStyle: 'italic', textColor: GREEN, fillColor: GREEN_BG },
-      },
-    ]],
-    headStyles: {
-      fillColor: NAVY, textColor: WHITE, fontSize: 9, fontStyle: 'bold', cellPadding: 3,
-    },
-    bodyStyles: { fontSize: 8.5, textColor: BODY, cellPadding: 3 },
-    alternateRowStyles: { fillColor: BGROW },
-    footStyles: { fontSize: 8, cellPadding: 3 },
-    columnStyles: {
-      0: { cellWidth: 42, fontStyle: 'bold' },
-      1: { cellWidth: 'auto' },
-    },
-    tableLineColor: LGRAY,
-    tableLineWidth: 0.2,
-  })
-  y = (doc as DocAT).lastAutoTable.finalY + 10
-
-  // ── V. PROFESSIONAL FEE & PAYMENT SCHEDULE ───────────────────────────────────
-  y = checkBreak(doc, y, 35, margin)
-  y = sectionHead(doc, 'V.', 'PROFESSIONAL FEE & PAYMENT SCHEDULE', y, margin, pw)
-  y += 3
-
-  const halfDown    = Math.ceil(proposal.total / 2)
-  const halfBalance = proposal.total - halfDown
-
-  const svcLabel = proposal.services.length === 1
-    ? proposal.services[0].name
-    : `${subtitle} (${proposal.services.length} services)`
-
-  const feeBody: (string | { content: string; styles: Record<string, unknown> })[][] = [
-    [svcLabel, php(proposal.subtotal)],
-    ...(proposal.discount > 0
-      ? [['Discount', `- ${php(proposal.discount)}`]]
-      : []),
-    [
-      { content: '1st Payment — 50% Downpayment (upon signing)', styles: { fontStyle: 'bold' } },
-      { content: php(halfDown), styles: { fontStyle: 'bold' } },
-    ],
-    [
-      { content: '2nd Payment — 50% Balance (upon delivery of full report / service)', styles: { fontStyle: 'bold' } },
-      { content: php(halfBalance), styles: { fontStyle: 'bold' } },
-    ],
-  ]
-
-  autoTable(doc, {
-    startY: y,
-    margin: { left: margin, right: margin },
-    head: [['Description', 'Amount (PHP)']],
-    body: feeBody,
-    headStyles: {
-      fillColor: NAVY, textColor: WHITE, fontSize: 9, fontStyle: 'bold', cellPadding: 3,
-    },
-    bodyStyles: { fontSize: 8.5, textColor: BODY, cellPadding: 3.5 },
+    head: [['Service', 'Rate', 'Amount (PHP)']],
+    body: serviceRows,
+    headStyles: { fillColor: NAVY, textColor: WHITE, fontSize: 9, fontStyle: 'bold', cellPadding: 3 },
+    bodyStyles: { fontSize: 9, textColor: BODY, cellPadding: 3.5 },
     alternateRowStyles: { fillColor: BGROW },
     columnStyles: {
       0: { cellWidth: 'auto' },
-      1: { cellWidth: 42, halign: 'right' },
+      1: { cellWidth: 45, halign: 'right' },
+      2: { cellWidth: 42, halign: 'right' },
     },
     tableLineColor: LGRAY,
     tableLineWidth: 0.2,
   })
-  y = (doc as DocAT).lastAutoTable.finalY + 10
+  y = (doc as DocAT).lastAutoTable.finalY
 
-  // ── VI. PAYMENT DETAILS ──────────────────────────────────────────────────────
-  y = checkBreak(doc, y, 28, margin)
-  y = sectionHead(doc, 'VI.', 'PAYMENT DETAILS', y, margin, pw)
-  y += 3
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...BODY)
-  doc.text('Payments may be made via bank transfer to the following account:', margin, y)
-  y += 5
-
-  autoTable(doc, {
-    startY: y,
-    margin: { left: margin, right: margin },
-    body: [
-      ['Bank',           'Metrobank (Metropolitan Bank & Trust Co.)'],
-      ['Account Name',   'NESW Realty Corporation'],
-      ['Account Number', 'Please contact your agent for bank details'],
-    ],
-    theme: 'plain',
-    styles: { fontSize: 9, cellPadding: { top: 2.8, bottom: 2.8, left: 4, right: 4 } },
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 42, textColor: BODY },
-      1: { textColor: BODY },
-    },
-    tableLineColor: LGRAY,
-    tableLineWidth: 0.25,
-  })
-  y = (doc as DocAT).lastAutoTable.finalY + 4
+  // TOTAL AMOUNT DUE highlighted row
+  const totalH = 11
+  doc.setFillColor(...NAVY)
+  doc.rect(margin, y, cw, totalH, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...WHITE)
+  doc.text('TOTAL AMOUNT DUE', margin + 5, y + 7.5)
+  doc.text(php(proposal.total), pw - margin - 5, y + 7.5, { align: 'right' })
+  y += totalH + 2
 
   doc.setFont('helvetica', 'italic')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...BODY)
-  doc.text('Please send proof of payment to the agent upon remittance of each installment.', margin, y)
-  y += 10
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  doc.text('VAT Exclusive', margin + 3, y + 4)
+  y += 14
 
-  // ── VII. TERMS AND CONDITIONS ────────────────────────────────────────────────
+  // ── V. TERMS AND CONDITIONS ───────────────────────────────────────────────────
   y = checkBreak(doc, y, 20, margin)
-  y = sectionHead(doc, 'VII.', 'TERMS AND CONDITIONS', y, margin, pw)
-  y += 3
+  y = sectionHead(doc, 'V.', 'TERMS AND CONDITIONS', y, margin, pw)
+  y += 4
 
   const termsList = proposal.terms
     .split('\n')
@@ -447,18 +404,17 @@ export function generateProposalPDF(proposal: Proposal) {
   doc.setTextColor(...BODY)
 
   for (const line of termsList) {
-    y = checkBreak(doc, y, 6, margin)
-    // Strip leading numbers like "1." and prefix with bullet
-    const clean = line.replace(/^\d+\.\s*/, '').trim()
+    y = checkBreak(doc, y, 8, margin)
+    const clean   = line.replace(/^\d+\.\s*/, '').trim()
     const wrapped = doc.splitTextToSize(`•   ${clean}`, cw) as string[]
     doc.text(wrapped, margin, y)
-    y += wrapped.length * 4.5
+    y += wrapped.length * 4.8 + 1.5   // extra gap between items
   }
   y += 8
 
-  // ── VIII. ACCEPTANCE ─────────────────────────────────────────────────────────
-  y = checkBreak(doc, y, 45, margin)
-  y = sectionHead(doc, 'VIII.', 'ACCEPTANCE', y, margin, pw)
+  // ── VI. ACCEPTANCE ────────────────────────────────────────────────────────────
+  y = checkBreak(doc, y, 50, margin)
+  y = sectionHead(doc, 'VI.', 'ACCEPTANCE', y, margin, pw)
   y += 3
 
   doc.setFont('helvetica', 'normal')
@@ -467,7 +423,7 @@ export function generateProposalPDF(proposal: Proposal) {
   const acceptText = 'By signing below, the client agrees to the terms and conditions set forth in this Engagement Proposal and authorizes the service provider to proceed with the agreed scope of work.'
   const acceptLines = doc.splitTextToSize(acceptText, cw) as string[]
   doc.text(acceptLines, margin, y)
-  y += acceptLines.length * 4.5 + 14
+  y += acceptLines.length * 4.5 + 16
 
   // Two signature blocks
   const sigW = (cw - 20) / 2
@@ -483,8 +439,21 @@ export function generateProposalPDF(proposal: Proposal) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(...BODY)
-  doc.text('Prepared by: Appraiser', lx, y)
-  doc.text('Conforme: Client', rx, y)
+  doc.text('Prepared by:', lx, y)
+  doc.text('Conforme:', rx, y)
+
+  y += 5
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...BODY)
+  doc.text(proposal.agentName || 'NESW Property & Planning Consultancy', lx, y)
+  doc.text(proposal.clientName || '—', rx, y)
+
+  y += 4
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  doc.text('NESW Property & Planning Consultancy', lx, y)
 
   y += 4
   doc.setFont('helvetica', 'italic')
@@ -495,7 +464,7 @@ export function generateProposalPDF(proposal: Proposal) {
 
   y += 14
 
-  // Footer rule + disclaimer
+  // Footer
   doc.setDrawColor(...LGRAY)
   doc.setLineWidth(0.3)
   doc.line(margin, y, pw - margin, y)
