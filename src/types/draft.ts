@@ -18,7 +18,7 @@ export interface ProposalDraft extends BaseDraft {
     name:        string
     company:     string
     email:       string
-    phone:       string
+    phone?:      string
     mobile:      string
     countryCode: string
     street:      string

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Download, PenLine, Trash2, X, BookmarkPlus, Search, ChevronDown, Eye } from 'lucide-react'
+import { Plus, Download, PenLine, Trash2, X, BookmarkPlus, Search, ChevronDown, Eye } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
@@ -227,11 +227,6 @@ export function Proposals() {
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
     }
-  }
-
-  async function handleDownload(p: Proposal) {
-    try { await generateProposalPDF(p) }
-    catch { toaster.create({ title: 'Failed to generate PDF', type: 'error' }) }
   }
 
   const filtered = proposals.filter(p => {
