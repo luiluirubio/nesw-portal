@@ -16,36 +16,41 @@ async function nextBillingNo(): Promise<string> {
   return String(max + 1)
 }
 
-// Create Xendit QR Ph payment — returns { qrId, qrString } or null on failure
-async function createXenditQR(billingNo: string, amount: number): Promise<{ qrId: string; qrString: string } | null> {
+// Create Xendit Invoice — returns { invoiceId, invoiceUrl } or null on failure
+// Uses Invoice API (covered by Money In permission); client scans QR → payment page
+async function createXenditInvoice(
+  billingNo: string, clientName: string, description: string, amount: number
+): Promise<{ invoiceId: string; invoiceUrl: string } | null> {
   const secret = process.env.XENDIT_SECRET_KEY
   if (!secret) return null
 
   try {
     const body = {
-      reference_id: `billing-${billingNo}`,
-      type:         'DYNAMIC',
-      currency:     'PHP',
-      amount:       Math.round(amount * 100) / 100,
-      expires_at:   new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+      external_id:          `billing-${billingNo}`,
+      amount:               Math.round(amount * 100) / 100,
+      description:          description || `Billing ${billingNo}`,
+      payer_email:          'client@neswcorp.com',
+      customer:             { given_names: clientName },
+      currency:             'PHP',
+      invoice_duration:     2592000, // 30 days
+      success_redirect_url: process.env.FRONTEND_URL ?? 'https://staging-portal.neswcorp.com',
     }
-    const res = await fetch('https://api.xendit.co/qr_codes', {
+    const res = await fetch('https://api.xendit.co/v2/invoices', {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Basic ${Buffer.from(`${secret}:`).toString('base64')}`,
-        'api-version':   '2022-07-31',
       },
       body: JSON.stringify(body),
     })
     if (!res.ok) {
-      console.error('Xendit QR error:', res.status, await res.text())
+      console.error('Xendit Invoice error:', res.status, await res.text())
       return null
     }
-    const data = await res.json() as { id: string; qr_string: string }
-    return { qrId: data.id, qrString: data.qr_string }
+    const data = await res.json() as { id: string; invoice_url: string }
+    return { invoiceId: data.id, invoiceUrl: data.invoice_url }
   } catch (err) {
-    console.error('Xendit QR exception:', err)
+    console.error('Xendit Invoice exception:', err)
     return null
   }
 }
@@ -60,16 +65,16 @@ router.post('/xendit-webhook', async (req: Request, res: Response) => {
     }
 
     const event = req.body
-    // QR payment completion event
-    if (event?.event === 'qr.payment' && event?.data?.qr_id) {
-      const qrId    = event.data.qr_id as string
-      const status  = event.data.status === 'COMPLETED' ? 'paid' : 'unpaid'
+    // Invoice payment completion event
+    if (event?.status === 'PAID' && event?.external_id?.startsWith('billing-')) {
+      const invoiceId = event.id as string
+      const status    = 'paid'
 
-      // Find billing by paymentQrId
+      // Find billing by paymentQrId (stored as invoiceId)
       const scan = await db.send(new ScanCommand({
         TableName:        Tables.billings,
         FilterExpression: 'paymentQrId = :qrId',
-        ExpressionAttributeValues: { ':qrId': qrId },
+        ExpressionAttributeValues: { ':qrId': invoiceId },
       }))
       const billing = scan.Items?.[0]
       if (billing) {
@@ -146,8 +151,9 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const billingNo = await nextBillingNo()
 
-    // Create Xendit QR (graceful — does not block billing creation)
-    const qr = await createXenditQR(billingNo, Number(total ?? 0))
+    // Create Xendit Invoice (graceful — does not block billing creation)
+    const desc = `${servicePurpose || 'Professional Services'} — ${clientName}`
+    const qr   = await createXenditInvoice(billingNo, clientName as string, desc, Number(total ?? 0))
 
     const item = {
       id:              `BILL-${uuid().slice(0, 8).toUpperCase()}`,
@@ -173,7 +179,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       dateIssued:      (dateIssued as string) ?? new Date().toISOString().slice(0, 10),
       createdAt:       new Date().toISOString(),
       updatedAt:       new Date().toISOString(),
-      ...(qr ? { paymentQrId: qr.qrId, paymentQrString: qr.qrString, paymentStatus: 'unpaid' } : {}),
+      // paymentQrId = Xendit invoice ID, paymentQrString = invoice URL (QR generated client-side)
+      ...(qr ? { paymentQrId: qr.invoiceId, paymentQrString: qr.invoiceUrl, paymentStatus: 'unpaid' } : {}),
     }
     await db.send(new PutCommand({ TableName: Tables.billings, Item: item }))
     res.status(201).json(item)
