@@ -63,6 +63,7 @@ export interface BillingDraft extends BaseDraft {
   clientAddress:   string
   servicePurpose:  string
   dateIssued:      string
+  dueDate?:        string
   items:           BillingItem[]
   discount:        number
   terms:           string

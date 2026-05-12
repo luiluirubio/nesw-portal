@@ -125,11 +125,11 @@ export async function generateBillingPDF(billing: Billing) {
 
   // ── INFO ROW: BILLED TO  |  QR CODE (if available) or SERVICE & PURPOSE ────
   const qrAvail    = !!billing.paymentQrString
-  const qrTextStrip = 11  // mm — left strip for rotated "SCAN TO PAY" label
-  const qrPad       = 2   // mm — padding around QR image
-  // Box height is content-driven but QR must be at least 32mm
-  const qrMinSize   = 32
-  const halfW  = qrAvail ? cw - (qrMinSize + qrTextStrip + qrPad * 2 + 2) - 6 : (cw - 6) / 2
+  const qrLabelH   = 8    // mm — top navy bar height for "SCAN TO PAY"
+  const qrPad      = 2    // mm — padding around QR image
+  const qrMinSize  = 32   // mm — minimum QR image size
+  const qrBoxW     = qrMinSize + qrPad * 2   // total width of QR column
+  const halfW  = qrAvail ? cw - qrBoxW - 6 : (cw - 6) / 2
   const rightX = margin + halfW + 6
 
   // Generate QR early (needed for both info row and payment section)
@@ -157,8 +157,8 @@ export async function generateBillingPDF(billing: Billing) {
     (companyLines.length ? companyLines.length * 4 + 1 : 0) +       // company
     (addrLines.length    ? addrLines.length    * 3.5 + 1 : 0) +     // address
     3                                                                 // bottom padding
-  // Box must be tall enough for the QR image
-  const boxH = Math.max(clientContentH, qrMinSize + qrPad * 2, 24)
+  // Box must be tall enough for the QR image + label
+  const boxH = Math.max(clientContentH, qrLabelH + qrMinSize + qrPad, 24)
 
   // Left — BILLED TO
   doc.setFillColor(240, 244, 252)
@@ -192,35 +192,29 @@ export async function generateBillingPDF(billing: Billing) {
     doc.text(addrLines, margin + 4, billedY + 2)
   }
 
-  // Right — QR code: navy strip with rotated label + light box with QR image
+  // Right — QR code: navy top bar + QR image below
   if (qrDataUrlEarly) {
-    const qrImgSz  = boxH - qrPad * 2
-    const qrImgBoxW = qrImgSz + qrPad * 2
+    const qrImgSz = boxH - qrLabelH - qrPad
+    const qrImgX  = rightX + (qrBoxW - qrImgSz) / 2  // centre QR horizontally
 
-    // Outer rounded border for the whole QR section
+    // Light background for full box
+    doc.setFillColor(248, 250, 255)
     doc.setDrawColor(...LGRAY)
     doc.setLineWidth(0.2)
-    doc.setFillColor(248, 250, 255)
-    doc.roundedRect(rightX, y, qrTextStrip + qrImgBoxW, boxH, 1.5, 1.5, 'FD')
+    doc.roundedRect(rightX, y, qrBoxW, boxH, 1.5, 1.5, 'FD')
 
-    // Navy fill over the left text strip (plain rect so it doesn't bleed into QR area)
+    // Navy top bar (plain rect so rounded corners stay only on outer box)
     doc.setFillColor(...NAVY)
-    doc.rect(rightX, y, qrTextStrip, boxH, 'F')
+    doc.rect(rightX, y, qrBoxW, qrLabelH, 'F')
 
-    // "SCAN TO PAY" — white text rotated 90° (bottom-to-top), centred in navy strip
+    // "SCAN TO PAY" — white horizontal text, centred in navy bar
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
+    doc.setFontSize(7)
     doc.setTextColor(255, 255, 255)
-    // x = baseline of rotated text (horizontal centre of strip)
-    // y = vertical centre of box (text is centred along its length via align:'center')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(doc as any).text('SCAN TO PAY', rightX + qrTextStrip / 2, y + boxH / 2, {
-      angle: 90,
-      align: 'center',
-    })
+    doc.text('SCAN TO PAY', rightX + qrBoxW / 2, y + qrLabelH / 2 + 1.5, { align: 'center' })
 
-    // QR image fills the right area
-    doc.addImage(qrDataUrlEarly, 'PNG', rightX + qrTextStrip + qrPad, y + qrPad, qrImgSz, qrImgSz)
+    // QR image below the bar
+    doc.addImage(qrDataUrlEarly, 'PNG', qrImgX, y + qrLabelH + qrPad / 2, qrImgSz, qrImgSz)
   }
 
   y += boxH + 5
