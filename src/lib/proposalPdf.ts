@@ -162,20 +162,25 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
   return y
 }
 
-// Composite logo on white so transparent areas render cleanly in jsPDF
+// Load logo onto a white canvas so transparent areas become white in jsPDF
 async function loadLogoBase64(url: string): Promise<string | null> {
   return new Promise<string | null>(resolve => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width  = img.width
-      canvas.height = img.height
-      const ctx = canvas.getContext('2d')!
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(img, 0, 0)
-      resolve(canvas.toDataURL('image/png'))
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width  = img.naturalWidth  || img.width
+        canvas.height = img.naturalHeight || img.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { resolve(null); return }
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0)
+        resolve(canvas.toDataURL('image/png'))
+      } catch {
+        resolve(null)
+      }
     }
     img.onerror = () => resolve(null)
     img.src = url
