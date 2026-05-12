@@ -288,16 +288,33 @@ export async function generateProposalPDF(proposal: Proposal) {
   doc.text(introLines, margin, y)
   y += introLines.length * 4.5 + 3
 
-  for (const svc of proposal.services) {
-    y = checkBreak(doc, y, 10, margin)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...BODY)
-    const nameLines = doc.splitTextToSize(`•   ${svc.name}`, cw - 4) as string[]
-    doc.text(nameLines, margin, y)
-    y += nameLines.length * 4.5 + 1.5
-  }
-  y += 5
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [[
+      { content: 'Service', styles: { halign: 'left' } },
+      { content: 'Title / Description', styles: { halign: 'left' } },
+    ]],
+    body: proposal.services.map(svc => [
+      { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5 } },
+      { content: svc.name, styles: { fontStyle: 'bold', textColor: BODY } },
+    ]),
+    headStyles: {
+      fillColor: NAVY, textColor: WHITE, fontSize: 8.5, fontStyle: 'bold',
+      cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
+    },
+    bodyStyles: {
+      fontSize: 9, cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
+    },
+    alternateRowStyles: { fillColor: BGROW },
+    columnStyles: {
+      0: { cellWidth: 65 },
+      1: { cellWidth: 'auto' },
+    },
+    tableLineColor: LGRAY,
+    tableLineWidth: 0.2,
+  })
+  y = (doc as DocAT).lastAutoTable.finalY + 6
 
   // ── III. DOCUMENTS REQUIRED FROM CLIENT ──────────────────────────────────────
   y = checkBreak(doc, y, 25, margin)
