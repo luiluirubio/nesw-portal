@@ -33,19 +33,24 @@ function sanitize(s: string) {
     .replace(/[^\x00-\xFF]/g, '?')
 }
 
+// Load image and composite on white canvas so transparent areas render cleanly in jsPDF
 async function toBase64(url: string): Promise<string | null> {
-  try {
-    const res  = await fetch(url)
-    const blob = await res.blob()
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload  = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return null
-  }
+  return new Promise<string | null>(resolve => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width  = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
 }
 
 function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number {
@@ -177,27 +182,32 @@ export async function generateBillingPDF(billing: Billing) {
     doc.text(addrLines, margin + 4, billedY + 2)
   }
 
-  // Right — QR code box: rotated label on left strip, QR fills remaining space
+  // Right — QR code: navy strip with rotated label + light box with QR image
   if (qrDataUrlEarly) {
-    const qrImgSz = boxH - qrPad * 2        // QR square fills full height minus padding
-    const qrBoxW  = qrTextStrip + qrImgSz + qrPad * 2
+    const qrImgSz  = boxH - qrPad * 2
+    const qrImgBoxW = qrImgSz + qrPad * 2
 
+    // Navy strip for "SCAN TO PAY" label
+    doc.setFillColor(...NAVY)
+    doc.roundedRect(rightX, y, qrTextStrip, boxH, 1.5, 1.5, 'F')
+
+    // Light box for QR image (adjacent to navy strip)
     doc.setFillColor(248, 250, 255)
-    doc.roundedRect(rightX, y, qrBoxW, boxH, 1.5, 1.5, 'F')
+    doc.roundedRect(rightX + qrTextStrip, y, qrImgBoxW, boxH, 1.5, 1.5, 'F')
     doc.setDrawColor(...LGRAY)
     doc.setLineWidth(0.2)
-    doc.roundedRect(rightX, y, qrBoxW, boxH, 1.5, 1.5, 'S')
+    doc.roundedRect(rightX + qrTextStrip, y, qrImgBoxW, boxH, 1.5, 1.5, 'S')
 
-    // "SCAN TO PAY" rotated 90° CCW in the left strip
+    // "SCAN TO PAY" — white text rotated 90° on navy strip, reading bottom-to-top
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...NAVY)
+    doc.setFontSize(6.5)
+    doc.setTextColor(...WHITE)
     doc.text('SCAN TO PAY', rightX + qrTextStrip / 2, y + boxH / 2, {
       angle: 90, align: 'center',
     })
 
-    // QR image fills the rest of the box
-    doc.addImage(qrDataUrlEarly, 'PNG', rightX + qrTextStrip, y + qrPad, qrImgSz, qrImgSz)
+    // QR image fills the light box
+    doc.addImage(qrDataUrlEarly, 'PNG', rightX + qrTextStrip + qrPad, y + qrPad, qrImgSz, qrImgSz)
   }
 
   y += boxH + 5
