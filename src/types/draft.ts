@@ -31,8 +31,10 @@ export interface ProposalDraft extends BaseDraft {
     // backwards compat for old drafts
     address?:    string
   }
-  selectedIds: string[]
+  serviceRows: { rowId: string; serviceId: string; title: string }[]
   lineItems:   Record<string, { qty: number; unitPrice: number; notes: string }>
+  // legacy — kept for old drafts
+  selectedIds?: string[]
   discountPct: string
   discount?:   string  // backwards compat
   validity:    string

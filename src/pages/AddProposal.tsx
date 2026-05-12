@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   User, ListChecks, DollarSign, Eye,
-  CheckCircle, ArrowLeft, ArrowRight, Download, Save,
+  CheckCircle, ArrowLeft, ArrowRight, Download, Save, Plus, Trash2,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
@@ -199,6 +199,11 @@ function TextInput({ value, onChange, placeholder, type = 'text', error, maxLeng
   )
 }
 
+// ── Service row type ──────────────────────────────────────────────────────────
+interface ServiceRow { rowId: string; serviceId: string; title: string }
+let rowCounter = 0
+function newRowId() { return `row-${++rowCounter}` }
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export function AddProposal() {
   const navigate = useNavigate()
@@ -227,7 +232,7 @@ export function AddProposal() {
   // Step 2
   const [catalog, setCatalog]           = useState<Service[]>([])
   const [loadingCatalog, setLoadingCatalog] = useState(false)
-  const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
+  const [serviceRows, setServiceRows]   = useState<ServiceRow[]>([])
 
   // Step 3
   const [lineItems, setLineItems] = useState<Record<string, { qty: number; unitPrice: number; notes: string }>>({})
@@ -244,7 +249,7 @@ export function AddProposal() {
       if (d) {
         setStep(d.lastStep)
         setClient(prev => ({ ...prev, ...d.client }))
-        setSelectedIds(new Set(d.selectedIds))
+        setServiceRows(d.serviceRows ?? [])
         setLineItems(d.lineItems)
         setDiscountPct(d.discountPct ?? '0')
         setValidity(d.validity)
@@ -264,13 +269,13 @@ export function AddProposal() {
       savedAt:   new Date().toISOString(),
       lastStep:  step,
       client,
-      selectedIds: Array.from(selectedIds),
+      serviceRows,
       lineItems,
       discountPct,
       validity,
       terms,
     })
-  }, [draftId, user, step, client, selectedIds, lineItems, discountPct, validity, terms, submitted, loadingDraft])
+  }, [draftId, user, step, client, serviceRows, lineItems, discountPct, validity, terms, submitted, loadingDraft])
 
   useEffect(() => {
     if (submitted || loadingDraft) return
@@ -291,26 +296,9 @@ export function AddProposal() {
       .finally(() => setLoadingCatalog(false))
   }, [])
 
-  // Keep lineItems in sync when selections change
-  useEffect(() => {
-    setLineItems(prev => {
-      const next = { ...prev }
-      for (const id of Array.from(selectedIds)) {
-        if (!next[id]) {
-          const svc = catalog.find(s => s.id === id)
-          if (svc) next[id] = { qty: 1, unitPrice: svc.defaultPrice, notes: '' }
-        }
-      }
-      for (const id of Object.keys(next)) {
-        if (!selectedIds.has(id)) delete next[id]
-      }
-      return next
-    })
-  }, [selectedIds, catalog])
-
   // ── Computed totals ──────────────────────────────────────────────────────────
-  const subtotal = Array.from(selectedIds).reduce((sum, id) => {
-    const li = lineItems[id]
+  const subtotal = serviceRows.reduce((sum, row) => {
+    const li = lineItems[row.rowId]
     return sum + (li ? li.qty * li.unitPrice : 0)
   }, 0)
   const discountAmt = subtotal * (Math.min(100, Math.max(0, Number(discountPct) || 0)) / 100)
@@ -326,7 +314,8 @@ export function AddProposal() {
         e.mobile = client.countryCode === '+63' ? 'Enter 10 digits starting with 9 (e.g. 9171234567)' : 'Enter a valid mobile number'
     }
     if (s === 2) {
-      if (selectedIds.size === 0) e.services = 'Select at least one service'
+      if (serviceRows.length === 0) e.services = 'Add at least one service'
+      else if (serviceRows.some(r => !r.serviceId)) e.services = 'Select a service type for each row'
     }
     setErrors(e)
     return Object.keys(e).length === 0
@@ -345,19 +334,21 @@ export function AddProposal() {
 
   // ── Build proposal payload ───────────────────────────────────────────────────
   function buildServices(): ProposalService[] {
-    return Array.from(selectedIds).map(id => {
-      const svc = catalog.find(s => s.id === id)!
-      const li  = lineItems[id] ?? { qty: 1, unitPrice: svc.defaultPrice, notes: '' }
-      return {
-        serviceId: id,
-        category:  svc.category,
-        name:      svc.name,
-        qty:       li.qty,
-        unitPrice: li.unitPrice,
-        timeline:  svc.timeline,
-        notes:     li.notes,
-      }
-    })
+    return serviceRows
+      .filter(row => row.serviceId)
+      .map(row => {
+        const svc = catalog.find(s => s.id === row.serviceId)!
+        const li  = lineItems[row.rowId] ?? { qty: 1, unitPrice: svc?.defaultPrice ?? 0, notes: '' }
+        return {
+          serviceId: row.serviceId,
+          category:  svc?.category ?? '',
+          name:      row.title.trim() || svc?.name ?? '',
+          qty:       li.qty,
+          unitPrice: li.unitPrice,
+          timeline:  svc?.timeline ?? '',
+          notes:     li.notes,
+        }
+      })
   }
 
   function buildProposalForPdf(proposalNo: string, id: string): Proposal {
@@ -422,13 +413,6 @@ export function AddProposal() {
       toaster.create({ title: 'Failed to generate PDF', type: 'error' })
     }
   }
-
-  // ── Grouped catalog ──────────────────────────────────────────────────────────
-  const grouped = catalog.reduce((acc, svc) => {
-    if (!acc[svc.category]) acc[svc.category] = []
-    acc[svc.category].push(svc)
-    return acc
-  }, {} as Record<string, Service[]>)
 
   // ── Render steps ─────────────────────────────────────────────────────────────
   function renderStep1() {
@@ -527,66 +511,129 @@ export function AddProposal() {
   }
 
   function renderStep2() {
+    function addRow() {
+      const rowId = newRowId()
+      setServiceRows(r => [...r, { rowId, serviceId: '', title: '' }])
+    }
+
+    function removeRow(rowId: string) {
+      setServiceRows(r => r.filter(x => x.rowId !== rowId))
+      setLineItems(prev => { const n = { ...prev }; delete n[rowId]; return n })
+    }
+
+    function changeService(rowId: string, serviceId: string) {
+      setServiceRows(r => r.map(x => x.rowId === rowId ? { ...x, serviceId } : x))
+      const svc = catalog.find(s => s.id === serviceId)
+      if (svc) {
+        setLineItems(prev => ({
+          ...prev,
+          [rowId]: prev[rowId]
+            ? { ...prev[rowId], unitPrice: svc.defaultPrice }
+            : { qty: 1, unitPrice: svc.defaultPrice, notes: '' },
+        }))
+      }
+    }
+
+    function changeTitle(rowId: string, title: string) {
+      setServiceRows(r => r.map(x => x.rowId === rowId ? { ...x, title } : x))
+    }
+
     if (loadingCatalog) return (
       <div className="flex items-center justify-center h-40" style={{ color: 'var(--muted-foreground)' }}>
         Loading services…
       </div>
     )
+
     return (
       <div className="flex flex-col gap-4">
         {errors.services && (
           <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg">{errors.services}</p>
         )}
-        {Object.entries(grouped).map(([cat, svcs]) => (
-          <div key={cat} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <div className="px-4 py-2.5 font-semibold text-sm"
-              style={{ backgroundColor: 'var(--accent)', color: 'var(--foreground)' }}>
-              {cat}
-            </div>
-            {svcs.map(svc => {
-              const checked = selectedIds.has(svc.id)
-              return (
-                <label key={svc.id}
-                  className="flex items-center gap-3 px-4 py-3 border-t cursor-pointer transition-colors hover:bg-[var(--accent)]"
-                  style={{ borderColor: 'var(--border)' }}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => setSelectedIds(prev => {
-                      const next = new Set(prev)
-                      checked ? next.delete(svc.id) : next.add(svc.id)
-                      return next
-                    })}
-                    className="w-4 h-4 accent-[var(--primary)] shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{svc.name}</p>
-                    {svc.description && (
-                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.description}</p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold" style={{ color: 'var(--primary)' }}>
-                      Starting at {formatPHP(svc.defaultPrice)}
-                    </p>
-                    {svc.timeline && (
-                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.timeline}</p>
-                    )}
-                  </div>
-                </label>
-              )
-            })}
-          </div>
-        ))}
-        <p className="text-xs text-right" style={{ color: 'var(--muted-foreground)' }}>
-          {selectedIds.size} service{selectedIds.size !== 1 ? 's' : ''} selected
-        </p>
+
+        {/* Table */}
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ backgroundColor: 'var(--card)', color: 'var(--muted-foreground)' }}>
+                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide w-10">#</th>
+                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide">Service Type</th>
+                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide">Title / Description</th>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {serviceRows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm"
+                    style={{ color: 'var(--muted-foreground)' }}>
+                    No services added yet. Click <strong>+ Add Service</strong> below.
+                  </td>
+                </tr>
+              ) : serviceRows.map((row, i) => {
+                const svc = catalog.find(s => s.id === row.serviceId)
+                return (
+                  <tr key={row.rowId} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                    <td className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--muted-foreground)' }}>
+                      {i + 1}
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={row.serviceId}
+                        onChange={e => changeService(row.rowId, e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg border text-sm outline-none"
+                        style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+                        <option value="">— Select service —</option>
+                        {catalog.map(s => (
+                          <option key={s.id} value={s.id}>{s.category} · {s.name}</option>
+                        ))}
+                      </select>
+                      {svc && (
+                        <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
+                          Default: {formatPHP(svc.defaultPrice)}{svc.timeline ? ` · ${svc.timeline}` : ''}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <input
+                        value={row.title}
+                        onChange={e => changeTitle(row.rowId, e.target.value)}
+                        placeholder={svc ? svc.name : 'e.g. Property at Marikina'}
+                        className="w-full px-2 py-1.5 rounded-lg border text-sm outline-none"
+                        style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      <button onClick={() => removeRow(row.rowId)}
+                        className="p-1.5 rounded-lg transition-colors hover:bg-red-50"
+                        style={{ color: 'var(--muted-foreground)' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#dc2626')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted-foreground)')}>
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <button onClick={addRow}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors hover:bg-[var(--accent)] self-start"
+          style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+          <Plus size={15} /> Add Service
+        </button>
+
+        {serviceRows.length > 0 && (
+          <p className="text-xs text-right" style={{ color: 'var(--muted-foreground)' }}>
+            {serviceRows.length} service{serviceRows.length !== 1 ? 's' : ''} added
+          </p>
+        )}
       </div>
     )
   }
 
   function renderStep3() {
-    const selectedSvcs = catalog.filter(s => selectedIds.has(s.id))
     return (
       <div className="flex flex-col gap-6">
         {/* Line items table */}
@@ -601,19 +648,22 @@ export function AddProposal() {
               </tr>
             </thead>
             <tbody>
-              {selectedSvcs.map(svc => {
-                const li = lineItems[svc.id] ?? { qty: 1, unitPrice: svc.defaultPrice, notes: '' }
+              {serviceRows.map(row => {
+                const svc = catalog.find(s => s.id === row.serviceId)
+                const li  = lineItems[row.rowId] ?? { qty: 1, unitPrice: svc?.defaultPrice ?? 0, notes: '' }
                 const amount = li.qty * li.unitPrice
                 return (
-                  <tr key={svc.id} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                  <tr key={row.rowId} className="border-t" style={{ borderColor: 'var(--border)' }}>
                     <td className="px-4 py-3">
-                      <p className="font-medium" style={{ color: 'var(--foreground)' }}>{svc.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.category} · {svc.timeline}</p>
+                      <p className="font-medium" style={{ color: 'var(--foreground)' }}>
+                        {row.title.trim() || svc?.name || '—'}
+                      </p>
+                      {svc && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.category}</p>}
                     </td>
                     <td className="px-3 py-3">
                       <input
                         type="number" min="1" value={li.qty}
-                        onChange={e => setLineItems(prev => ({ ...prev, [svc.id]: { ...li, qty: Math.max(1, Number(e.target.value)) } }))}
+                        onChange={e => setLineItems(prev => ({ ...prev, [row.rowId]: { ...li, qty: Math.max(1, Number(e.target.value)) } }))}
                         className="w-full text-center px-2 py-1.5 rounded border text-sm outline-none"
                         style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
                       />
@@ -621,7 +671,7 @@ export function AddProposal() {
                     <td className="px-3 py-3">
                       <input
                         type="number" min="0" value={li.unitPrice}
-                        onChange={e => setLineItems(prev => ({ ...prev, [svc.id]: { ...li, unitPrice: Number(e.target.value) } }))}
+                        onChange={e => setLineItems(prev => ({ ...prev, [row.rowId]: { ...li, unitPrice: Number(e.target.value) } }))}
                         className="w-full text-right px-2 py-1.5 rounded border text-sm outline-none"
                         style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
                       />
@@ -689,7 +739,6 @@ export function AddProposal() {
   }
 
   function renderStep4() {
-    const selectedSvcs = catalog.filter(s => selectedIds.has(s.id))
     return (
       <div className="flex flex-col gap-6">
         {/* Client summary */}
@@ -721,13 +770,14 @@ export function AddProposal() {
                 </tr>
               </thead>
               <tbody>
-                {selectedSvcs.map(svc => {
-                  const li = lineItems[svc.id] ?? { qty: 1, unitPrice: svc.defaultPrice }
+                {serviceRows.map(row => {
+                  const svc = catalog.find(s => s.id === row.serviceId)
+                  const li  = lineItems[row.rowId] ?? { qty: 1, unitPrice: svc?.defaultPrice ?? 0 }
                   return (
-                    <tr key={svc.id} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                    <tr key={row.rowId} className="border-t" style={{ borderColor: 'var(--border)' }}>
                       <td className="px-4 py-2.5" style={{ color: 'var(--foreground)' }}>
-                        <p>{svc.name}</p>
-                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.timeline}</p>
+                        <p className="font-medium">{row.title.trim() || svc?.name || '—'}</p>
+                        {svc && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.category}</p>}
                       </td>
                       <td className="px-3 py-2.5 text-center" style={{ color: 'var(--foreground)' }}>{li.qty}</td>
                       <td className="px-3 py-2.5 text-right" style={{ color: 'var(--foreground)' }}>{formatPHP(li.unitPrice)}</td>
