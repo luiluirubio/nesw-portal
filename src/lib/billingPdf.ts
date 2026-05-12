@@ -213,11 +213,11 @@ export async function generateBillingPDF(billing: Billing) {
     doc.setTextColor(255, 255, 255)
     // x = baseline of rotated text (horizontal centre of strip)
     // y = vertical centre of box (text is centred along its length via align:'center')
-    doc.text('SCAN TO PAY', rightX + qrTextStrip / 2, y + boxH / 2, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(doc as any).text('SCAN TO PAY', rightX + qrTextStrip / 2, y + boxH / 2, {
       angle: 90,
       align: 'center',
-      baseline: 'middle',
-    } as Parameters<typeof doc.text>[2])
+    })
 
     // QR image fills the right area
     doc.addImage(qrDataUrlEarly, 'PNG', rightX + qrTextStrip + qrPad, y + qrPad, qrImgSz, qrImgSz)
