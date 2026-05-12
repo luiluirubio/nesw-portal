@@ -108,21 +108,29 @@ export async function generateBillingPDF(billing: Billing) {
   doc.rect(margin, y, cw, 0.8, 'F')
   y += 8
 
-  // ── INFO ROW: BILLED TO  |  SERVICE & PURPOSE ────────────────────────────────
-  const halfW  = (cw - 6) / 2
+  // ── INFO ROW: BILLED TO  |  QR CODE (if available) or SERVICE & PURPOSE ────
+  const qrAvail = !!billing.paymentQrString
+  const qrInfoSize = 44  // mm — QR box in info row
+  const halfW  = qrAvail ? cw - qrInfoSize - 6 : (cw - 6) / 2
   const rightX = margin + halfW + 6
 
-  // Calculate dynamic box height based on content
-  const clientNameLines  = doc.splitTextToSize(sanitize(billing.clientName || '—'), halfW - 8) as string[]
-  const companyLines     = billing.clientCompany
+  // Generate QR early (needed for both info row and payment section)
+  let qrDataUrlEarly: string | null = null
+  if (qrAvail && billing.paymentQrString) {
+    try {
+      qrDataUrlEarly = await QRCode.toDataURL(billing.paymentQrString, {
+        width: 220, margin: 1, color: { dark: '#1b3864', light: '#ffffff' },
+      })
+    } catch { /* skip */ }
+  }
+
+  const clientNameLines = doc.splitTextToSize(sanitize(billing.clientName || '—'), halfW - 8) as string[]
+  const companyLines    = billing.clientCompany
     ? doc.splitTextToSize(sanitize(billing.clientCompany), halfW - 8) as string[]
-    : []
-  const purposeLines     = billing.servicePurpose
-    ? doc.splitTextToSize(sanitize(billing.servicePurpose), halfW - 8) as string[]
     : []
   const boxH = Math.max(
     5 + clientNameLines.length * 5 + (companyLines.length ? companyLines.length * 4 + 2 : 0) + 8,
-    purposeLines.length ? 5 + purposeLines.length * 5 + 8 : 28,
+    qrAvail ? qrInfoSize + 10 : 28,
     28
   )
 
@@ -159,23 +167,21 @@ export async function generateBillingPDF(billing: Billing) {
     doc.text(addrLines, margin + 4, billedY + 3)
   }
 
-  // Right — SERVICE & PURPOSE
-  doc.setFillColor(255, 245, 230)
-  doc.roundedRect(rightX, y, halfW, boxH, 1.5, 1.5, 'F')
-  doc.setDrawColor(...ORANGE)
-  doc.setLineWidth(0.2)
-  doc.roundedRect(rightX, y, halfW, boxH, 1.5, 1.5, 'S')
+  // Right — QR code (if available) or empty space
+  if (qrDataUrlEarly) {
+    doc.setFillColor(248, 250, 255)
+    doc.roundedRect(rightX, y, qrInfoSize + 4, boxH, 1.5, 1.5, 'F')
+    doc.setDrawColor(...LGRAY)
+    doc.setLineWidth(0.2)
+    doc.roundedRect(rightX, y, qrInfoSize + 4, boxH, 1.5, 1.5, 'S')
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...ORANGE)
-  doc.text('SERVICE & PURPOSE', rightX + 4, y + 5)
-
-  if (billing.servicePurpose) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
     doc.setTextColor(...NAVY)
-    doc.text(purposeLines, rightX + 4, y + 11)
+    doc.text('SCAN TO PAY', rightX + (qrInfoSize + 4) / 2, y + 5, { align: 'center' })
+
+    const qrImgY = y + 8
+    doc.addImage(qrDataUrlEarly, 'PNG', rightX + 2, qrImgY, qrInfoSize, qrInfoSize)
   }
 
   y += boxH + 8
@@ -284,50 +290,27 @@ export async function generateBillingPDF(billing: Billing) {
 
   // Three-column layout when QR exists: bank | terms | QR
   // Two-column layout without QR: bank | terms
-  const hasQR  = !!billing.paymentQrString
-  const qrSize = 40  // mm square
-
-  // Generate QR data URL
-  let qrDataUrl: string | null = null
-  if (hasQR && billing.paymentQrString) {
-    try {
-      qrDataUrl = await QRCode.toDataURL(billing.paymentQrString, {
-        width: 220, margin: 1, color: { dark: '#1b3864', light: '#ffffff' },
-      })
-    } catch { /* skip QR on error */ }
-  }
-
-  const contentW = qrDataUrl ? cw - qrSize - 8 : cw
-  const payW     = (contentW - 6) / 2
-  const termsX   = margin + payW + 6
-  const qrX      = pw - margin - qrSize
+  const payW   = (cw - 6) / 2
+  const termsX = margin + payW + 6
 
   // ── Column headers ────────────────────────────────────────────────────────
-  const headerH = 7
   doc.setFillColor(...NAVY)
-  doc.rect(margin, y, payW, headerH, 'F')
+  doc.rect(margin, y, payW, 7, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...WHITE)
   doc.text('CORPORATE BANK ACCOUNT DETAILS', margin + 4, y + 4.5)
 
   doc.setFillColor(...ORANGE)
-  doc.rect(termsX, y, payW, headerH, 'F')
+  doc.rect(termsX, y, payW, 7, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...WHITE)
   doc.text('TERMS AND CONDITIONS', termsX + 4, y + 4.5)
 
-  if (qrDataUrl) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...NAVY)
-    doc.text('SCAN TO PAY', qrX + qrSize / 2, y + 4.5, { align: 'center' })
-  }
+  y += 11
 
-  y += headerH + 4
-
-  // ── Bank details — stacked label / value (avoids overflow) ────────────────
+  // ── Bank details — stacked label / value ──────────────────────────────────
   const bankItems = [
     { label: 'Account Name', value: 'NESW Property & Planning Consultancy' },
     { label: 'Metrobank',    value: '2923 2925 57869' },
@@ -358,21 +341,7 @@ export async function generateBillingPDF(billing: Billing) {
     doc.text(tLines, termsX + 4, bankStartY)
   }
 
-  // ── QR image — positioned from header bottom, same column ─────────────────
-  let qrEndY = bankStartY
-  if (qrDataUrl) {
-    doc.setFillColor(248, 250, 255)
-    doc.setDrawColor(...LGRAY)
-    doc.setLineWidth(0.2)
-    doc.roundedRect(qrX - 2, bankStartY - 2, qrSize + 4, qrSize + 8, 2, 2, 'FD')
-
-    doc.addImage(qrDataUrl, 'PNG', qrX, bankStartY, qrSize, qrSize)
-
-    qrEndY = bankStartY + qrSize + 8
-  }
-
-  // Advance y past the tallest of bank column, terms column, or QR
-  y = Math.max(bankEndY, qrEndY) + 8
+  y = bankEndY + 8
 
   // ── PREPARED BY ───────────────────────────────────────────────────────────────
   y = checkBreak(doc, y, 45, margin)
