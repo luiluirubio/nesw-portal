@@ -346,7 +346,7 @@ export async function generateBillingPDF(billing: Billing) {
   // ── Bank details — Metrobank only ────────────────────────────────────────
   const bankItems = [
     { label: 'Account Name', value: 'NESW Property & Planning Consultancy' },
-    { label: 'Metrobank',    value: '2923 2925 57869' },
+    { label: 'Metrobank',    value: '225-3-92483176-7' },
   ]
   const contentStartY = y   // both bank and terms start at the same y
   bankItems.forEach(({ label, value }) => {
