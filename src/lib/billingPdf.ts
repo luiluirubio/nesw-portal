@@ -109,9 +109,12 @@ export async function generateBillingPDF(billing: Billing) {
   y += 5
 
   // ── INFO ROW: BILLED TO  |  QR CODE (if available) or SERVICE & PURPOSE ────
-  const qrAvail = !!billing.paymentQrString
-  const qrInfoSize = 34  // mm — QR box in info row
-  const halfW  = qrAvail ? cw - qrInfoSize - 6 : (cw - 6) / 2
+  const qrAvail    = !!billing.paymentQrString
+  const qrTextStrip = 8   // mm — left strip for rotated "SCAN TO PAY" label
+  const qrPad       = 2   // mm — padding around QR image
+  // Box height is content-driven but QR must be at least 32mm
+  const qrMinSize   = 32
+  const halfW  = qrAvail ? cw - (qrMinSize + qrTextStrip + qrPad * 2 + 2) - 6 : (cw - 6) / 2
   const rightX = margin + halfW + 6
 
   // Generate QR early (needed for both info row and payment section)
@@ -133,14 +136,14 @@ export async function generateBillingPDF(billing: Billing) {
     ? doc.splitTextToSize(sanitize(billing.clientAddress), halfW - 8) as string[]
     : []
 
-  // Box height = content height only (QR will scale to match)
   const clientContentH =
     4 +                                                               // label
     clientNameLines.length * 5 +                                     // name
     (companyLines.length ? companyLines.length * 4 + 1 : 0) +       // company
     (addrLines.length    ? addrLines.length    * 3.5 + 1 : 0) +     // address
     3                                                                 // bottom padding
-  const boxH = Math.max(clientContentH, 22)
+  // Box must be tall enough for the QR image
+  const boxH = Math.max(clientContentH, qrMinSize + qrPad * 2, 24)
 
   // Left — BILLED TO
   doc.setFillColor(240, 244, 252)
@@ -174,12 +177,10 @@ export async function generateBillingPDF(billing: Billing) {
     doc.text(addrLines, margin + 4, billedY + 2)
   }
 
-  // Right — QR code box, same height as BILLED TO
+  // Right — QR code box: rotated label on left strip, QR fills remaining space
   if (qrDataUrlEarly) {
-    const qrBoxW   = qrInfoSize + 4
-    const labelH   = 7            // height reserved for "SCAN TO PAY" label
-    const qrImgSz  = boxH - labelH - 2  // QR fills remaining height
-    const qrImgX   = rightX + (qrBoxW - qrImgSz) / 2  // center horizontally
+    const qrImgSz = boxH - qrPad * 2        // QR square fills full height minus padding
+    const qrBoxW  = qrTextStrip + qrImgSz + qrPad * 2
 
     doc.setFillColor(248, 250, 255)
     doc.roundedRect(rightX, y, qrBoxW, boxH, 1.5, 1.5, 'F')
@@ -187,12 +188,16 @@ export async function generateBillingPDF(billing: Billing) {
     doc.setLineWidth(0.2)
     doc.roundedRect(rightX, y, qrBoxW, boxH, 1.5, 1.5, 'S')
 
+    // "SCAN TO PAY" rotated 90° CCW in the left strip
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
     doc.setTextColor(...NAVY)
-    doc.text('SCAN TO PAY', rightX + qrBoxW / 2, y + 5, { align: 'center' })
+    doc.text('SCAN TO PAY', rightX + qrTextStrip / 2, y + boxH / 2, {
+      angle: 90, align: 'center',
+    })
 
-    doc.addImage(qrDataUrlEarly, 'PNG', qrImgX, y + labelH, qrImgSz, qrImgSz)
+    // QR image fills the rest of the box
+    doc.addImage(qrDataUrlEarly, 'PNG', rightX + qrTextStrip, y + qrPad, qrImgSz, qrImgSz)
   }
 
   y += boxH + 5
