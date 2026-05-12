@@ -202,12 +202,15 @@ export async function generateBillingPDF(billing: Billing) {
     doc.setFillColor(...NAVY)
     doc.rect(rightX, y, qrTextStrip, boxH, 'F')
 
-    // "SCAN TO PAY" — white text rotated 90°, drawn AFTER navy fill
+    // "SCAN TO PAY" — white characters stacked vertically (no rotation needed)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
+    doc.setFontSize(6)
     doc.setTextColor(255, 255, 255)
-    doc.text('SCAN TO PAY', rightX + qrTextStrip / 2, y + boxH / 2, {
-      angle: 90, align: 'center',
+    const chars = ['S','C','A','N','T','O','P','A','Y']
+    const charStep = boxH / (chars.length + 1)
+    const charX    = rightX + qrTextStrip / 2
+    chars.forEach((ch, i) => {
+      doc.text(ch, charX, y + charStep * (i + 1), { align: 'center' })
     })
 
     // QR image fills the right area
