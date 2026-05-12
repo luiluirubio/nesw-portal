@@ -9,14 +9,15 @@ import { inputCls, inputStyle } from '@/lib/utils'
 import type { Client } from '@/types/client'
 
 interface ClientSelectorProps {
-  value?:    Client | null
-  onSelect:  (c: Client) => void
-  onClear:   () => void
-  disabled?: boolean
-  label?:    string
+  value?:       Client | null
+  onSelect:     (c: Client) => void
+  onClear:      () => void
+  disabled?:    boolean
+  label?:       string
+  hideCreate?:  boolean
 }
 
-export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Client' }: ClientSelectorProps) {
+export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Client', hideCreate }: ClientSelectorProps) {
   const [clients,  setClients]  = useState<Client[]>([])
   const [query,    setQuery]    = useState('')
   const [open,     setOpen]     = useState(false)
@@ -172,17 +173,19 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
           )}
 
           {/* + New Client button */}
-          <button type="button"
-            onClick={() => { setCreating(true); setOpen(false) }}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-t transition-colors hover:bg-[var(--accent)]"
-            style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}>
-            <Plus size={14} /> New Client
-          </button>
+          {!hideCreate && (
+            <button type="button"
+              onClick={() => { setCreating(true); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-t transition-colors hover:bg-[var(--accent)]"
+              style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}>
+              <Plus size={14} /> New Client
+            </button>
+          )}
         </div>
       )}
 
       {/* Inline new-client mini form */}
-      {creating && (
+      {creating && !hideCreate && (
         <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl border shadow-xl p-4 space-y-3"
           style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
           <p className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>

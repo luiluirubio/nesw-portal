@@ -321,8 +321,26 @@ export function AddProposal() {
     return Object.keys(e).length === 0
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (!validate(step)) return
+
+    if (step === 1 && !client.clientId) {
+      try {
+        const created = await api.createClient({
+          name:    client.name.trim(),
+          company: client.company.trim(),
+          email:   client.email.trim(),
+          phone:   client.mobile ? `${client.countryCode} ${client.mobile}` : '',
+          address: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
+          notes:   client.notes.trim(),
+        }) as Client
+        setClient(prev => ({ ...prev, clientId: created.id, clientCode: created.clientCode }))
+        setSelectedClient(created)
+      } catch {
+        // Non-blocking — proposal continues even if client registration fails
+      }
+    }
+
     setStep(s => s + 1)
     window.scrollTo(0, 0)
   }
@@ -422,6 +440,7 @@ export function AddProposal() {
 
         {/* Client lookup / create */}
         <ClientSelector
+          hideCreate
           value={selectedClient}
           onSelect={c => {
             setSelectedClient(c)
