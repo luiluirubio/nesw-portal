@@ -62,16 +62,16 @@ export async function generateBillingPDF(billing: Billing) {
 
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw     = doc.internal.pageSize.getWidth()
-  const margin = 20
+  const margin = 16
   const cw     = pw - margin * 2
 
   let y = margin
 
-  // ── LETTERHEAD (matches proposalPdf) ─────────────────────────────────────────
+  // ── LETTERHEAD ───────────────────────────────────────────────────────────────
   if (logoData) {
-    doc.addImage(logoData, 'PNG', margin, y, 18, 18)
+    doc.addImage(logoData, 'PNG', margin, y, 15, 15)
   }
-  const textX = margin + (logoData ? 22 : 0)
+  const textX = margin + (logoData ? 18 : 0)
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
@@ -101,12 +101,12 @@ export async function generateBillingPDF(billing: Billing) {
   const issued = billing.dateIssued ? longDate(billing.dateIssued) : longDate(billing.createdAt)
   doc.text(`Date Issued: ${issued}`, pw - margin, y + 16, { align: 'right' })
 
-  y += 22
+  y += 18
 
-  // Navy divider (matches proposalPdf)
+  // Navy divider
   doc.setFillColor(...NAVY)
   doc.rect(margin, y, cw, 0.8, 'F')
-  y += 8
+  y += 5
 
   // ── INFO ROW: BILLED TO  |  QR CODE (if available) or SERVICE & PURPOSE ────
   const qrAvail = !!billing.paymentQrString
@@ -124,15 +124,23 @@ export async function generateBillingPDF(billing: Billing) {
     } catch { /* skip */ }
   }
 
+  // Pre-calculate all content lines for accurate box height
   const clientNameLines = doc.splitTextToSize(sanitize(billing.clientName || '—'), halfW - 8) as string[]
   const companyLines    = billing.clientCompany
     ? doc.splitTextToSize(sanitize(billing.clientCompany), halfW - 8) as string[]
     : []
-  const boxH = Math.max(
-    5 + clientNameLines.length * 5 + (companyLines.length ? companyLines.length * 4 + 2 : 0) + 6,
-    qrAvail ? qrInfoSize + 8 : 24,
-    24
-  )
+  const addrLines = billing.clientAddress
+    ? doc.splitTextToSize(sanitize(billing.clientAddress), halfW - 8) as string[]
+    : []
+
+  // Box height = content height only (QR will scale to match)
+  const clientContentH =
+    4 +                                                               // label
+    clientNameLines.length * 5 +                                     // name
+    (companyLines.length ? companyLines.length * 4 + 1 : 0) +       // company
+    (addrLines.length    ? addrLines.length    * 3.5 + 1 : 0) +     // address
+    3                                                                 // bottom padding
+  const boxH = Math.max(clientContentH, 22)
 
   // Left — BILLED TO
   doc.setFillColor(240, 244, 252)
@@ -144,55 +152,58 @@ export async function generateBillingPDF(billing: Billing) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...MUTED)
-  doc.text('BILLED TO', margin + 4, y + 5)
+  doc.text('BILLED TO', margin + 4, y + 4)
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(9.5)
   doc.setTextColor(...NAVY)
-  doc.text(clientNameLines, margin + 4, y + 11)
+  doc.text(clientNameLines, margin + 4, y + 9)
 
-  let billedY = y + 11 + clientNameLines.length * 5
-  if (billing.clientCompany) {
+  let billedY = y + 9 + clientNameLines.length * 4.8
+  if (companyLines.length) {
     doc.setFont('helvetica', 'italic')
-    doc.setFontSize(8)
+    doc.setFontSize(7.5)
     doc.setTextColor(...MUTED)
-    doc.text(companyLines, margin + 4, billedY + 2)
-    billedY += companyLines.length * 4 + 2
+    doc.text(companyLines, margin + 4, billedY + 1.5)
+    billedY += companyLines.length * 4 + 1.5
   }
-  if (billing.clientAddress) {
+  if (addrLines.length) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7.5)
     doc.setTextColor(...MUTED)
-    const addrLines = doc.splitTextToSize(sanitize(billing.clientAddress), halfW - 8) as string[]
-    doc.text(addrLines, margin + 4, billedY + 3)
+    doc.text(addrLines, margin + 4, billedY + 2)
   }
 
-  // Right — QR code (if available) or empty space
+  // Right — QR code box, same height as BILLED TO
   if (qrDataUrlEarly) {
+    const qrBoxW   = qrInfoSize + 4
+    const labelH   = 7            // height reserved for "SCAN TO PAY" label
+    const qrImgSz  = boxH - labelH - 2  // QR fills remaining height
+    const qrImgX   = rightX + (qrBoxW - qrImgSz) / 2  // center horizontally
+
     doc.setFillColor(248, 250, 255)
-    doc.roundedRect(rightX, y, qrInfoSize + 4, boxH, 1.5, 1.5, 'F')
+    doc.roundedRect(rightX, y, qrBoxW, boxH, 1.5, 1.5, 'F')
     doc.setDrawColor(...LGRAY)
     doc.setLineWidth(0.2)
-    doc.roundedRect(rightX, y, qrInfoSize + 4, boxH, 1.5, 1.5, 'S')
+    doc.roundedRect(rightX, y, qrBoxW, boxH, 1.5, 1.5, 'S')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
     doc.setTextColor(...NAVY)
-    doc.text('SCAN TO PAY', rightX + (qrInfoSize + 4) / 2, y + 5, { align: 'center' })
+    doc.text('SCAN TO PAY', rightX + qrBoxW / 2, y + 5, { align: 'center' })
 
-    const qrImgY = y + 8
-    doc.addImage(qrDataUrlEarly, 'PNG', rightX + 2, qrImgY, qrInfoSize, qrInfoSize)
+    doc.addImage(qrDataUrlEarly, 'PNG', qrImgX, y + labelH, qrImgSz, qrImgSz)
   }
 
-  y += boxH + 8
+  y += boxH + 5
 
   // ── ITEMIZED BILLING ──────────────────────────────────────────────────────────
-  y = checkBreak(doc, y, 30, margin)
+  y = checkBreak(doc, y, 25, margin)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(...NAVY)
   doc.text('ITEMIZED BILLING', margin, y)
-  y += 5
+  y += 4
 
   const tableBody: { content: string; styles?: Record<string, unknown> }[][] = []
 
@@ -246,12 +257,12 @@ export async function generateBillingPDF(billing: Billing) {
     ]],
     body: tableBody,
     headStyles: {
-      fillColor: NAVY, textColor: WHITE, fontSize: 9, fontStyle: 'bold',
-      cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
+      fillColor: NAVY, textColor: WHITE, fontSize: 8.5, fontStyle: 'bold',
+      cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
     },
     bodyStyles: {
-      fontSize: 9, textColor: BODY,
-      cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 },
+      fontSize: 8.5, textColor: BODY,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
     },
     alternateRowStyles: { fillColor: BGROW },
     columnStyles: {
@@ -275,18 +286,18 @@ export async function generateBillingPDF(billing: Billing) {
   y += totalH + 1
 
   doc.setFont('helvetica', 'italic')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
-  doc.text('VAT Exclusive', margin + 3, y + 4)
-  y += 14
+  doc.text('VAT Exclusive', margin + 3, y + 3.5)
+  y += 8
 
   // ── PAYMENT DETAILS & TERMS ───────────────────────────────────────────────────
-  y = checkBreak(doc, y, 55, margin)
+  y = checkBreak(doc, y, 45, margin)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(...NAVY)
   doc.text('PAYMENT DETAILS & TERMS', margin, y)
-  y += 5
+  y += 4
 
   // Three-column layout when QR exists: bank | terms | QR
   // Two-column layout without QR: bank | terms
@@ -308,7 +319,7 @@ export async function generateBillingPDF(billing: Billing) {
   doc.setTextColor(...WHITE)
   doc.text('TERMS AND CONDITIONS', termsX + 4, y + 4.5)
 
-  y += 11
+  y += 9
 
   // ── Bank details — stacked label / value ──────────────────────────────────
   const bankItems = [
@@ -319,15 +330,15 @@ export async function generateBillingPDF(billing: Billing) {
   const bankStartY = y
   bankItems.forEach(({ label, value }) => {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
+    doc.setFontSize(6.5)
     doc.setTextColor(...MUTED)
     doc.text(label, margin + 4, y)
-    y += 4
+    y += 3.5
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
+    doc.setFontSize(7.5)
     doc.setTextColor(...BODY)
     doc.text(value, margin + 4, y)
-    y += 6
+    y += 5
   })
   const bankEndY = y
 
@@ -341,30 +352,30 @@ export async function generateBillingPDF(billing: Billing) {
     doc.text(tLines, termsX + 4, bankStartY)
   }
 
-  y = bankEndY + 8
+  y = bankEndY + 5
 
   // ── PREPARED BY ───────────────────────────────────────────────────────────────
-  y = checkBreak(doc, y, 45, margin)
+  y = checkBreak(doc, y, 35, margin)
 
   doc.setDrawColor(...LGRAY)
   doc.setLineWidth(0.3)
   doc.line(margin, y, pw - margin, y)
-  y += 6
+  y += 4
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
   doc.text('PREPARED BY', margin, y)
-  y += 5
+  y += 4
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(9.5)
   doc.setTextColor(...BODY)
   doc.text(sanitize(billing.agentName || '—'), margin, y)
-  y += 5
+  y += 4.5
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
+  doc.setFontSize(8)
   doc.setTextColor(...MUTED)
   const agentLines = [
     'President, REA, REB, EnP.',
@@ -374,7 +385,7 @@ export async function generateBillingPDF(billing: Billing) {
   ]
   agentLines.forEach(line => {
     doc.text(line, margin, y)
-    y += 4.5
+    y += 4
   })
 
   // ── FOOTER (matches proposalPdf) ─────────────────────────────────────────────
@@ -386,7 +397,7 @@ export async function generateBillingPDF(billing: Billing) {
 
     doc.setDrawColor(...LGRAY)
     doc.setLineWidth(0.3)
-    doc.line(margin, ph - 12, pw - margin, ph - 12)
+    doc.line(margin, ph - 11, pw - margin, ph - 11)
 
     doc.setFont('helvetica', 'italic')
     doc.setFontSize(7.5)
