@@ -70,7 +70,7 @@ function ClientForm({ initial, onSave, onClose }: {
         )}
         <Field label="Full Name / Contact Person" required>
           <input value={form.name} onChange={e => set('name', e.target.value)}
-            placeholder="e.g. SPS Jennifer and Perry Bucay"
+            placeholder="e.g. SPS Lui and Jessamn Rubio"
             className={inputCls} style={inputStyle} />
           {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
         </Field>
@@ -87,7 +87,7 @@ function ClientForm({ initial, onSave, onClose }: {
           </Field>
           <Field label="Phone">
             <input value={form.phone} onChange={e => set('phone', e.target.value)}
-              placeholder="+63 9XX XXX XXXX"
+              placeholder="09189116269"
               className={inputCls} style={inputStyle} />
           </Field>
         </div>
