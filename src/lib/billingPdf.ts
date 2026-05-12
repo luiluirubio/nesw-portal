@@ -110,8 +110,13 @@ export async function generateBillingPDF(billing: Billing) {
   doc.setTextColor(...MUTED)
   const issued = billing.dateIssued ? longDate(billing.dateIssued) : longDate(billing.createdAt)
   doc.text(`Date Issued: ${issued}`, pw - margin, y + 16, { align: 'right' })
+  if (billing.dueDate) {
+    doc.setTextColor(230, 80, 20)
+    doc.text(`Due Date: ${longDate(billing.dueDate)}`, pw - margin, y + 21, { align: 'right' })
+    doc.setTextColor(...MUTED)
+  }
 
-  y += 18
+  y += billing.dueDate ? 25 : 18
 
   // Navy divider
   doc.setFillColor(...NAVY)
@@ -120,7 +125,7 @@ export async function generateBillingPDF(billing: Billing) {
 
   // ── INFO ROW: BILLED TO  |  QR CODE (if available) or SERVICE & PURPOSE ────
   const qrAvail    = !!billing.paymentQrString
-  const qrTextStrip = 8   // mm — left strip for rotated "SCAN TO PAY" label
+  const qrTextStrip = 11  // mm — left strip for rotated "SCAN TO PAY" label
   const qrPad       = 2   // mm — padding around QR image
   // Box height is content-driven but QR must be at least 32mm
   const qrMinSize   = 32
@@ -202,16 +207,17 @@ export async function generateBillingPDF(billing: Billing) {
     doc.setFillColor(...NAVY)
     doc.rect(rightX, y, qrTextStrip, boxH, 'F')
 
-    // "SCAN TO PAY" — white characters stacked vertically (no rotation needed)
+    // "SCAN TO PAY" — white text rotated 90° (bottom-to-top), centred in navy strip
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6)
+    doc.setFontSize(8)
     doc.setTextColor(255, 255, 255)
-    const chars = ['S','C','A','N','T','O','P','A','Y']
-    const charStep = boxH / (chars.length + 1)
-    const charX    = rightX + qrTextStrip / 2
-    chars.forEach((ch, i) => {
-      doc.text(ch, charX, y + charStep * (i + 1), { align: 'center' })
-    })
+    // x = baseline of rotated text (horizontal centre of strip)
+    // y = vertical centre of box (text is centred along its length via align:'center')
+    doc.text('SCAN TO PAY', rightX + qrTextStrip / 2, y + boxH / 2, {
+      angle: 90,
+      align: 'center',
+      baseline: 'middle',
+    } as Parameters<typeof doc.text>[2])
 
     // QR image fills the right area
     doc.addImage(qrDataUrlEarly, 'PNG', rightX + qrTextStrip + qrPad, y + qrPad, qrImgSz, qrImgSz)
@@ -343,13 +349,12 @@ export async function generateBillingPDF(billing: Billing) {
 
   y += 9
 
-  // ── Bank details — stacked label / value ──────────────────────────────────
+  // ── Bank details — Metrobank only ────────────────────────────────────────
   const bankItems = [
     { label: 'Account Name', value: 'NESW Property & Planning Consultancy' },
     { label: 'Metrobank',    value: '2923 2925 57869' },
-    { label: 'China Bank',   value: '1212 0204 5660' },
   ]
-  const bankStartY = y
+  const contentStartY = y   // both bank and terms start at the same y
   bankItems.forEach(({ label, value }) => {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
@@ -364,14 +369,14 @@ export async function generateBillingPDF(billing: Billing) {
   })
   const bankEndY = y
 
-  // ── Terms text ────────────────────────────────────────────────────────────
+  // ── Terms text — starts at same y as bank content ─────────────────────────
   const termsText = billing.terms || ''
   if (termsText) {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
+    doc.setFontSize(7.5)
     doc.setTextColor(...BODY)
     const tLines = doc.splitTextToSize(sanitize(termsText), payW - 8) as string[]
-    doc.text(tLines, termsX + 4, bankStartY)
+    doc.text(tLines, termsX + 4, contentStartY)
   }
 
   y = bankEndY + 5

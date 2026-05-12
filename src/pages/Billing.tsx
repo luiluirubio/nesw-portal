@@ -69,7 +69,12 @@ function BillingDetailPanel({
               {billing.clientName}
             </p>
             <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              {billing.dateIssued ? formatDate(billing.dateIssued) : formatDate(billing.createdAt)}
+              Issued: {billing.dateIssued ? formatDate(billing.dateIssued) : formatDate(billing.createdAt)}
+              {billing.dueDate && (
+                <span className="ml-2 font-semibold" style={{ color: '#dc2626' }}>
+                  · Due: {formatDate(billing.dueDate)}
+                </span>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-1 shrink-0">

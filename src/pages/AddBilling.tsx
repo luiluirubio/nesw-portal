@@ -64,6 +64,7 @@ export function AddBilling() {
   const [clientAddress,  setClientAddress]  = useState('')
   const [servicePurpose, setServicePurpose] = useState('')
   const [dateIssued,     setDateIssued]     = useState(new Date().toISOString().slice(0, 10))
+  const [dueDate,        setDueDate]        = useState('')
   const [items,          setItems]          = useState<BillingItem[]>([emptyItem()])
   const [discount,       setDiscount]       = useState(0)
   const [terms,          setTerms]          = useState(DEFAULT_TERMS)
@@ -183,7 +184,7 @@ export function AddBilling() {
   async function buildPayload() {
     return {
       clientId, clientCode,
-      clientName, clientCompany, clientAddress, servicePurpose, dateIssued,
+      clientName, clientCompany, clientAddress, servicePurpose, dateIssued, dueDate,
       items, discount, subtotal, total, terms,
       bookingId: linkedBookingId || '',
       bookingNo: linkedBookingNo || '',
@@ -322,6 +323,10 @@ export function AddBilling() {
               </Field>
               <Field label="Date Issued">
                 <input type="date" value={dateIssued} onChange={e => setDateIssued(e.target.value)}
+                  className={inputCls} style={inputStyle} />
+              </Field>
+              <Field label="Due Date">
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
                   className={inputCls} style={inputStyle} />
               </Field>
             </div>

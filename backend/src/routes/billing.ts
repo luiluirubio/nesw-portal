@@ -138,7 +138,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const {
       clientName, clientCompany, clientAddress, servicePurpose,
-      items, discount, subtotal, total, terms, dateIssued,
+      items, discount, subtotal, total, terms, dateIssued, dueDate,
       bookingId, bookingNo, proposalId, proposalNo, clientId, clientCode,
     } = req.body
 
@@ -177,6 +177,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       total:           Number(total ?? 0),
       terms:           (terms as string) ?? '',
       dateIssued:      (dateIssued as string) ?? new Date().toISOString().slice(0, 10),
+      dueDate:         (dueDate as string) ?? '',
       createdAt:       new Date().toISOString(),
       updatedAt:       new Date().toISOString(),
       // paymentQrId = Xendit invoice ID, paymentQrString = invoice URL (QR generated client-side)
@@ -203,7 +204,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const allowed = [
       'status', 'clientName', 'clientCompany', 'clientAddress', 'servicePurpose',
-      'items', 'discount', 'subtotal', 'total', 'terms', 'dateIssued',
+      'items', 'discount', 'subtotal', 'total', 'terms', 'dateIssued', 'dueDate',
       'bookingId', 'bookingNo', 'clientId', 'clientCode', 'paymentStatus',
       ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),
     ]

@@ -30,6 +30,7 @@ export interface Billing {
   total:          number
   terms:          string
   dateIssued:       string
+  dueDate?:         string
   createdAt:        string
   updatedAt:        string
   paymentQrId?:     string
