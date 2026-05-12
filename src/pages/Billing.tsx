@@ -125,7 +125,7 @@ function BillingDetailPanel({
           {billing.paymentQrString && billing.paymentStatus !== 'paid' && (
             <section>
               <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>
-                Scan to Pay — QR Ph
+                Scan to Pay
               </p>
               <div className="flex items-start gap-4 rounded-xl border p-4"
                 style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
@@ -135,9 +135,6 @@ function BillingDetailPanel({
                   className="w-24 h-24 rounded-lg shrink-0"
                 />
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>
-                    InstaPay / PESONet
-                  </p>
                   <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
                     Scan with any Philippine banking app to pay {formatPHP(billing.total)}.
                   </p>

@@ -285,90 +285,94 @@ export async function generateBillingPDF(billing: Billing) {
   // Three-column layout when QR exists: bank | terms | QR
   // Two-column layout without QR: bank | terms
   const hasQR  = !!billing.paymentQrString
-  const qrSize = 38  // mm square
+  const qrSize = 40  // mm square
 
-  // Generate QR data URL if available
+  // Generate QR data URL
   let qrDataUrl: string | null = null
   if (hasQR && billing.paymentQrString) {
     try {
       qrDataUrl = await QRCode.toDataURL(billing.paymentQrString, {
-        width: 200, margin: 1, color: { dark: '#1b3864', light: '#ffffff' },
+        width: 220, margin: 1, color: { dark: '#1b3864', light: '#ffffff' },
       })
-    } catch { /* skip QR if generation fails */ }
+    } catch { /* skip QR on error */ }
   }
 
-  const contentW = hasQR ? cw - qrSize - 6 : cw
+  const contentW = qrDataUrl ? cw - qrSize - 8 : cw
   const payW     = (contentW - 6) / 2
   const termsX   = margin + payW + 6
   const qrX      = pw - margin - qrSize
 
-  // Left header — bank
+  // ── Column headers ────────────────────────────────────────────────────────
+  const headerH = 7
   doc.setFillColor(...NAVY)
-  doc.rect(margin, y, payW, 7, 'F')
+  doc.rect(margin, y, payW, headerH, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(7)
   doc.setTextColor(...WHITE)
   doc.text('CORPORATE BANK ACCOUNT DETAILS', margin + 4, y + 4.5)
 
-  // Right header — terms
   doc.setFillColor(...ORANGE)
-  doc.rect(termsX, y, payW, 7, 'F')
+  doc.rect(termsX, y, payW, headerH, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
+  doc.setFontSize(7)
   doc.setTextColor(...WHITE)
   doc.text('TERMS AND CONDITIONS', termsX + 4, y + 4.5)
 
-  y += 10
-
-  // Bank rows
-  const bankRows = [
-    ['Account Name', 'NESW Property & Planning Consultancy'],
-    ['Metrobank',    '2923 2925 57869'],
-    ['China Bank',   '1212 0204 5660'],
-  ]
-  bankRows.forEach(([label, value], idx) => {
-    const rowY = y + idx * 7
+  if (qrDataUrl) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.setTextColor(...MUTED)
-    doc.text(label, margin + 4, rowY)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(...BODY)
-    doc.text(value, margin + 36, rowY)
-  })
+    doc.setFontSize(7)
+    doc.setTextColor(...NAVY)
+    doc.text('SCAN TO PAY', qrX + qrSize / 2, y + 4.5, { align: 'center' })
+  }
 
-  // Terms text
+  y += headerH + 4
+
+  // ── Bank details — stacked label / value (avoids overflow) ────────────────
+  const bankItems = [
+    { label: 'Account Name', value: 'NESW Property & Planning Consultancy' },
+    { label: 'Metrobank',    value: '2923 2925 57869' },
+    { label: 'China Bank',   value: '1212 0204 5660' },
+  ]
+  const bankStartY = y
+  bankItems.forEach(({ label, value }) => {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...MUTED)
+    doc.text(label, margin + 4, y)
+    y += 4
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...BODY)
+    doc.text(value, margin + 4, y)
+    y += 6
+  })
+  const bankEndY = y
+
+  // ── Terms text ────────────────────────────────────────────────────────────
   const termsText = billing.terms || ''
   if (termsText) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
     doc.setTextColor(...BODY)
     const tLines = doc.splitTextToSize(sanitize(termsText), payW - 8) as string[]
-    doc.text(tLines, termsX + 4, y)
+    doc.text(tLines, termsX + 4, bankStartY)
   }
 
-  // QR code block
+  // ── QR image — positioned from header bottom, same column ─────────────────
+  let qrEndY = bankStartY
   if (qrDataUrl) {
     doc.setFillColor(248, 250, 255)
-    doc.roundedRect(qrX - 2, y - 12, qrSize + 4, qrSize + 18, 2, 2, 'F')
     doc.setDrawColor(...LGRAY)
     doc.setLineWidth(0.2)
-    doc.roundedRect(qrX - 2, y - 12, qrSize + 4, qrSize + 18, 2, 2, 'S')
+    doc.roundedRect(qrX - 2, bankStartY - 2, qrSize + 4, qrSize + 8, 2, 2, 'FD')
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...NAVY)
-    doc.text('SCAN TO PAY', qrX + qrSize / 2, y - 7, { align: 'center' })
+    doc.addImage(qrDataUrl, 'PNG', qrX, bankStartY, qrSize, qrSize)
 
-    doc.addImage(qrDataUrl, 'PNG', qrX, y - 4, qrSize, qrSize)
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...MUTED)
-    doc.text('QR Ph · InstaPay / PESONet', qrX + qrSize / 2, y + qrSize - 2, { align: 'center' })
+    qrEndY = bankStartY + qrSize + 8
   }
 
-  y += Math.max(bankRows.length * 7, 22) + 10
+  // Advance y past the tallest of bank column, terms column, or QR
+  y = Math.max(bankEndY, qrEndY) + 8
 
   // ── PREPARED BY ───────────────────────────────────────────────────────────────
   y = checkBreak(doc, y, 45, margin)
