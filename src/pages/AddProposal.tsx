@@ -439,7 +439,7 @@ export function AddProposal() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Client Name" required error={errors.name}>
-            <TextInput value={client.name} onChange={set('name')} placeholder="Juan dela Cruz" error={!!errors.name} />
+            <TextInput value={client.name} onChange={set('name')} placeholder="SPS Lui and Jessamn Rubio" error={!!errors.name} />
           </Field>
           <Field label="Company / Organization">
             <TextInput value={client.company} onChange={set('company')} placeholder="ABC Corporation (optional)" />
@@ -462,7 +462,7 @@ export function AddProposal() {
                 <option key={cc.code} value={cc.code}>{cc.label}</option>
               ))}
             </select>
-            <TextInput value={client.mobile} onChange={set('mobile')} placeholder="9171234567" error={!!errors.mobile} maxLength={10} />
+            <TextInput value={client.mobile} onChange={set('mobile')} placeholder="9189116269" error={!!errors.mobile} maxLength={10} />
           </div>
           {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
         </Field>
