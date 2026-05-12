@@ -342,7 +342,7 @@ export function AddProposal() {
         return {
           serviceId: row.serviceId,
           category:  svc?.category ?? '',
-          name:      row.title.trim() || svc?.name ?? '',
+          name:      row.title.trim() || (svc?.name ?? ''),
           qty:       li.qty,
           unitPrice: li.unitPrice,
           timeline:  svc?.timeline ?? '',
