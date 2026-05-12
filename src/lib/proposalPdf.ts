@@ -491,7 +491,7 @@ export async function generateProposalPDF(proposal: Proposal) {
   doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
   doc.text(
-    'This document constitutes the entire agreement between the parties with respect to the subject matter hereof.',
+    'This document is system generated. For inquiries, please contact NESW Property & Planning Consultancy.',
     pw / 2, y, { align: 'center' }
   )
 

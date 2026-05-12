@@ -110,7 +110,7 @@ export async function generateBillingPDF(billing: Billing) {
 
   // ── INFO ROW: BILLED TO  |  QR CODE (if available) or SERVICE & PURPOSE ────
   const qrAvail = !!billing.paymentQrString
-  const qrInfoSize = 44  // mm — QR box in info row
+  const qrInfoSize = 34  // mm — QR box in info row
   const halfW  = qrAvail ? cw - qrInfoSize - 6 : (cw - 6) / 2
   const rightX = margin + halfW + 6
 
@@ -129,9 +129,9 @@ export async function generateBillingPDF(billing: Billing) {
     ? doc.splitTextToSize(sanitize(billing.clientCompany), halfW - 8) as string[]
     : []
   const boxH = Math.max(
-    5 + clientNameLines.length * 5 + (companyLines.length ? companyLines.length * 4 + 2 : 0) + 8,
-    qrAvail ? qrInfoSize + 10 : 28,
-    28
+    5 + clientNameLines.length * 5 + (companyLines.length ? companyLines.length * 4 + 2 : 0) + 6,
+    qrAvail ? qrInfoSize + 8 : 24,
+    24
   )
 
   // Left — BILLED TO
@@ -392,7 +392,7 @@ export async function generateBillingPDF(billing: Billing) {
     doc.setFontSize(7.5)
     doc.setTextColor(...MUTED)
     doc.text(
-      'This document constitutes the entire agreement between the parties with respect to the subject matter hereof.',
+      'This document is system generated. For inquiries, please contact NESW Property & Planning Consultancy.',
       pw / 2, ph - 8, { align: 'center' }
     )
 
