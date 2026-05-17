@@ -34,7 +34,7 @@ function ProposalDetailPanel({
   }
   const sc = STATUS_COLORS[proposal.status]
 
-  const proposalEmailBody = `Dear ${proposal.clientName},\n\nPlease find attached your proposal from NESW Realty Corporation.\n\nIf you have any questions, please don't hesitate to reach out.\n\nBest regards,\nNESW Realty Corporation`
+  const proposalEmailBody = `Dear ${proposal.clientName},\n\nPlease find attached your proposal from NESW Realty Corporation.\n\nIf you have any questions, please don't hesitate to reach out.\n\nBest regards,\nNESW Realty Corporation\n\n---\nThis is a system-generated email. Please do not reply to this message.`
 
   async function handleSendEmail(to: string[], body: string) {
     const blob = await generateProposalPDF(proposal, true) as Blob

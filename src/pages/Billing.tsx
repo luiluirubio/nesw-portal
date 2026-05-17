@@ -39,7 +39,7 @@ function BillingDetailPanel({
   const [emailOpen, setEmailOpen] = useState(false)
   const sc = STATUS_COLORS[billing.status]
 
-  const billingEmailBody = `Dear ${billing.clientName},\n\nPlease find attached your Statement of Account from NESW Realty Corporation.\n\nKindly settle your account on or before the due date.\n\nBest regards,\nNESW Realty Corporation`
+  const billingEmailBody = `Dear ${billing.clientName},\n\nPlease find attached your Statement of Account from NESW Realty Corporation.\n\nKindly settle your account on or before the due date.\n\nBest regards,\nNESW Realty Corporation\n\n---\nThis is a system-generated email. Please do not reply to this message.`
 
   async function handleSendEmail(to: string[], body: string) {
     const blob = await generateBillingPDF(billing, true) as Blob
