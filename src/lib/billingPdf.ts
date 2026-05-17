@@ -41,8 +41,26 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
   return y
 }
 
+async function fetchLogoDataUrl(): Promise<string | null> {
+  try {
+    const stage = (import.meta.env.VITE_API_URL ?? '').includes('staging') ? 'staging' : 'production'
+    const url   = `https://nesw-portal-files-${stage}.s3.ap-southeast-1.amazonaws.com/assets/nesw-logo.png`
+    const res   = await fetch(url)
+    if (!res.ok) return null
+    const blob  = await res.blob()
+    return new Promise(resolve => {
+      const reader = new FileReader()
+      reader.onload  = () => resolve(reader.result as string)
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  } catch { return null }
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export async function generateBillingPDF(billing: Billing, returnBlob?: boolean): Promise<Blob | void> {
+  const logoData = await fetchLogoDataUrl()
+
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw     = doc.internal.pageSize.getWidth()
   const margin = 16
@@ -51,13 +69,16 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   let y = margin
 
   // ── LETTERHEAD ───────────────────────────────────────────────────────────────
-  // Logo placeholder
-  doc.setFillColor(220, 220, 220)
-  doc.roundedRect(margin, y, 15, 15, 2, 2, 'F')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6)
-  doc.setTextColor(150, 150, 150)
-  doc.text('LOGO', margin + 7.5, y + 8, { align: 'center' })
+  if (logoData) {
+    doc.addImage(logoData, 'PNG', margin, y, 15, 15)
+  } else {
+    doc.setFillColor(220, 220, 220)
+    doc.roundedRect(margin, y, 15, 15, 2, 2, 'F')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6)
+    doc.setTextColor(150, 150, 150)
+    doc.text('LOGO', margin + 7.5, y + 8, { align: 'center' })
+  }
   const textX = margin + 18
 
   doc.setFont('helvetica', 'bold')
