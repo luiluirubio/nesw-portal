@@ -66,14 +66,8 @@ function ClientForm({ initial, onSave, onClose }: {
           <div className="flex gap-2 flex-wrap">
             <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold"
               style={{ backgroundColor: 'var(--accent)', color: 'var(--primary)' }}>
-              Code: {initial.clientCode}
+              Client Code: {initial.clientCode}
             </span>
-            {initial.accountNumber && (
-              <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold"
-                style={{ backgroundColor: 'var(--accent)', color: 'var(--primary)' }}>
-                Account: {initial.accountNumber}
-              </span>
-            )}
           </div>
         )}
         <Field label="Full Name / Contact Person" required>
@@ -258,7 +252,7 @@ export function Clients() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--muted-foreground)' }}>
-                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Code / Account</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Client Code</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Name</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Company</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Email</th>
@@ -274,9 +268,6 @@ export function Clients() {
                       style={{ borderColor: 'var(--border)', backgroundColor: i % 2 === 0 ? 'var(--background)' : 'transparent' }}>
                       <td className="px-4 py-3" style={{ color: 'var(--primary)' }}>
                         <div className="font-mono text-xs font-semibold">{c.clientCode}</div>
-                        {c.accountNumber && (
-                          <div className="font-mono text-xs mt-0.5 opacity-70">{c.accountNumber}</div>
-                        )}
                       </td>
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--foreground)' }}>{c.name}</td>
                       <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>{c.company || '—'}</td>
@@ -319,7 +310,7 @@ export function Clients() {
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div>
                       <span className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>
-                        {c.clientCode}{c.accountNumber ? ` · ${c.accountNumber}` : ''}
+                        {c.clientCode}
                       </span>
                       <p className="font-semibold text-sm mt-0.5" style={{ color: 'var(--foreground)' }}>{c.name}</p>
                       {c.company && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{c.company}</p>}
