@@ -33,8 +33,6 @@ function sanitize(s: string) {
     .replace(/[^\x00-\xFF]/g, '?')
 }
 
-}
-
 function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number {
   if (y + need > doc.internal.pageSize.getHeight() - margin - 5) {
     doc.addPage()
