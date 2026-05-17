@@ -15,6 +15,7 @@ interface ComboBoxProps {
   options: ComboBoxOption[]
   placeholder?: string
   error?: boolean
+  disabled?: boolean
   /** Allow user to type a free-text value and add it as a new option */
   creatable?: boolean
   /** Include the sublabel in search matching (default: false — label only) */
@@ -30,6 +31,7 @@ export function ComboBox({
   options: externalOptions,
   placeholder = 'Search…',
   error = false,
+  disabled = false,
   creatable = false,
   searchSublabel = false,
   className,
@@ -126,19 +128,19 @@ export function ComboBox({
           ref={inputRef}
           type="text"
           value={inputValue}
-          onChange={e => { setInput(e.target.value); setIsOpen(true) }}
-          onFocus={open}
+          onChange={e => { if (!disabled) { setInput(e.target.value); setIsOpen(true) } }}
+          onFocus={() => { if (!disabled) open() }}
           placeholder={placeholder}
+          disabled={disabled}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
           inputMode="search"
-          className="w-full px-3 py-3 pr-16 text-sm rounded-[var(--radius-sm)] focus:outline-none transition-colors"
+          className={cn('w-full px-3 py-3 pr-16 text-sm rounded-[var(--radius-sm)] focus:outline-none transition-colors', disabled && 'opacity-60 cursor-default')}
           style={{
             border:           `1px solid ${error ? '#ef4444' : isOpen ? 'var(--primary)' : 'var(--border)'}`,
-            backgroundColor:  'var(--background)',
+            backgroundColor:  disabled ? 'var(--accent)' : 'var(--background)',
             color:            'var(--foreground)',
-            // Comfortable minimum touch height
             minHeight: '44px',
           }}
         />
