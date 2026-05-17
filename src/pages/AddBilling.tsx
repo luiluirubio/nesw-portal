@@ -301,7 +301,7 @@ export function AddBilling() {
             </Field>
 
             <ClientSelector
-              value={clientId ? { id: clientId, clientCode, name: clientName, company: clientCompany, email: '', phone: '', address: '', notes: '', status: 'active', agentId: '', agentName: '', createdAt: '', updatedAt: '' } : null}
+              value={clientId ? { id: clientId, clientCode, name: clientName, company: clientCompany, email: '', phone: '', street: '', barangay: '', city: '', province: '', notes: '', status: 'active', agentId: '', agentName: '', createdAt: '', updatedAt: '' } : null}
               onSelect={c => { setClientId(c.id); setClientCode(c.clientCode); setClientName(c.name); setClientCompany(c.company || '') }}
               onClear={() => { setClientId(''); setClientCode('') }}
               disabled={!!linkedBookingId}
