@@ -16,11 +16,13 @@ function ProposalDetailPanel({
   onClose,
   onStatusChange,
   onNavigate,
+  isBooked,
 }: {
   proposal: Proposal
   onClose: () => void
   onStatusChange: (p: Proposal, s: ProposalStatus) => void
   onNavigate: (id: string) => void
+  isBooked?: boolean
 }) {
   const [emailOpen, setEmailOpen] = useState(false)
 
@@ -100,7 +102,7 @@ function ProposalDetailPanel({
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
               <Mail size={14} /> Send
             </button>
-            {proposal.status === 'accepted' && (
+            {proposal.status === 'accepted' && !isBooked && (
               <button onClick={() => onNavigate(proposal.id)}
                 title="Create Booking"
                 className="p-2 rounded-lg transition-colors font-medium text-xs flex items-center gap-1.5 border"
@@ -242,6 +244,7 @@ export function Proposals() {
   const [search, setSearch]                     = useState('')
   const [drafts, setDrafts]                     = useState<ProposalDraft[]>([])
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null)
+  const [bookedProposalIds, setBookedProposalIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     api.getProposals()
@@ -249,6 +252,14 @@ export function Proposals() {
       .catch(() => toaster.create({ title: 'Failed to load proposals', type: 'error' }))
       .finally(() => setLoading(false))
     fetchDrafts('proposal').then(d => setDrafts(d as ProposalDraft[])).catch(() => {})
+    api.getBookings()
+      .then(data => {
+        const ids = (data as { proposalId?: string }[])
+          .map(b => b.proposalId)
+          .filter((id): id is string => !!id)
+        setBookedProposalIds(new Set(ids))
+      })
+      .catch(() => {})
   }, [])
 
   async function handleStatusChange(p: Proposal, status: ProposalStatus) {
@@ -517,6 +528,7 @@ export function Proposals() {
           onClose={() => setSelectedProposal(null)}
           onStatusChange={handleStatusChange}
           onNavigate={id => { setSelectedProposal(null); navigate(`/add-booking?proposalId=${id}`) }}
+          isBooked={bookedProposalIds.has(selectedProposal.id)}
         />
       )}
     </div>
