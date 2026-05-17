@@ -543,17 +543,6 @@ export function AddProposal() {
               style={{ borderColor: 'var(--border)', backgroundColor: 'var(--accent)', color: 'var(--foreground)', cursor: 'default' }} />
           </Field>
         </div>
-        <Field label="Notes / Property Description">
-          <textarea
-            value={client.notes}
-            onChange={e => setClient(c => ({ ...c, notes: e.target.value }))}
-            placeholder="Additional context about the client or property"
-            rows={3}
-            disabled={locked}
-            className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none disabled:opacity-60 disabled:cursor-default"
-            style={{ backgroundColor: locked ? 'var(--accent)' : 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
-          />
-        </Field>
       </div>
     )
   }

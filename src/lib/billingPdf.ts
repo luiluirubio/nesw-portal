@@ -67,7 +67,7 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export async function generateBillingPDF(billing: Billing) {
+export async function generateBillingPDF(billing: Billing, returnBlob?: boolean): Promise<Blob | void> {
   const logoData = await toBase64('/nesw-logo-transparent.png')
 
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -434,5 +434,6 @@ export async function generateBillingPDF(billing: Billing) {
     doc.text(`${billing.billingNo}  ·  ${billing.clientName}`, margin, ph - 4)
   }
 
+  if (returnBlob) return doc.output('blob') as unknown as Blob
   doc.save(`${billing.billingNo}.pdf`)
 }

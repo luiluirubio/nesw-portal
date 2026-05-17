@@ -6,11 +6,13 @@
     "dev": "ts-node-dev --respawn src/server.ts",
     "build": "tsc",
     "seed": "ts-node src/scripts/seed.ts",
+    "seed:services": "ts-node src/scripts/seedServices.ts",
     "deploy": "npx serverless deploy --stage staging"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.701.0",
     "@aws-sdk/client-s3": "^3.1041.0",
+    "@aws-sdk/client-sesv2": "^3.1048.0",
     "@aws-sdk/lib-dynamodb": "^3.701.0",
     "@aws-sdk/s3-request-presigner": "^3.1041.0",
     "aws-jwt-verify": "^4.0.1",

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Receipt, Download, Pencil, PenLine, Trash2, X, Eye } from 'lucide-react'
+import { Plus, Receipt, Download, Pencil, PenLine, Trash2, X, Eye, Mail } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
 import type { Billing, BillingStatus } from '@/types/billing'
 import { generateBillingPDF } from '@/lib/billingPdf'
+import { SendEmailDialog } from '@/components/SendEmailDialog'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
 import type { BillingDraft } from '@/types/draft'
 
@@ -35,7 +36,24 @@ function BillingDetailPanel({
   onStatusChange: (b: Billing, s: BillingStatus) => void
   onEdit: (b: Billing) => void
 }) {
+  const [emailOpen, setEmailOpen] = useState(false)
   const sc = STATUS_COLORS[billing.status]
+
+  async function handleSendEmail(to: string[]) {
+    const blob = await generateBillingPDF(billing, true) as Blob
+    const base64 = await new Promise<string>(resolve => {
+      const reader = new FileReader()
+      reader.onload = () => resolve((reader.result as string).split(',')[1])
+      reader.readAsDataURL(blob)
+    })
+    await api.sendEmail({
+      to,
+      subject: `Statement of Account ${billing.billingNo} – NESW Realty Corporation`,
+      bodyHtml: `<p>Dear ${billing.clientName},</p><p>Please find attached your Statement of Account from NESW Realty Corporation.</p><p>Kindly settle your account on or before the due date.</p><p>Best regards,<br/>NESW Realty Corporation</p>`,
+      attachment: { filename: `${billing.billingNo}.pdf`, content: base64 },
+    })
+    toaster.create({ title: 'Email sent successfully', type: 'success' })
+  }
 
   const totalDebits  = billing.items.filter(i => i.type !== 'credit').reduce((s, i) => s + i.amount, 0)
   const totalCredits = billing.items.filter(i => i.type === 'credit').reduce((s, i) => s + i.amount, 0)
@@ -43,6 +61,14 @@ function BillingDetailPanel({
 
   return (
     <>
+      <SendEmailDialog
+        open={emailOpen}
+        onClose={() => setEmailOpen(false)}
+        initialEmails={[(billing as Billing & { clientEmail?: string }).clientEmail].filter(Boolean) as string[]}
+        subject={`Statement of Account ${billing.billingNo} – NESW Realty Corporation`}
+        onSend={handleSendEmail}
+      />
+
       {/* Backdrop */}
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
         style={{ animation: 'fadeIn 0.15s ease' }}
@@ -89,6 +115,12 @@ function BillingDetailPanel({
               className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
               <Download size={14} /> Download
+            </button>
+            <button onClick={() => setEmailOpen(true)}
+              title="Send to Email"
+              className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+              <Mail size={14} /> Send
             </button>
             <button onClick={onClose}
               className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)]"

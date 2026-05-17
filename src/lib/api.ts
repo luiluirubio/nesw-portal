@@ -112,6 +112,10 @@ export const api = {
   createBilling: (body: unknown)            => request<unknown>('/api/billing', { method: 'POST', body: JSON.stringify(body) }),
   updateBilling: (id: string, body: unknown) => request<unknown>(`/api/billing/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
 
+  // Email
+  sendEmail: (body: { to: string[]; subject: string; bodyHtml: string; attachment?: { filename: string; content: string } }) =>
+    request<{ success: boolean }>('/api/email/send', { method: 'POST', body: JSON.stringify(body) }),
+
   // Health
   health: () => request<{ status: string; stage: string; ts: string }>('/api/health'),
 }

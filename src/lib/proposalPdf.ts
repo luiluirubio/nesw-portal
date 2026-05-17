@@ -188,7 +188,7 @@ async function loadLogoBase64(url: string): Promise<string | null> {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export async function generateProposalPDF(proposal: Proposal) {
+export async function generateProposalPDF(proposal: Proposal, returnBlob?: boolean): Promise<Blob | void> {
   const logoData = await loadLogoBase64('/nesw-logo-transparent.png')
 
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -534,5 +534,6 @@ export async function generateProposalPDF(proposal: Proposal) {
     doc.text(`${proposal.proposalNo}  ·  ${proposal.clientName}`, margin, doc.internal.pageSize.getHeight() - 8)
   }
 
+  if (returnBlob) return doc.output('blob') as unknown as Blob
   doc.save(`${proposal.proposalNo}.pdf`)
 }

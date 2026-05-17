@@ -79,6 +79,17 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       updatedAt:     new Date().toISOString(),
     }
     await db.send(new PutCommand({ TableName: Tables.bookings, Item: item }))
+
+    if (proposalId) {
+      db.send(new UpdateCommand({
+        TableName: Tables.proposals,
+        Key: { id: proposalId as string },
+        UpdateExpression: 'SET #s = :s, #ua = :ua',
+        ExpressionAttributeNames: { '#s': 'status', '#ua': 'updatedAt' },
+        ExpressionAttributeValues: { ':s': 'accepted', ':ua': new Date().toISOString() },
+      })).catch(err => console.warn('Auto-accept proposal failed:', err.message))
+    }
+
     res.status(201).json(item)
   } catch (err) {
     console.error(err)

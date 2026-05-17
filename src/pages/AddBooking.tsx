@@ -138,11 +138,6 @@ export function AddBooking() {
       }
       const booking = await api.createBooking(payload) as Booking
 
-      // When activating, mark linked proposal as accepted
-      if (!asDraft && selectedProposal && selectedProposal.status !== 'accepted') {
-        await api.updateProposal(selectedProposal.id, { status: 'accepted' }).catch(() => {})
-      }
-
       setSubmitted(true)
       deleteDraftCloud(draftId)
       toaster.create({ title: `Booking ${booking.bookingNo} ${asDraft ? 'saved as draft' : 'activated'}`, type: 'success' })

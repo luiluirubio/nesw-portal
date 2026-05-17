@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Download, PenLine, Trash2, X, BookmarkPlus, Search, ChevronDown, Eye } from 'lucide-react'
+import { Plus, Download, PenLine, Trash2, X, BookmarkPlus, Search, ChevronDown, Eye, Mail } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
@@ -8,6 +8,7 @@ import type { Proposal, ProposalStatus } from '@/types/proposal'
 import { generateProposalPDF } from '@/lib/proposalPdf'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
 import type { ProposalDraft } from '@/types/draft'
+import { SendEmailDialog } from '@/components/SendEmailDialog'
 
 // ── Slide-in Proposal Detail Panel ───────────────────────────────────────────
 function ProposalDetailPanel({
@@ -21,6 +22,8 @@ function ProposalDetailPanel({
   onStatusChange: (p: Proposal, s: ProposalStatus) => void
   onNavigate: (id: string) => void
 }) {
+  const [emailOpen, setEmailOpen] = useState(false)
+
   const STATUS_COLORS: Record<ProposalStatus, { bg: string; text: string }> = {
     draft:    { bg: '#f3f4f6', text: '#4b5563' },
     sent:     { bg: '#dbeafe', text: '#1d4ed8' },
@@ -29,8 +32,32 @@ function ProposalDetailPanel({
   }
   const sc = STATUS_COLORS[proposal.status]
 
+  async function handleSendEmail(to: string[]) {
+    const blob = await generateProposalPDF(proposal, true) as Blob
+    const base64 = await new Promise<string>(resolve => {
+      const reader = new FileReader()
+      reader.onload = () => resolve((reader.result as string).split(',')[1])
+      reader.readAsDataURL(blob)
+    })
+    await api.sendEmail({
+      to,
+      subject: `Proposal ${proposal.proposalNo} – NESW Realty Corporation`,
+      bodyHtml: `<p>Dear ${proposal.clientName},</p><p>Please find attached your proposal from NESW Realty Corporation.</p><p>If you have any questions, please don't hesitate to reach out.</p><p>Best regards,<br/>NESW Realty Corporation</p>`,
+      attachment: { filename: `${proposal.proposalNo}.pdf`, content: base64 },
+    })
+    toaster.create({ title: 'Email sent successfully', type: 'success' })
+  }
+
   return (
     <>
+      <SendEmailDialog
+        open={emailOpen}
+        onClose={() => setEmailOpen(false)}
+        initialEmails={[proposal.clientEmail].filter(Boolean)}
+        subject={`Proposal ${proposal.proposalNo} – NESW Realty Corporation`}
+        onSend={handleSendEmail}
+      />
+
       {/* Backdrop */}
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
         style={{ animation: 'fadeIn 0.15s ease' }}
@@ -66,6 +93,12 @@ function ProposalDetailPanel({
               className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
               <Download size={14} /> Download
+            </button>
+            <button onClick={() => setEmailOpen(true)}
+              title="Send to Email"
+              className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+              <Mail size={14} /> Send
             </button>
             {proposal.status === 'accepted' && (
               <button onClick={() => onNavigate(proposal.id)}

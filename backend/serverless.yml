@@ -43,6 +43,11 @@ provider:
             - s3:PutObject
             - s3:DeleteObject
           Resource: arn:aws:s3:::nesw-portal-files-${self:provider.stage}/*
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource: '*'
 
 plugins:
   - serverless-plugin-typescript
