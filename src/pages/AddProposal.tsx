@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  User, ListChecks, DollarSign, Eye,
+  User, ListChecks, DollarSign, Eye, Search,
   CheckCircle, ArrowLeft, ArrowRight, Download, Save, Plus, Trash2,
 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -116,10 +116,11 @@ const DEFAULT_TERMS = `1. Prices are in Philippine Peso (₱) and are exclusive 
 5. Services will commence upon receipt of down payment and signed agreement.`
 
 const STEPS = [
-  { number: 1, label: 'Client Details',  icon: User        },
-  { number: 2, label: 'Select Services', icon: ListChecks  },
-  { number: 3, label: 'Pricing',         icon: DollarSign  },
-  { number: 4, label: 'Review & Submit', icon: Eye         },
+  { number: 1, label: 'Client Lookup',   icon: Search      },
+  { number: 2, label: 'Client Details',  icon: User        },
+  { number: 3, label: 'Select Services', icon: ListChecks  },
+  { number: 4, label: 'Pricing',         icon: DollarSign  },
+  { number: 5, label: 'Review & Submit', icon: Eye         },
 ]
 
 // ── Step Indicator ─────────────────────────────────────────────────────────────
@@ -310,13 +311,13 @@ export function AddProposal() {
   // ── Validation ───────────────────────────────────────────────────────────────
   function validate(s: number) {
     const e: Record<string, string> = {}
-    if (s === 1) {
+    if (s === 2) {
       if (!client.name.trim())                               e.name   = 'Client name is required'
       if (client.email.trim() && !isValidEmail(client.email)) e.email = 'Enter a valid email address'
       if (client.mobile.trim() && !isValidMobile(client.mobile, client.countryCode))
         e.mobile = client.countryCode === '+63' ? 'Enter 10 digits starting with 9 (e.g. 9171234567)' : 'Enter a valid mobile number'
     }
-    if (s === 2) {
+    if (s === 3) {
       if (serviceRows.length === 0) e.services = 'Add at least one service'
       else if (serviceRows.some(r => !r.serviceId)) e.services = 'Select a service type for each row'
     }
@@ -327,7 +328,7 @@ export function AddProposal() {
   async function handleNext() {
     if (!validate(step)) return
 
-    if (step === 1 && !client.clientId) {
+    if (step === 2 && !client.clientId) {
       try {
         const created = await api.createClient({
           name:    client.name.trim(),
@@ -345,6 +346,13 @@ export function AddProposal() {
     }
 
     setStep(s => s + 1)
+    window.scrollTo(0, 0)
+  }
+
+  function handleSkip() {
+    setSelectedClient(null)
+    setClient(prev => ({ ...prev, clientId: '', clientCode: '' }))
+    setStep(2)
     window.scrollTo(0, 0)
   }
 
@@ -437,12 +445,12 @@ export function AddProposal() {
 
   // ── Render steps ─────────────────────────────────────────────────────────────
   function renderStep1() {
-    const set = (k: keyof typeof client) => (v: string) => setClient(c => ({ ...c, [k]: v }))
-    const locked = !!selectedClient
     return (
-      <div className="flex flex-col gap-4">
-
-        {/* Client lookup / create */}
+      <div className="flex flex-col gap-6">
+        <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+          Search for an existing client by account number or name to auto-fill their details.
+          If the client is not yet registered, click <strong>Skip</strong> to enter details manually.
+        </p>
         <ClientSelector
           hideCreate
           value={selectedClient}
@@ -455,10 +463,24 @@ export function AddProposal() {
               street: c.address ?? '', barangay: '', city: '', province: '',
               notes: c.notes ?? '', clientId: c.id, clientCode: c.clientCode,
             }))
-            setErrors(e => ({ ...e, name: '' }))
           }}
           onClear={() => { setSelectedClient(null); setClient(prev => ({ ...prev, clientId: '', clientCode: '' })) }}
         />
+        {selectedClient && (
+          <div className="px-4 py-3 rounded-xl text-sm"
+            style={{ backgroundColor: 'var(--accent)', color: 'var(--muted-foreground)' }}>
+            Client details will be pre-filled and locked in the next step.
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function renderStep2() {
+    const set = (k: keyof typeof client) => (v: string) => setClient(c => ({ ...c, [k]: v }))
+    const locked = !!selectedClient
+    return (
+      <div className="flex flex-col gap-4">
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Client Name" required error={errors.name}>
@@ -536,7 +558,7 @@ export function AddProposal() {
     )
   }
 
-  function renderStep2() {
+  function renderStep3() {
     function addRow() {
       const rowId = newRowId()
       setServiceRows(r => [...r, { rowId, serviceId: '', title: '' }])
@@ -659,7 +681,7 @@ export function AddProposal() {
     )
   }
 
-  function renderStep3() {
+  function renderStep4() {
     return (
       <div className="flex flex-col gap-6">
         {/* Line items table */}
@@ -764,7 +786,7 @@ export function AddProposal() {
     )
   }
 
-  function renderStep4() {
+  function renderStep5() {
     return (
       <div className="flex flex-col gap-6">
         {/* Client summary */}
@@ -890,24 +912,36 @@ export function AddProposal() {
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
+          {step === 5 && renderStep5()}
         </div>
 
         {/* Navigation */}
-        {step < 4 && (
+        {step < 5 && (
           <div className="flex justify-between mt-8 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
             <button onClick={handleBack} disabled={step === 1}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
               <ArrowLeft size={15} /> Back
             </button>
-            <button onClick={handleNext}
-              className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: 'var(--primary)' }}>
-              Next <ArrowRight size={15} />
-            </button>
+            <div className="flex items-center gap-2">
+              {step === 1 && !selectedClient && (
+                <button onClick={handleSkip}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors hover:bg-[var(--accent)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}>
+                  Skip <ArrowRight size={15} />
+                </button>
+              )}
+              {(step !== 1 || selectedClient) && (
+                <button onClick={handleNext}
+                  className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--primary)' }}>
+                  Next <ArrowRight size={15} />
+                </button>
+              )}
+            </div>
           </div>
         )}
-        {step === 4 && (
+        {step === 5 && (
           <div className="flex justify-start mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
             <button onClick={handleBack}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors"
