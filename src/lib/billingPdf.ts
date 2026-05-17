@@ -48,7 +48,7 @@ async function toBase64(url: string): Promise<string | null> {
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.drawImage(img, 0, 0)
-        resolve(canvas.toDataURL('image/jpeg', 1.0))
+        resolve(canvas.toDataURL('image/png'))
       } catch {
         resolve(null)
       }
@@ -79,7 +79,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
 
   // ── LETTERHEAD ───────────────────────────────────────────────────────────────
   if (logoData) {
-    doc.addImage(logoData, 'JPEG', margin, y, 15, 15)
+    doc.addImage(logoData, 'PNG', margin, y, 15, 15)
   }
   const textX = margin + (logoData ? 18 : 0)
 
