@@ -164,17 +164,11 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
 
 async function fetchLogoDataUrl(): Promise<string | null> {
   try {
-    const stage = (import.meta.env.VITE_API_URL ?? '').includes('staging') ? 'staging' : 'production'
-    const url   = `https://nesw-portal-files-${stage}.s3.ap-southeast-1.amazonaws.com/assets/nesw-logo.png`
-    const res   = await fetch(url)
+    const res  = await fetch('/nesw-logo.png')
     if (!res.ok) return null
-    const blob  = await res.blob()
-    return new Promise(resolve => {
-      const reader = new FileReader()
-      reader.onload  = () => resolve(reader.result as string)
-      reader.onerror = () => resolve(null)
-      reader.readAsDataURL(blob)
-    })
+    const buf  = await res.arrayBuffer()
+    const b64  = btoa(String.fromCharCode(...new Uint8Array(buf)))
+    return `data:image/png;base64,${b64}`
   } catch { return null }
 }
 
