@@ -189,8 +189,6 @@ async function loadLogoBase64(url: string): Promise<string | null> {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export async function generateProposalPDF(proposal: Proposal, returnBlob?: boolean): Promise<Blob | void> {
-  const logoData = await loadLogoBase64('/nesw-logo-transparent.png')
-
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw     = doc.internal.pageSize.getWidth()
   const margin = 20
@@ -202,11 +200,14 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   let y = margin
 
   // ── LETTERHEAD ───────────────────────────────────────────────────────────────
-  // Logo (left)
-  if (logoData) {
-    doc.addImage(logoData, 'PNG', margin, y, 18, 18)
-  }
-  const textX = margin + (logoData ? 22 : 0)
+  // Logo placeholder
+  doc.setFillColor(220, 220, 220)
+  doc.roundedRect(margin, y, 18, 18, 2, 2, 'F')
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6)
+  doc.setTextColor(150, 150, 150)
+  doc.text('LOGO', margin + 9, y + 9.5, { align: 'center' })
+  const textX = margin + 22
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)

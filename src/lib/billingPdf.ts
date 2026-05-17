@@ -68,8 +68,6 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export async function generateBillingPDF(billing: Billing, returnBlob?: boolean): Promise<Blob | void> {
-  const logoData = await toBase64('/nesw-logo-transparent.png')
-
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw     = doc.internal.pageSize.getWidth()
   const margin = 16
@@ -78,10 +76,14 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   let y = margin
 
   // ── LETTERHEAD ───────────────────────────────────────────────────────────────
-  if (logoData) {
-    doc.addImage(logoData, 'PNG', margin, y, 15, 15)
-  }
-  const textX = margin + (logoData ? 18 : 0)
+  // Logo placeholder
+  doc.setFillColor(220, 220, 220)
+  doc.roundedRect(margin, y, 15, 15, 2, 2, 'F')
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6)
+  doc.setTextColor(150, 150, 150)
+  doc.text('LOGO', margin + 7.5, y + 8, { align: 'center' })
+  const textX = margin + 18
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
