@@ -1,4 +1,4 @@
-import { useState, useRef, KeyboardEvent } from 'react'
+import { useState, useRef, type KeyboardEvent } from 'react'
 import { X, Mail, Send } from 'lucide-react'
 
 function isValidEmail(e: string) {
