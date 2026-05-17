@@ -39,7 +39,9 @@ function BillingDetailPanel({
   const [emailOpen, setEmailOpen] = useState(false)
   const sc = STATUS_COLORS[billing.status]
 
-  async function handleSendEmail(to: string[]) {
+  const billingEmailBody = `Dear ${billing.clientName},\n\nPlease find attached your Statement of Account from NESW Realty Corporation.\n\nKindly settle your account on or before the due date.\n\nBest regards,\nNESW Realty Corporation`
+
+  async function handleSendEmail(to: string[], body: string) {
     const blob = await generateBillingPDF(billing, true) as Blob
     const base64 = await new Promise<string>(resolve => {
       const reader = new FileReader()
@@ -49,7 +51,7 @@ function BillingDetailPanel({
     await api.sendEmail({
       to,
       subject: `Statement of Account ${billing.billingNo} – NESW Realty Corporation`,
-      bodyHtml: `<p>Dear ${billing.clientName},</p><p>Please find attached your Statement of Account from NESW Realty Corporation.</p><p>Kindly settle your account on or before the due date.</p><p>Best regards,<br/>NESW Realty Corporation</p>`,
+      bodyHtml: body.replace(/\n/g, '<br/>'),
       attachment: { filename: `${billing.billingNo}.pdf`, content: base64 },
     })
     toaster.create({ title: 'Email sent successfully', type: 'success' })
@@ -66,6 +68,7 @@ function BillingDetailPanel({
         onClose={() => setEmailOpen(false)}
         initialEmails={[(billing as Billing & { clientEmail?: string }).clientEmail].filter(Boolean) as string[]}
         subject={`Statement of Account ${billing.billingNo} – NESW Realty Corporation`}
+        initialBody={billingEmailBody}
         onSend={handleSendEmail}
       />
 

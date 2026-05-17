@@ -34,7 +34,9 @@ function ProposalDetailPanel({
   }
   const sc = STATUS_COLORS[proposal.status]
 
-  async function handleSendEmail(to: string[]) {
+  const proposalEmailBody = `Dear ${proposal.clientName},\n\nPlease find attached your proposal from NESW Realty Corporation.\n\nIf you have any questions, please don't hesitate to reach out.\n\nBest regards,\nNESW Realty Corporation`
+
+  async function handleSendEmail(to: string[], body: string) {
     const blob = await generateProposalPDF(proposal, true) as Blob
     const base64 = await new Promise<string>(resolve => {
       const reader = new FileReader()
@@ -44,7 +46,7 @@ function ProposalDetailPanel({
     await api.sendEmail({
       to,
       subject: `Proposal ${proposal.proposalNo} – NESW Realty Corporation`,
-      bodyHtml: `<p>Dear ${proposal.clientName},</p><p>Please find attached your proposal from NESW Realty Corporation.</p><p>If you have any questions, please don't hesitate to reach out.</p><p>Best regards,<br/>NESW Realty Corporation</p>`,
+      bodyHtml: body.replace(/\n/g, '<br/>'),
       attachment: { filename: `${proposal.proposalNo}.pdf`, content: base64 },
     })
     toaster.create({ title: 'Email sent successfully', type: 'success' })
@@ -57,6 +59,7 @@ function ProposalDetailPanel({
         onClose={() => setEmailOpen(false)}
         initialEmails={[proposal.clientEmail].filter(Boolean)}
         subject={`Proposal ${proposal.proposalNo} – NESW Realty Corporation`}
+        initialBody={proposalEmailBody}
         onSend={handleSendEmail}
       />
 
