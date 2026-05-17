@@ -7,13 +7,21 @@ const router = Router()
 
 const CLIENT_BASE = 5000000
 
-async function nextClientCode(): Promise<string> {
-  const result = await db.send(new ScanCommand({ TableName: Tables.clients, ProjectionExpression: 'clientCode' }))
-  const max = (result.Items ?? [])
+function deriveClientCode(items: Record<string, unknown>[]): string {
+  const max = items
     .map(i => parseInt(i.clientCode as string, 10))
     .filter(n => !isNaN(n) && n >= CLIENT_BASE && n < CLIENT_BASE + 1_000_000)
     .reduce((acc, n) => n > acc ? n : acc, CLIENT_BASE)
   return String(max + 1)
+}
+
+function deriveAccountNumber(items: Record<string, unknown>[]): string {
+  const nums = items
+    .map(i => String(i.accountNumber ?? ''))
+    .filter(s => /^ACC-\d{5}$/.test(s))
+    .map(s => parseInt(s.slice(4), 10))
+  const max = nums.length ? Math.max(...nums) : 0
+  return `ACC-${String(max + 1).padStart(5, '0')}`
 }
 
 // GET /api/clients
@@ -51,21 +59,25 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const { name, company, email, phone, address, notes } = req.body
     if (!name) { res.status(400).json({ error: 'name is required' }); return }
 
-    const clientCode = await nextClientCode()
+    const scan = await db.send(new ScanCommand({ TableName: Tables.clients, ProjectionExpression: 'clientCode, accountNumber' }))
+    const existing = (scan.Items ?? []) as Record<string, unknown>[]
+    const clientCode    = deriveClientCode(existing)
+    const accountNumber = deriveAccountNumber(existing)
     const item = {
-      id:         `CLT-${uuid().slice(0, 8).toUpperCase()}`,
+      id:            `CLT-${uuid().slice(0, 8).toUpperCase()}`,
       clientCode,
-      agentId:    req.userId ?? '',
-      agentName:  req.userName ?? '',
-      status:     'active',
-      name:       name as string,
-      company:    (company as string) ?? '',
-      email:      (email as string) ?? '',
-      phone:      (phone as string) ?? '',
-      address:    (address as string) ?? '',
-      notes:      (notes as string) ?? '',
-      createdAt:  new Date().toISOString(),
-      updatedAt:  new Date().toISOString(),
+      accountNumber,
+      agentId:       req.userId ?? '',
+      agentName:     req.userName ?? '',
+      status:        'active',
+      name:          name as string,
+      company:       (company as string) ?? '',
+      email:         (email as string) ?? '',
+      phone:         (phone as string) ?? '',
+      address:       (address as string) ?? '',
+      notes:         (notes as string) ?? '',
+      createdAt:     new Date().toISOString(),
+      updatedAt:     new Date().toISOString(),
     }
     await db.send(new PutCommand({ TableName: Tables.clients, Item: item }))
     res.status(201).json(item)
@@ -87,7 +99,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     const allowed = [
-      'name', 'company', 'email', 'phone', 'address', 'notes', 'status',
+      'name', 'company', 'email', 'phone', 'address', 'notes', 'status', 'accountNumber',
       ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),
     ]
     const exprParts: string[] = ['#ua = :ua']

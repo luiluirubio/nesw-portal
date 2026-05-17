@@ -4,7 +4,7 @@ import { Plus, Trash2, Download, Save, ArrowLeft } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { toaster } from '@/components/ui/toast'
-import { cn, formatPHP, inputCls, inputStyle } from '@/lib/utils'
+import { cn, formatPHP, inputCls, inputStyle, addWorkingDays } from '@/lib/utils'
 import { generateBillingPDF } from '@/lib/billingPdf'
 import type { Billing, BillingItem, BillingItemType } from '@/types/billing'
 import type { Booking } from '@/types/booking'
@@ -64,7 +64,7 @@ export function AddBilling() {
   const [clientAddress,  setClientAddress]  = useState('')
   const [servicePurpose, setServicePurpose] = useState('')
   const [dateIssued,     setDateIssued]     = useState(new Date().toISOString().slice(0, 10))
-  const [dueDate,        setDueDate]        = useState('')
+  const [dueDate,        setDueDate]        = useState(() => addWorkingDays(new Date(), 15))
   const [items,          setItems]          = useState<BillingItem[]>([emptyItem()])
   const [discount,       setDiscount]       = useState(0)
   const [terms,          setTerms]          = useState(DEFAULT_TERMS)

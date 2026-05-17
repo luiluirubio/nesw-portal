@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, ToggleLeft, ToggleRight, Users2, X, Search } from 'lucide-react'
+import { Pencil, ToggleLeft, ToggleRight, Users2, X, Search } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, inputCls, inputStyle } from '@/lib/utils'
@@ -63,9 +63,17 @@ function ClientForm({ initial, onSave, onClose }: {
 
       <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
         {initial?.clientCode && (
-          <div className="px-3 py-2 rounded-lg text-xs font-mono font-semibold"
-            style={{ backgroundColor: 'var(--accent)', color: 'var(--primary)' }}>
-            Client Code: {initial.clientCode}
+          <div className="flex gap-2 flex-wrap">
+            <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold"
+              style={{ backgroundColor: 'var(--accent)', color: 'var(--primary)' }}>
+              Code: {initial.clientCode}
+            </span>
+            {initial.accountNumber && (
+              <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold"
+                style={{ backgroundColor: 'var(--accent)', color: 'var(--primary)' }}>
+                Account: {initial.accountNumber}
+              </span>
+            )}
           </div>
         )}
         <Field label="Full Name / Contact Person" required>
@@ -146,21 +154,15 @@ export function Clients() {
         || (c.clientCode ?? '').toLowerCase().includes(q)
     })
 
-  function openNew() { setEditing(null); setDrawer(true) }
   function openEdit(c: Client) { setEditing(c); setDrawer(true) }
   function closeDrawer() { setDrawer(false); setEditing(null) }
 
   async function handleSave(data: Partial<Client>) {
+    if (!editing) return
     try {
-      if (editing) {
-        const updated = await api.updateClient(editing.id, data) as Client
-        setClients(cs => cs.map(c => c.id === editing.id ? { ...c, ...updated } : c))
-        toaster.create({ title: 'Client updated', type: 'success' })
-      } else {
-        const created = await api.createClient(data) as Client
-        setClients(cs => [created, ...cs])
-        toaster.create({ title: `Client created — ${created.clientCode}`, type: 'success' })
-      }
+      const updated = await api.updateClient(editing.id, data) as Client
+      setClients(cs => cs.map(c => c.id === editing.id ? { ...c, ...updated } : c))
+      toaster.create({ title: 'Client updated', type: 'success' })
       closeDrawer()
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
@@ -201,11 +203,6 @@ export function Clients() {
             </p>
           </div>
         </div>
-        <button onClick={openNew}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: 'var(--primary)' }}>
-          <Plus size={15} /> New Client
-        </button>
       </div>
 
       {/* Filter + Search row */}
@@ -248,9 +245,9 @@ export function Clients() {
             <Users2 size={32} className="opacity-30" />
             <p className="text-sm">{search ? 'No clients match your search' : 'No clients yet'}</p>
             {!search && (
-              <button onClick={openNew} className="text-xs font-medium" style={{ color: 'var(--primary)' }}>
-                + Add your first client
-              </button>
+              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                Clients are added automatically when a proposal is created.
+              </p>
             )}
           </div>
         ) : (
@@ -261,7 +258,7 @@ export function Clients() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--muted-foreground)' }}>
-                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Code</th>
+                    <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Code / Account</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Name</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Company</th>
                     <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide">Email</th>
@@ -275,8 +272,11 @@ export function Clients() {
                     <tr key={c.id}
                       className="border-t transition-colors hover:bg-[var(--accent)]"
                       style={{ borderColor: 'var(--border)', backgroundColor: i % 2 === 0 ? 'var(--background)' : 'transparent' }}>
-                      <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>
-                        {c.clientCode}
+                      <td className="px-4 py-3" style={{ color: 'var(--primary)' }}>
+                        <div className="font-mono text-xs font-semibold">{c.clientCode}</div>
+                        {c.accountNumber && (
+                          <div className="font-mono text-xs mt-0.5 opacity-70">{c.accountNumber}</div>
+                        )}
                       </td>
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--foreground)' }}>{c.name}</td>
                       <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted-foreground)' }}>{c.company || '—'}</td>
@@ -319,7 +319,7 @@ export function Clients() {
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div>
                       <span className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>
-                        {c.clientCode}
+                        {c.clientCode}{c.accountNumber ? ` · ${c.accountNumber}` : ''}
                       </span>
                       <p className="font-semibold text-sm mt-0.5" style={{ color: 'var(--foreground)' }}>{c.name}</p>
                       {c.company && <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{c.company}</p>}

@@ -28,8 +28,8 @@ const CITY_OPTIONS: ComboBoxOption[] = phLgusSorted.map(l => ({
 // ── Email domain suggestions ──────────────────────────────────────────────────
 const EMAIL_DOMAINS = ['@gmail.com', '@yahoo.com', '@outlook.com', '@hotmail.com', '@icloud.com', '@neswcorp.com']
 
-function EmailInput({ value, onChange, error, placeholder }: {
-  value: string; onChange: (v: string) => void; error?: boolean; placeholder?: string
+function EmailInput({ value, onChange, error, placeholder, disabled }: {
+  value: string; onChange: (v: string) => void; error?: boolean; placeholder?: string; disabled?: boolean
 }) {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -63,8 +63,9 @@ function EmailInput({ value, onChange, error, placeholder }: {
         onChange={e => handleChange(e.target.value)}
         onFocus={() => { const ai = value.indexOf('@'); if (ai >= 0 && !value.slice(ai+1).includes('.')) setShowSuggestions(true) }}
         placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2"
-        style={{ borderColor: error ? '#ef4444' : 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
+        disabled={disabled}
+        className={cn('w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2', disabled && 'opacity-60 cursor-default')}
+        style={{ borderColor: error ? '#ef4444' : 'var(--border)', backgroundColor: disabled ? 'var(--accent)' : 'var(--background)', color: 'var(--foreground)' }}
       />
       {showSuggestions && filtered.length > 0 && (
         <div className="absolute z-40 left-0 right-0 mt-1 rounded-lg border shadow-lg overflow-hidden"
@@ -180,8 +181,8 @@ function Field({ label, required, error, children }: {
   )
 }
 
-function TextInput({ value, onChange, placeholder, type = 'text', error, maxLength }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; error?: boolean; maxLength?: number
+function TextInput({ value, onChange, placeholder, type = 'text', error, maxLength, disabled }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; error?: boolean; maxLength?: number; disabled?: boolean
 }) {
   return (
     <input
@@ -190,11 +191,13 @@ function TextInput({ value, onChange, placeholder, type = 'text', error, maxLeng
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       maxLength={maxLength}
+      disabled={disabled}
       className={cn(
         'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors',
-        error ? 'border-red-400' : 'border-[var(--border)]'
+        error ? 'border-red-400' : 'border-[var(--border)]',
+        disabled && 'opacity-60 cursor-default'
       )}
-      style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
+      style={{ backgroundColor: disabled ? 'var(--accent)' : 'var(--background)', color: 'var(--foreground)' }}
     />
   )
 }
@@ -435,6 +438,7 @@ export function AddProposal() {
   // ── Render steps ─────────────────────────────────────────────────────────────
   function renderStep1() {
     const set = (k: keyof typeof client) => (v: string) => setClient(c => ({ ...c, [k]: v }))
+    const locked = !!selectedClient
     return (
       <div className="flex flex-col gap-4">
 
@@ -458,13 +462,13 @@ export function AddProposal() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Client Name" required error={errors.name}>
-            <TextInput value={client.name} onChange={set('name')} placeholder="SPS Lui and Jessamn Rubio" error={!!errors.name} />
+            <TextInput value={client.name} onChange={set('name')} placeholder="SPS Lui and Jessamn Rubio" error={!!errors.name} disabled={locked} />
           </Field>
           <Field label="Company / Organization">
-            <TextInput value={client.company} onChange={set('company')} placeholder="ABC Corporation (optional)" />
+            <TextInput value={client.company} onChange={set('company')} placeholder="ABC Corporation (optional)" disabled={locked} />
           </Field>
           <Field label="Email" error={errors.email}>
-            <EmailInput value={client.email} onChange={set('email')} placeholder="juan@example.com" error={!!errors.email} />
+            <EmailInput value={client.email} onChange={set('email')} placeholder="juan@example.com" error={!!errors.email} disabled={locked} />
             {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
           </Field>
         </div>
@@ -475,24 +479,25 @@ export function AddProposal() {
             <select
               value={client.countryCode}
               onChange={e => setClient(c => ({ ...c, countryCode: e.target.value }))}
+              disabled={locked}
               className="shrink-0 px-2 py-2 rounded-lg border text-sm outline-none"
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+              style={{ borderColor: 'var(--border)', backgroundColor: locked ? 'var(--accent)' : 'var(--background)', color: 'var(--foreground)', opacity: locked ? 0.6 : 1 }}>
               {COUNTRY_CODES.map(cc => (
                 <option key={cc.code} value={cc.code}>{cc.label}</option>
               ))}
             </select>
-            <TextInput value={client.mobile} onChange={set('mobile')} placeholder="9189116269" error={!!errors.mobile} maxLength={10} />
+            <TextInput value={client.mobile} onChange={set('mobile')} placeholder="9189116269" error={!!errors.mobile} maxLength={10} disabled={locked} />
           </div>
           {errors.mobile && <p className="text-xs text-red-500 mt-1">{errors.mobile}</p>}
         </Field>
 
         {/* Structured address */}
         <Field label="Street / House No.">
-          <TextInput value={client.street} onChange={set('street')} placeholder="e.g. Lot 12 Blk 5, Sampaguita St." />
+          <TextInput value={client.street} onChange={set('street')} placeholder="e.g. Lot 12 Blk 5, Sampaguita St." disabled={locked} />
         </Field>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Barangay">
-            <TextInput value={client.barangay} onChange={set('barangay')} placeholder="e.g. Barangay Plainview" />
+            <TextInput value={client.barangay} onChange={set('barangay')} placeholder="e.g. Barangay Plainview" disabled={locked} />
           </Field>
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>
@@ -507,6 +512,7 @@ export function AddProposal() {
               }}
               options={CITY_OPTIONS}
               placeholder="Search city or municipality…"
+              disabled={locked}
             />
           </div>
           <Field label="Province">
@@ -521,8 +527,9 @@ export function AddProposal() {
             onChange={e => setClient(c => ({ ...c, notes: e.target.value }))}
             placeholder="Additional context about the client or property"
             rows={3}
-            className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none"
-            style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
+            disabled={locked}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none disabled:opacity-60 disabled:cursor-default"
+            style={{ backgroundColor: locked ? 'var(--accent)' : 'var(--background)', color: 'var(--foreground)', borderColor: 'var(--border)' }}
           />
         </Field>
       </div>
