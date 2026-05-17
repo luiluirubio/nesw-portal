@@ -56,7 +56,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // POST /api/clients
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, company, email, phone, address, notes } = req.body
+    const { name, company, email, phone, street, barangay, city, province, notes } = req.body
     if (!name) { res.status(400).json({ error: 'name is required' }); return }
 
     const scan = await db.send(new ScanCommand({ TableName: Tables.clients, ProjectionExpression: 'clientCode, accountNumber' }))
@@ -71,11 +71,14 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       agentName:     req.userName ?? '',
       status:        'active',
       name:          name as string,
-      company:       (company as string) ?? '',
-      email:         (email as string) ?? '',
-      phone:         (phone as string) ?? '',
-      address:       (address as string) ?? '',
-      notes:         (notes as string) ?? '',
+      company:       (company as string)   ?? '',
+      email:         (email as string)     ?? '',
+      phone:         (phone as string)     ?? '',
+      street:        (street as string)    ?? '',
+      barangay:      (barangay as string)  ?? '',
+      city:          (city as string)      ?? '',
+      province:      (province as string)  ?? '',
+      notes:         (notes as string)     ?? '',
       createdAt:     new Date().toISOString(),
       updatedAt:     new Date().toISOString(),
     }
@@ -99,7 +102,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     const allowed = [
-      'name', 'company', 'email', 'phone', 'address', 'notes', 'status', 'accountNumber',
+      'name', 'company', 'email', 'phone', 'street', 'barangay', 'city', 'province', 'notes', 'status', 'accountNumber',
       ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),
     ]
     const exprParts: string[] = ['#ua = :ua']

@@ -235,7 +235,7 @@ export function AddBooking() {
                 setClientCompany(c.company || '')
                 setClientEmail(c.email || '')
                 setClientPhone(c.phone || '')
-                setClientAddress(c.address || '')
+                setClientAddress([c.street, c.barangay, c.city, c.province].filter(Boolean).join(', '))
               }}
               onClear={() => { setSelectedClient(null); setClientId(''); setClientCode('') }}
             />

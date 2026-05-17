@@ -8,7 +8,10 @@ export interface Client {
   company:       string
   email:         string
   phone:         string
-  address:       string
+  street:        string
+  barangay:      string
+  city:          string
+  province:      string
   notes:         string
   status:        ClientStatus
   agentId:       string

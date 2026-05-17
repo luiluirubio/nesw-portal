@@ -24,7 +24,7 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
   const [creating, setCreating] = useState(false)
   const [saving,   setSaving]   = useState(false)
 
-  const [newForm, setNewForm] = useState({ name: '', company: '', email: '', phone: '', address: '', notes: '' })
+  const [newForm, setNewForm] = useState({ name: '', company: '', email: '', phone: '', street: '', notes: '' })
   const [nameErr, setNameErr] = useState('')
   const setNew = (k: keyof typeof newForm) => (v: string) => setNewForm(f => ({ ...f, [k]: v }))
 
@@ -76,12 +76,12 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
         company: newForm.company.trim(),
         email:   newForm.email.trim(),
         phone:   newForm.phone.trim(),
-        address: newForm.address.trim(),
+        street: newForm.street.trim(),
         notes:   newForm.notes.trim(),
       }) as Client
       setClients(cs => [created, ...cs])
       selectClient(created)
-      setNewForm({ name: '', company: '', email: '', phone: '', address: '', notes: '' })
+      setNewForm({ name: '', company: '', email: '', phone: '', street: '', notes: '' })
     } catch (err) {
       setNameErr((err as Error).message)
     } finally {
@@ -210,7 +210,7 @@ export function ClientSelector({ value, onSelect, onClear, disabled, label = 'Cl
                 placeholder="Phone"
                 className={inputCls} style={inputStyle} />
             </div>
-            <input value={newForm.address} onChange={e => setNew('address')(e.target.value)}
+            <input value={newForm.street} onChange={e => setNew('street')(e.target.value)}
               placeholder="Address (optional)"
               className={inputCls} style={inputStyle} />
           </div>

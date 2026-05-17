@@ -4,6 +4,13 @@ import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
 import { cn, inputCls, inputStyle } from '@/lib/utils'
 import type { Client, ClientStatus } from '@/types/client'
+import { ComboBox } from '@/components/ui/combo-box'
+import type { ComboBoxOption } from '@/components/ui/combo-box'
+import { phLgusSorted } from '@/data/philippines'
+
+const CITY_OPTIONS: ComboBoxOption[] = phLgusSorted.map(l => ({
+  value: `${l.name}|||${l.province}`, label: l.name, sublabel: l.province,
+}))
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -22,12 +29,15 @@ function ClientForm({ initial, onSave, onClose }: {
   onClose: () => void
 }) {
   const [form, setForm] = useState({
-    name:    initial?.name    ?? '',
-    company: initial?.company ?? '',
-    email:   initial?.email   ?? '',
-    phone:   initial?.phone   ?? '',
-    address: initial?.address ?? '',
-    notes:   initial?.notes   ?? '',
+    name:     initial?.name     ?? '',
+    company:  initial?.company  ?? '',
+    email:    initial?.email    ?? '',
+    phone:    initial?.phone    ?? '',
+    street:   initial?.street   ?? '',
+    barangay: initial?.barangay ?? '',
+    city:     initial?.city     ?? '',
+    province: initial?.province ?? '',
+    notes:    initial?.notes    ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -93,11 +103,35 @@ function ClientForm({ initial, onSave, onClose }: {
               className={inputCls} style={inputStyle} />
           </Field>
         </div>
-        <Field label="Address">
-          <textarea value={form.address} onChange={e => set('address', e.target.value)}
-            rows={2} placeholder="Full address"
-            className={cn(inputCls, 'resize-none')} style={inputStyle} />
+        <Field label="Street / House No.">
+          <input value={form.street} onChange={e => set('street', e.target.value)}
+            placeholder="e.g. Lot 12 Blk 5, Sampaguita St."
+            className={inputCls} style={inputStyle} />
         </Field>
+        <Field label="Barangay">
+          <input value={form.barangay} onChange={e => set('barangay', e.target.value)}
+            placeholder="e.g. Barangay Plainview"
+            className={inputCls} style={inputStyle} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="City / Municipality">
+            <ComboBox
+              value={form.city ? `${form.city}|||${form.province}` : ''}
+              onChange={(_val, opt) => {
+                if (!opt) { setForm(f => ({ ...f, city: '', province: '' })); return }
+                const [city, province] = opt.value.split('|||')
+                setForm(f => ({ ...f, city: city ?? '', province: province ?? '' }))
+              }}
+              options={CITY_OPTIONS}
+              placeholder="Search city…"
+            />
+          </Field>
+          <Field label="Province">
+            <input value={form.province} readOnly placeholder="Auto-filled"
+              className={inputCls}
+              style={{ ...inputStyle, backgroundColor: 'var(--accent)', cursor: 'default' }} />
+          </Field>
+        </div>
         <Field label="Notes">
           <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
             rows={3} placeholder="Internal notes (optional)"

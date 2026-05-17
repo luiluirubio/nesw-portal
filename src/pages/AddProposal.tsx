@@ -335,7 +335,10 @@ export function AddProposal() {
           company: client.company.trim(),
           email:   client.email.trim(),
           phone:   client.mobile ? `${client.countryCode} ${client.mobile}` : '',
-          address: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
+          street:   client.street.trim(),
+          barangay: client.barangay.trim(),
+          city:     client.city.trim(),
+          province: client.province.trim(),
           notes:   client.notes.trim(),
         }) as Client
         setClient(prev => ({ ...prev, clientId: created.id, clientCode: created.clientCode }))
@@ -460,7 +463,7 @@ export function AddProposal() {
               ...prev,
               name: c.name, company: c.company ?? '', email: c.email ?? '',
               mobile: '', countryCode: '+63',
-              street: c.address ?? '', barangay: '', city: '', province: '',
+              street: c.street ?? '', barangay: c.barangay ?? '', city: c.city ?? '', province: c.province ?? '',
               notes: c.notes ?? '', clientId: c.id, clientCode: c.clientCode,
             }))
           }}
