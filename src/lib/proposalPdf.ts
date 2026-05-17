@@ -177,7 +177,7 @@ async function loadLogoBase64(url: string): Promise<string | null> {
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.drawImage(img, 0, 0)
-        resolve(canvas.toDataURL('image/png'))
+        resolve(canvas.toDataURL('image/jpeg', 1.0))
       } catch {
         resolve(null)
       }
@@ -204,7 +204,7 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   // ── LETTERHEAD ───────────────────────────────────────────────────────────────
   // Logo (left)
   if (logoData) {
-    doc.addImage(logoData, 'PNG', margin, y, 18, 18)
+    doc.addImage(logoData, 'JPEG', margin, y, 18, 18)
   }
   const textX = margin + (logoData ? 22 : 0)
 
