@@ -282,6 +282,24 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   doc.text(introLines, margin, y)
   y += introLines.length * 4.5 + 3
 
+  const svcBody = proposal.services.flatMap((svc, i) => {
+    const bg = i % 2 === 0 ? [255, 255, 255] as [number,number,number] : BGROW
+    const nameRow = [
+      { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5, fillColor: bg } },
+      { content: svc.name, styles: { fontStyle: 'bold', textColor: BODY, fontSize: 9, fillColor: bg } },
+    ]
+    if (!svc.propertyAddress) return [nameRow]
+    const propRow = [
+      { content: '', styles: { fillColor: bg, cellPadding: { top: 0, bottom: 3, left: 5, right: 5 } } },
+      {
+        content: `Property Details: ${svc.propertyAddress}`,
+        styles: { fontStyle: 'italic', textColor: MUTED, fontSize: 7.5, fillColor: bg,
+          cellPadding: { top: 0, bottom: 3, left: 5, right: 5 } },
+      },
+    ]
+    return [nameRow, propRow]
+  })
+
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
@@ -289,13 +307,7 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
       { content: 'Service', styles: { halign: 'left' } },
       { content: 'Title / Description', styles: { halign: 'left' } },
     ]],
-    body: proposal.services.map(svc => [
-      { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5 } },
-      {
-        content: svc.propertyAddress ? `${svc.name}\nProperty Details: ${svc.propertyAddress}` : svc.name,
-        styles: { fontStyle: 'bold', textColor: BODY },
-      },
-    ]),
+    body: svcBody,
     headStyles: {
       fillColor: NAVY, textColor: WHITE, fontSize: 8.5, fontStyle: 'bold',
       cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
@@ -304,7 +316,6 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
       fontSize: 9, cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
       overflow: 'linebreak',
     },
-    alternateRowStyles: { fillColor: BGROW },
     columnStyles: {
       0: { cellWidth: 55 },
       1: { cellWidth: cw - 55 },
