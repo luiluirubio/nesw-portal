@@ -291,12 +291,7 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     ]],
     body: proposal.services.map(svc => [
       { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5 } },
-      {
-        content: svc.propertyAddress
-          ? `${svc.name}\nProperty Details: ${svc.propertyAddress}`
-          : svc.name,
-        styles: { fontStyle: 'bold', textColor: BODY, fontSize: 9 },
-      },
+      { content: svc.name, styles: { fontStyle: 'bold', textColor: BODY, fontSize: 9 } },
     ]),
     headStyles: {
       fillColor: NAVY, textColor: WHITE, fontSize: 8.5, fontStyle: 'bold',
@@ -304,7 +299,7 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     },
     bodyStyles: {
       fontSize: 9, cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
-      overflow: 'linebreak', minCellHeight: 10,
+      overflow: 'linebreak',
     },
     alternateRowStyles: { fillColor: BGROW },
     columnStyles: {
@@ -314,11 +309,33 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     tableLineColor: LGRAY,
     tableLineWidth: 0.2,
     tableWidth: cw,
-    didParseCell: (data: { section: string; column: { index: number }; cell: { styles: { fontSize: number } }; row: { index: number } }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    didParseCell: (data: any) => {
       if (data.section === 'body' && data.column.index === 1) {
         const svc = proposal.services[data.row.index]
-        if (svc?.propertyAddress) data.cell.styles.fontSize = 8
+        if (svc?.propertyAddress) {
+          const propLines = doc.splitTextToSize(
+            `Property Details: ${svc.propertyAddress}`,
+            (cw - 55) - 10
+          ) as string[]
+          data.cell.styles.minCellHeight = 4 + 4.5 + 4 + 1.5 + (propLines.length * 3.2)
+        }
       }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    didDrawCell: (data: any) => {
+      if (data.section !== 'body' || data.column.index !== 1) return
+      const svc = proposal.services[data.row.index]
+      if (!svc?.propertyAddress) return
+      const x      = data.cell.x + data.cell.padding('left')
+      const nameH  = (9 * 0.3528) + 1   // ~9pt in mm + gap
+      const textY  = data.cell.y + data.cell.padding('top') + nameH + 2.5
+      const maxW   = data.cell.width - data.cell.padding('left') - data.cell.padding('right')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(120, 120, 120)
+      const lines = doc.splitTextToSize(`Property Details: ${svc.propertyAddress}`, maxW) as string[]
+      doc.text(lines, x, textY)
     },
   })
   y = (doc as DocAT).lastAutoTable.finalY + 6

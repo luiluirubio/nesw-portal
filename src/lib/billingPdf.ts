@@ -380,7 +380,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     doc.text(tLines, termsX + 4, contentStartY)
   }
 
-  y = bankEndY + 5
+  y = bankEndY + 12
 
   // ── PREPARED BY ───────────────────────────────────────────────────────────────
   y = checkBreak(doc, y, 35, margin)
