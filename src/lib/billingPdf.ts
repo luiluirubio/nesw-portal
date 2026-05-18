@@ -120,9 +120,9 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
 
   // ── INFO ROW: BILLED TO  |  QR CODE (if available) or SERVICE & PURPOSE ────
   const qrAvail    = !!billing.paymentQrString
-  const qrLabelH   = 8    // mm — top navy bar height for "SCAN TO PAY"
-  const qrPad      = 2    // mm — padding around QR image
-  const qrMinSize  = 32   // mm — minimum QR image size
+  const qrLabelH   = 6    // mm — top navy bar height for "SCAN TO PAY"
+  const qrPad      = 1    // mm — padding around QR image
+  const qrMinSize  = 22   // mm — minimum QR image size
   const qrBoxW     = qrMinSize + qrPad * 2   // total width of QR column
   const halfW  = qrAvail ? cw - qrBoxW - 6 : (cw - 6) / 2
   const rightX = margin + halfW + 6
@@ -150,12 +150,12 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     : []
 
   const clientContentH =
-    4 +                                                               // label
-    clientNameLines.length * 5 +                                     // name
-    (companyLines.length ? companyLines.length * 4 + 1 : 0) +       // company
-    (addrLines.length    ? addrLines.length    * 3.5 + 1 : 0) +     // address
-    (propLines.length    ? propLines.length    * 3.5 + 1 : 0) +     // property address
-    3                                                                 // bottom padding
+    3.5 +                                                             // label
+    clientNameLines.length * 4 +                                     // name
+    (companyLines.length ? companyLines.length * 3.5 + 1 : 0) +     // company
+    (addrLines.length    ? addrLines.length    * 3 + 1 : 0) +       // address
+    (propLines.length    ? propLines.length    * 3 + 1 : 0) +       // property address
+    2.5                                                               // bottom padding
   // Box must be tall enough for the QR image + label
   const boxH = Math.max(clientContentH, qrLabelH + qrMinSize + qrPad, 24)
 
@@ -169,27 +169,27 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...MUTED)
-  doc.text('BILLED TO', margin + 4, y + 4)
+  doc.text('BILLED TO', margin + 4, y + 3.5)
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
+  doc.setFontSize(8.5)
   doc.setTextColor(...NAVY)
-  doc.text(clientNameLines, margin + 4, y + 9)
+  doc.text(clientNameLines, margin + 4, y + 7)
 
-  let billedY = y + 9 + clientNameLines.length * 4.8
+  let billedY = y + 7 + clientNameLines.length * 4
   if (companyLines.length) {
     doc.setFont('helvetica', 'italic')
-    doc.setFontSize(7.5)
+    doc.setFontSize(7)
     doc.setTextColor(...MUTED)
-    doc.text(companyLines, margin + 4, billedY + 1.5)
-    billedY += companyLines.length * 4 + 1.5
+    doc.text(companyLines, margin + 4, billedY + 1)
+    billedY += companyLines.length * 3.5 + 1
   }
   if (addrLines.length) {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.5)
+    doc.setFontSize(7)
     doc.setTextColor(...MUTED)
-    doc.text(addrLines, margin + 4, billedY + 2)
-    billedY += addrLines.length * 3.5 + 1
+    doc.text(addrLines, margin + 4, billedY + 1.5)
+    billedY += addrLines.length * 3 + 1
   }
   if (propLines.length) {
     doc.setFont('helvetica', 'normal')
