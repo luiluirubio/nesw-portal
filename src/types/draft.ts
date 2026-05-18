@@ -31,6 +31,7 @@ export interface ProposalDraft extends BaseDraft {
     // backwards compat for old drafts
     address?:    string
   }
+  propertyAddress?: string
   serviceRows: { rowId: string; serviceId: string; title: string }[]
   lineItems:   Record<string, { qty: number; unitPrice: number; notes: string }>
   // legacy — kept for old drafts
@@ -62,8 +63,9 @@ export interface BillingDraft extends BaseDraft {
   linkedBookingNo: string
   clientName:      string
   clientCompany:   string
-  clientAddress:   string
-  servicePurpose:  string
+  clientAddress:    string
+  propertyAddress?: string
+  servicePurpose:   string
   dateIssued:      string
   dueDate?:        string
   items:           BillingItem[]

@@ -243,10 +243,11 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   y += 2
 
   const clientRows: [string, string][] = [
-    ['Client Name',            proposal.clientName    || '—'],
-    ['Company / Organization', proposal.clientCompany || '—'],
-    ['Address',                proposal.clientAddress || '—'],
-    ['Purpose / Notes',        proposal.clientNotes   || '—'],
+    ['Client Name',            proposal.clientName       || '—'],
+    ['Company / Organization', proposal.clientCompany    || '—'],
+    ['Address',                proposal.clientAddress    || '—'],
+    ['Property Address',       proposal.propertyAddress  || '—'],
+    ['Purpose / Notes',        proposal.clientNotes      || '—'],
   ]
   if (proposal.clientEmail) clientRows.splice(2, 0, ['Email', proposal.clientEmail])
   if (proposal.clientPhone) clientRows.splice(3, 0, ['Mobile', proposal.clientPhone])

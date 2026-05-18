@@ -61,8 +61,9 @@ export function AddBilling() {
   // Form state
   const [clientName,     setClientName]     = useState(preClientName)
   const [clientCompany,  setClientCompany]  = useState('')
-  const [clientAddress,  setClientAddress]  = useState('')
-  const [servicePurpose, setServicePurpose] = useState('')
+  const [clientAddress,   setClientAddress]   = useState('')
+  const [propertyAddress, setPropertyAddress] = useState('')
+  const [servicePurpose,  setServicePurpose]  = useState('')
   const [dateIssued,     setDateIssued]     = useState(new Date().toISOString().slice(0, 10))
   const [dueDate,        setDueDate]        = useState(() => addWorkingDays(new Date(), 15))
   const [items,          setItems]          = useState<BillingItem[]>([emptyItem()])
@@ -88,6 +89,7 @@ export function AddBilling() {
         setClientName(d.clientName)
         setClientCompany(d.clientCompany)
         setClientAddress(d.clientAddress)
+        if (d.propertyAddress) setPropertyAddress(d.propertyAddress)
         setServicePurpose(d.servicePurpose)
         setDateIssued(d.dateIssued)
         if (d.dueDate) setDueDate(d.dueDate)
@@ -105,10 +107,10 @@ export function AddBilling() {
       id: draftId, agentId: user.id, agentName: user.name,
       draftType: 'billing', savedAt: new Date().toISOString(),
       linkedBookingId, linkedBookingNo,
-      clientName, clientCompany, clientAddress, servicePurpose,
+      clientName, clientCompany, clientAddress, propertyAddress, servicePurpose,
       dateIssued, items, discount, terms,
     })
-  }, [draftId, user, isEdit, submitted, loadingDraft, linkedBookingId, linkedBookingNo, clientName, clientCompany, clientAddress, servicePurpose, dateIssued, items, discount, terms])
+  }, [draftId, user, isEdit, submitted, loadingDraft, linkedBookingId, linkedBookingNo, clientName, clientCompany, clientAddress, propertyAddress, servicePurpose, dateIssued, items, discount, terms])
 
   useEffect(() => {
     if (isEdit || submitted || loadingDraft) return
@@ -126,6 +128,7 @@ export function AddBilling() {
         setClientName(b.clientName)
         setClientCompany(b.clientCompany)
         setClientAddress(b.clientAddress)
+        if (b.propertyAddress) setPropertyAddress(b.propertyAddress)
         setServicePurpose(b.servicePurpose)
         setDateIssued(b.dateIssued || new Date().toISOString().slice(0, 10))
         setDueDate(b.dueDate || '')
@@ -186,7 +189,7 @@ export function AddBilling() {
   async function buildPayload() {
     return {
       clientId, clientCode,
-      clientName, clientCompany, clientAddress, servicePurpose, dateIssued, dueDate,
+      clientName, clientCompany, clientAddress, propertyAddress, servicePurpose, dateIssued, dueDate,
       items, discount, subtotal, total, terms,
       bookingId: linkedBookingId || '',
       bookingNo: linkedBookingNo || '',
@@ -321,6 +324,11 @@ export function AddBilling() {
               <Field label="Client Address">
                 <input value={clientAddress} onChange={e => setClientAddress(e.target.value)}
                   placeholder="Address"
+                  className={inputCls} style={inputStyle} />
+              </Field>
+              <Field label="Property Address">
+                <input value={propertyAddress} onChange={e => setPropertyAddress(e.target.value)}
+                  placeholder="e.g. Lot 12 Blk 5, Sampaguita St., Barangay Plainview, Marikina City"
                   className={inputCls} style={inputStyle} />
               </Field>
               <Field label="Date Issued">

@@ -22,8 +22,9 @@ export interface Proposal {
   clientCompany: string
   clientEmail:   string
   clientPhone:   string
-  clientAddress: string
-  clientNotes:   string
+  clientAddress:   string
+  clientNotes:     string
+  propertyAddress?: string
   services:      ProposalService[]
   discount:      number
   validityDays:  number

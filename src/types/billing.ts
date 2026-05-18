@@ -22,8 +22,9 @@ export interface Billing {
   clientCode?:    string
   clientName:     string
   clientCompany:  string
-  clientAddress:  string
-  servicePurpose: string
+  clientAddress:    string
+  propertyAddress?: string
+  servicePurpose:   string
   items:          BillingItem[]
   discount:       number
   subtotal:       number

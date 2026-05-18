@@ -142,12 +142,16 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   const addrLines = billing.clientAddress
     ? doc.splitTextToSize(sanitize(billing.clientAddress), halfW - 8) as string[]
     : []
+  const propLines = billing.propertyAddress
+    ? doc.splitTextToSize(sanitize(billing.propertyAddress), halfW - 8) as string[]
+    : []
 
   const clientContentH =
     4 +                                                               // label
     clientNameLines.length * 5 +                                     // name
     (companyLines.length ? companyLines.length * 4 + 1 : 0) +       // company
     (addrLines.length    ? addrLines.length    * 3.5 + 1 : 0) +     // address
+    (propLines.length    ? propLines.length    * 3.5 + 1 : 0) +     // property address
     3                                                                 // bottom padding
   // Box must be tall enough for the QR image + label
   const boxH = Math.max(clientContentH, qrLabelH + qrMinSize + qrPad, 24)
@@ -182,6 +186,14 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     doc.setFontSize(7.5)
     doc.setTextColor(...MUTED)
     doc.text(addrLines, margin + 4, billedY + 2)
+    billedY += addrLines.length * 3.5 + 1
+  }
+  if (propLines.length) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...MUTED)
+    doc.text('Property: ', margin + 4, billedY + 2)
+    doc.text(propLines, margin + 18, billedY + 2)
   }
 
   // Right — QR code: navy top bar + QR image below

@@ -137,7 +137,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const {
-      clientName, clientCompany, clientAddress, servicePurpose,
+      clientName, clientCompany, clientAddress, propertyAddress, servicePurpose,
       items, discount, subtotal, total, terms, dateIssued, dueDate,
       bookingId, bookingNo, proposalId, proposalNo, clientId, clientCode,
     } = req.body
@@ -169,8 +169,9 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       clientCode:      (clientCode as string)     ?? '',
       clientName:      clientName as string,
       clientCompany:   (clientCompany as string)  ?? '',
-      clientAddress:   (clientAddress as string)  ?? '',
-      servicePurpose:  (servicePurpose as string) ?? '',
+      clientAddress:   (clientAddress as string)   ?? '',
+      propertyAddress: (propertyAddress as string) ?? '',
+      servicePurpose:  (servicePurpose as string)  ?? '',
       items:           items ?? [],
       discount:        Number(discount ?? 0),
       subtotal:        Number(subtotal ?? 0),
@@ -203,7 +204,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     const allowed = [
-      'status', 'clientName', 'clientCompany', 'clientAddress', 'servicePurpose',
+      'status', 'clientName', 'clientCompany', 'clientAddress', 'propertyAddress', 'servicePurpose',
       'items', 'discount', 'subtotal', 'total', 'terms', 'dateIssued', 'dueDate',
       'bookingId', 'bookingNo', 'clientId', 'clientCode', 'paymentStatus',
       ...(req.userRole === 'Admin' ? ['agentId', 'agentName'] : []),

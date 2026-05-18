@@ -239,6 +239,7 @@ export function AddProposal() {
   const [serviceRows, setServiceRows]   = useState<ServiceRow[]>([])
 
   // Step 3
+  const [propertyAddress, setPropertyAddress] = useState('')
   const [lineItems, setLineItems] = useState<Record<string, { qty: number; unitPrice: number; notes: string }>>({})
   const [discountPct, setDiscountPct] = useState('0')
   const [validity, setValidity]   = useState('30')
@@ -253,6 +254,7 @@ export function AddProposal() {
       if (d) {
         setStep(d.lastStep)
         setClient(prev => ({ ...prev, ...d.client }))
+        if (d.propertyAddress) setPropertyAddress(d.propertyAddress)
         setServiceRows(d.serviceRows ?? [])
         setLineItems(d.lineItems)
         setDiscountPct(d.discountPct ?? '0')
@@ -273,13 +275,14 @@ export function AddProposal() {
       savedAt:   new Date().toISOString(),
       lastStep:  step,
       client,
+      propertyAddress,
       serviceRows,
       lineItems,
       discountPct,
       validity,
       terms,
     })
-  }, [draftId, user, step, client, serviceRows, lineItems, discountPct, validity, terms, submitted, loadingDraft])
+  }, [draftId, user, step, client, propertyAddress, serviceRows, lineItems, discountPct, validity, terms, submitted, loadingDraft])
 
   useEffect(() => {
     if (submitted || loadingDraft) return
@@ -394,16 +397,17 @@ export function AddProposal() {
       clientCompany: client.company,
       clientEmail:   client.email,
       clientPhone:   client.mobile ? `${client.countryCode} ${client.mobile}` : '',
-      clientAddress: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
-      clientNotes:   client.notes,
-      services:      buildServices(),
-      discount:      discountAmt,
-      validityDays:  Number(validity) || 30,
+      clientAddress:   [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
+      clientNotes:     client.notes,
+      propertyAddress,
+      services:        buildServices(),
+      discount:        discountAmt,
+      validityDays:    Number(validity) || 30,
       terms,
       subtotal,
       total,
-      createdAt:     new Date().toISOString(),
-      updatedAt:     new Date().toISOString(),
+      createdAt:       new Date().toISOString(),
+      updatedAt:       new Date().toISOString(),
     }
   }
 
@@ -417,9 +421,10 @@ export function AddProposal() {
         clientCompany: client.company,
         clientEmail:   client.email,
         clientPhone:   client.mobile ? `${client.countryCode} ${client.mobile}` : '',
-        clientAddress: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
-        clientNotes:   client.notes,
-        services:      buildServices(),
+        clientAddress:   [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
+        clientNotes:     client.notes,
+        propertyAddress,
+        services:        buildServices(),
         discount:      discountAmt,
         validityDays:  Number(validity) || 30,
         terms,
@@ -586,6 +591,14 @@ export function AddProposal() {
 
     return (
       <div className="flex flex-col gap-4">
+        <Field label="Property Address" required>
+          <TextInput
+            value={propertyAddress}
+            onChange={setPropertyAddress}
+            placeholder="e.g. Lot 12 Blk 5, Sampaguita St., Barangay Plainview, Marikina City"
+          />
+        </Field>
+
         {errors.services && (
           <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg">{errors.services}</p>
         )}
