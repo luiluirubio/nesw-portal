@@ -59,7 +59,8 @@ function BillingDetailPanel({
 
   const totalDebits  = billing.items.filter(i => i.type !== 'credit').reduce((s, i) => s + i.amount, 0)
   const totalCredits = billing.items.filter(i => i.type === 'credit').reduce((s, i) => s + i.amount, 0)
-  const netBalance   = totalDebits - totalCredits
+  const discountAmt  = totalDebits * (billing.discount || 0) / 100
+  const netBalance   = totalDebits - totalCredits - discountAmt
 
   return (
     <>
