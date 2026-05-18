@@ -243,11 +243,10 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   y += 2
 
   const clientRows: [string, string][] = [
-    ['Client Name',            proposal.clientName       || '—'],
-    ['Company / Organization', proposal.clientCompany    || '—'],
-    ['Address',                proposal.clientAddress    || '—'],
-    ['Property Address',       proposal.propertyAddress  || '—'],
-    ['Purpose / Notes',        proposal.clientNotes      || '—'],
+    ['Client Name',            proposal.clientName    || '—'],
+    ['Company / Organization', proposal.clientCompany || '—'],
+    ['Address',                proposal.clientAddress || '—'],
+    ['Purpose / Notes',        proposal.clientNotes   || '—'],
   ]
   if (proposal.clientEmail) clientRows.splice(2, 0, ['Email', proposal.clientEmail])
   if (proposal.clientPhone) clientRows.splice(3, 0, ['Mobile', proposal.clientPhone])
@@ -289,7 +288,10 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     ]],
     body: proposal.services.map(svc => [
       { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5 } },
-      { content: svc.name, styles: { fontStyle: 'bold', textColor: BODY } },
+      {
+        content: svc.propertyAddress ? `${svc.name}\n📍 ${svc.propertyAddress}` : svc.name,
+        styles: { fontStyle: 'bold', textColor: BODY },
+      },
     ]),
     headStyles: {
       fillColor: NAVY, textColor: WHITE, fontSize: 8.5, fontStyle: 'bold',

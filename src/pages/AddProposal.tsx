@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   User, ListChecks, DollarSign, Eye, Search,
@@ -204,7 +204,7 @@ function TextInput({ value, onChange, placeholder, type = 'text', error, maxLeng
 }
 
 // ── Service row type ──────────────────────────────────────────────────────────
-interface ServiceRow { rowId: string; serviceId: string; title: string }
+interface ServiceRow { rowId: string; serviceId: string; title: string; propertyAddress: string }
 let rowCounter = 0
 function newRowId() { return `row-${++rowCounter}` }
 
@@ -239,7 +239,6 @@ export function AddProposal() {
   const [serviceRows, setServiceRows]   = useState<ServiceRow[]>([])
 
   // Step 3
-  const [propertyAddress, setPropertyAddress] = useState('')
   const [lineItems, setLineItems] = useState<Record<string, { qty: number; unitPrice: number; notes: string }>>({})
   const [discountPct, setDiscountPct] = useState('0')
   const [validity, setValidity]   = useState('30')
@@ -254,8 +253,7 @@ export function AddProposal() {
       if (d) {
         setStep(d.lastStep)
         setClient(prev => ({ ...prev, ...d.client }))
-        if (d.propertyAddress) setPropertyAddress(d.propertyAddress)
-        setServiceRows(d.serviceRows ?? [])
+        setServiceRows((d.serviceRows ?? []).map(r => ({ ...r, propertyAddress: r.propertyAddress ?? '' })))
         setLineItems(d.lineItems)
         setDiscountPct(d.discountPct ?? '0')
         setValidity(d.validity)
@@ -275,14 +273,13 @@ export function AddProposal() {
       savedAt:   new Date().toISOString(),
       lastStep:  step,
       client,
-      propertyAddress,
       serviceRows,
       lineItems,
       discountPct,
       validity,
       terms,
     })
-  }, [draftId, user, step, client, propertyAddress, serviceRows, lineItems, discountPct, validity, terms, submitted, loadingDraft])
+  }, [draftId, user, step, client, serviceRows, lineItems, discountPct, validity, terms, submitted, loadingDraft])
 
   useEffect(() => {
     if (submitted || loadingDraft) return
@@ -375,13 +372,14 @@ export function AddProposal() {
         const svc = catalog.find(s => s.id === row.serviceId)!
         const li  = lineItems[row.rowId] ?? { qty: 1, unitPrice: svc?.defaultPrice ?? 0, notes: '' }
         return {
-          serviceId: row.serviceId,
-          category:  svc?.category ?? '',
-          name:      row.title.trim() || (svc?.name ?? ''),
-          qty:       li.qty,
-          unitPrice: li.unitPrice,
-          timeline:  svc?.timeline ?? '',
-          notes:     li.notes,
+          serviceId:       row.serviceId,
+          category:        svc?.category ?? '',
+          name:            row.title.trim() || (svc?.name ?? ''),
+          qty:             li.qty,
+          unitPrice:       li.unitPrice,
+          timeline:        svc?.timeline ?? '',
+          notes:           li.notes,
+          propertyAddress: row.propertyAddress.trim(),
         }
       })
   }
@@ -397,10 +395,9 @@ export function AddProposal() {
       clientCompany: client.company,
       clientEmail:   client.email,
       clientPhone:   client.mobile ? `${client.countryCode} ${client.mobile}` : '',
-      clientAddress:   [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
-      clientNotes:     client.notes,
-      propertyAddress,
-      services:        buildServices(),
+      clientAddress: [client.street, client.barangay, client.city, client.province].filter(Boolean).join(', '),
+      clientNotes:   client.notes,
+      services:      buildServices(),
       discount:        discountAmt,
       validityDays:    Number(validity) || 30,
       terms,
@@ -558,7 +555,7 @@ export function AddProposal() {
   function renderStep3() {
     function addRow() {
       const rowId = newRowId()
-      setServiceRows(r => [...r, { rowId, serviceId: '', title: '' }])
+      setServiceRows(r => [...r, { rowId, serviceId: '', title: '', propertyAddress: '' }])
     }
 
     function removeRow(rowId: string) {
@@ -583,6 +580,10 @@ export function AddProposal() {
       setServiceRows(r => r.map(x => x.rowId === rowId ? { ...x, title } : x))
     }
 
+    function changePropertyAddress(rowId: string, propertyAddress: string) {
+      setServiceRows(r => r.map(x => x.rowId === rowId ? { ...x, propertyAddress } : x))
+    }
+
     if (loadingCatalog) return (
       <div className="flex items-center justify-center h-40" style={{ color: 'var(--muted-foreground)' }}>
         Loading services…
@@ -591,14 +592,6 @@ export function AddProposal() {
 
     return (
       <div className="flex flex-col gap-4">
-        <Field label="Property Address" required>
-          <TextInput
-            value={propertyAddress}
-            onChange={setPropertyAddress}
-            placeholder="e.g. Lot 12 Blk 5, Sampaguita St., Barangay Plainview, Marikina City"
-          />
-        </Field>
-
         {errors.services && (
           <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg">{errors.services}</p>
         )}
@@ -608,10 +601,10 @@ export function AddProposal() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ backgroundColor: 'var(--card)', color: 'var(--muted-foreground)' }}>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide w-10">#</th>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide">Service Type</th>
-                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide">Title / Description</th>
-                <th className="w-10" />
+                <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide w-8">#</th>
+                <th className="text-left px-3 py-3 text-xs font-bold uppercase tracking-wide">Service Type</th>
+                <th className="text-left px-3 py-3 text-xs font-bold uppercase tracking-wide">Title / Description</th>
+                <th className="w-8" />
               </tr>
             </thead>
             <tbody>
@@ -625,46 +618,61 @@ export function AddProposal() {
               ) : serviceRows.map((row, i) => {
                 const svc = catalog.find(s => s.id === row.serviceId)
                 return (
-                  <tr key={row.rowId} className="border-t" style={{ borderColor: 'var(--border)' }}>
-                    <td className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--muted-foreground)' }}>
-                      {i + 1}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={row.serviceId}
-                        onChange={e => changeService(row.rowId, e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-lg border text-sm outline-none"
-                        style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
-                        <option value="">— Select service —</option>
-                        {catalog.map(s => (
-                          <option key={s.id} value={s.id}>{s.category} · {s.name}</option>
-                        ))}
-                      </select>
-                      {svc && (
-                        <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
-                          Default: {formatPHP(svc.defaultPrice)}{svc.timeline ? ` · ${svc.timeline}` : ''}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        value={row.title}
-                        onChange={e => changeTitle(row.rowId, e.target.value)}
-                        placeholder={svc ? svc.name : 'e.g. Property at Marikina'}
-                        className="w-full px-2 py-1.5 rounded-lg border text-sm outline-none"
-                        style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <button onClick={() => removeRow(row.rowId)}
-                        className="p-1.5 rounded-lg transition-colors hover:bg-red-50"
-                        style={{ color: 'var(--muted-foreground)' }}
-                        onMouseEnter={e => (e.currentTarget.style.color = '#dc2626')}
-                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted-foreground)')}>
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
+                  <React.Fragment key={row.rowId}>
+                    <tr className="border-t" style={{ borderColor: 'var(--border)' }}>
+                      <td className="px-3 pt-3 pb-1 text-xs font-semibold align-top" style={{ color: 'var(--muted-foreground)' }}>
+                        {i + 1}
+                      </td>
+                      <td className="px-3 pt-3 pb-1">
+                        <select
+                          value={row.serviceId}
+                          onChange={e => changeService(row.rowId, e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border text-sm outline-none"
+                          style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+                          <option value="">— Select service —</option>
+                          {catalog.map(s => (
+                            <option key={s.id} value={s.id}>{s.category} · {s.name}</option>
+                          ))}
+                        </select>
+                        {svc && (
+                          <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
+                            Default: {formatPHP(svc.defaultPrice)}{svc.timeline ? ` · ${svc.timeline}` : ''}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 pt-3 pb-1">
+                        <input
+                          value={row.title}
+                          onChange={e => changeTitle(row.rowId, e.target.value)}
+                          placeholder={svc ? svc.name : 'e.g. Property at Marikina'}
+                          className="w-full px-2 py-1.5 rounded-lg border text-sm outline-none"
+                          style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
+                        />
+                      </td>
+                      <td className="px-2 pt-3 pb-1">
+                        <button onClick={() => removeRow(row.rowId)}
+                          className="p-1.5 rounded-lg transition-colors hover:bg-red-50"
+                          style={{ color: 'var(--muted-foreground)' }}
+                          onMouseEnter={e => (e.currentTarget.style.color = '#dc2626')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted-foreground)')}>
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td />
+                      <td colSpan={2} className="px-3 pb-2">
+                        <input
+                          value={row.propertyAddress}
+                          onChange={e => changePropertyAddress(row.rowId, e.target.value)}
+                          placeholder="📍 Property Address"
+                          className="w-full px-2 py-1 rounded-lg border text-xs outline-none"
+                          style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
+                        />
+                      </td>
+                      <td />
+                    </tr>
+                  </React.Fragment>
                 )
               })}
             </tbody>
