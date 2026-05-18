@@ -43,11 +43,14 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
 
 async function fetchLogoDataUrl(): Promise<string | null> {
   try {
-    const res  = await fetch('/nesw-logo.png')
+    const res   = await fetch('/nesw-logo.png')
     if (!res.ok) return null
-    const buf  = await res.arrayBuffer()
-    const b64  = btoa(String.fromCharCode(...new Uint8Array(buf)))
-    return `data:image/png;base64,${b64}`
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    let binary  = ''
+    const chunk = 8192
+    for (let i = 0; i < bytes.length; i += chunk)
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+    return `data:image/png;base64,${btoa(binary)}`
   } catch { return null }
 }
 
