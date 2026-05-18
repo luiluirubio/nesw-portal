@@ -205,7 +205,7 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...NAVY)
-  doc.text('NESW Property & Planning Consultancy', textX, y + 5)
+  doc.text('NESW Property & Planning Consultancy OPC', textX, y + 5)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
@@ -515,14 +515,14 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...BODY)
-  doc.text(proposal.agentName || 'NESW Property & Planning Consultancy', lx, y)
+  doc.text(proposal.agentName || 'NESW Property & Planning Consultancy OPC', lx, y)
   doc.text(proposal.clientName || '—', rx, y)
 
   y += 4
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
-  doc.text('NESW Property & Planning Consultancy', lx, y)
+  doc.text('NESW Property & Planning Consultancy OPC', lx, y)
 
   y += 4
   doc.setFont('helvetica', 'italic')
@@ -542,7 +542,7 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
   doc.text(
-    'This document is system generated. For inquiries, please contact NESW Property & Planning Consultancy.',
+    'This document is system generated. For inquiries, please contact NESW Property & Planning Consultancy OPC.',
     pw / 2, y, { align: 'center' }
   )
 

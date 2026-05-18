@@ -81,7 +81,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...NAVY)
-  doc.text('NESW Property & Planning Consultancy', textX, y + 5)
+  doc.text('NESW Property & Planning Consultancy OPC', textX, y + 5)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
@@ -352,7 +352,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
 
   // ── Bank details — Metrobank only ────────────────────────────────────────
   const bankItems = [
-    { label: 'Account Name', value: 'NESW Property & Planning Consultancy' },
+    { label: 'Account Name', value: 'NESW Property & Planning Consultancy OPC' },
     { label: 'Metrobank',    value: '225-3-92483176-7' },
   ]
   const contentStartY = y   // both bank and terms start at the same y
@@ -407,7 +407,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.setTextColor(...MUTED)
   const agentLines = [
     'President, REA, REB, EnP.',
-    'NESW Property & Planning Consultancy',
+    'NESW Property & Planning Consultancy OPC',
     'E: jrubio@neswcorp.com',
     'M: +63 998 859 0597',
   ]
@@ -431,7 +431,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     doc.setFontSize(7.5)
     doc.setTextColor(...MUTED)
     doc.text(
-      'This document is system generated. For inquiries, please contact NESW Property & Planning Consultancy.',
+      'This document is system generated. For inquiries, please contact NESW Property & Planning Consultancy OPC.',
       pw / 2, ph - 8, { align: 'center' }
     )
 
