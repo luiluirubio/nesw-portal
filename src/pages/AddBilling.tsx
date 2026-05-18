@@ -326,9 +326,9 @@ export function AddBilling() {
                   placeholder="Address"
                   className={inputCls} style={inputStyle} />
               </Field>
-              <Field label="Property Address">
+              <Field label="Property Details">
                 <input value={propertyAddress} onChange={e => setPropertyAddress(e.target.value)}
-                  placeholder="e.g. Lot 12 Blk 5, Sampaguita St., Barangay Plainview, Marikina City"
+                  placeholder="Address, Title No., Tax Dec No., etc."
                   className={inputCls} style={inputStyle} />
               </Field>
               <Field label="Date Issued">
@@ -417,10 +417,10 @@ export function AddBilling() {
                         className={inputCls} style={{ ...inputStyle, backgroundColor: 'var(--background)' }} />
                     </Field>
                   </div>
-                  <Field label="Property Address">
+                  <Field label="Property Details">
                     <input value={item.subDescription}
                       onChange={e => updateItem(idx, 'subDescription', e.target.value)}
-                      placeholder="e.g. Lot 12, Scout Fuentebella St., Quezon City"
+                      placeholder="Address, Title No., Tax Dec No., etc."
                       className={inputCls} style={{ ...inputStyle, backgroundColor: 'var(--background)' }} />
                   </Field>
                 </div>

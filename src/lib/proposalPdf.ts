@@ -292,8 +292,8 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     body: proposal.services.map(svc => [
       { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5 } },
       {
-        content: svc.propertyAddress ? `${svc.name}\nProperty: ${svc.propertyAddress}` : svc.name,
-        styles: { fontStyle: 'bold', textColor: BODY, overflow: 'linebreak', cellWidth: 'wrap' },
+        content: svc.propertyAddress ? `${svc.name}\nProperty Details: ${svc.propertyAddress}` : svc.name,
+        styles: { fontStyle: 'bold', textColor: BODY },
       },
     ]),
     headStyles: {
@@ -302,11 +302,12 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     },
     bodyStyles: {
       fontSize: 9, cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
+      overflow: 'linebreak',
     },
     alternateRowStyles: { fillColor: BGROW },
     columnStyles: {
-      0: { cellWidth: 65 },
-      1: { cellWidth: 'auto' },
+      0: { cellWidth: 55 },
+      1: { cellWidth: cw - 55 },
     },
     tableLineColor: LGRAY,
     tableLineWidth: 0.2,

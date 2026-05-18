@@ -664,7 +664,7 @@ export function AddProposal() {
                         <input
                           value={row.propertyAddress}
                           onChange={e => changePropertyAddress(row.rowId, e.target.value)}
-                          placeholder="📍 Property Address"
+                          placeholder="Property Details (Address, Title No., Tax Dec No., etc.)"
                           className="w-full px-2 py-1 rounded-lg border text-xs outline-none"
                           style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
                         />
