@@ -313,12 +313,11 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     },
     tableLineColor: LGRAY,
     tableLineWidth: 0.2,
-    didParseCell: (data: { section: string; column: { index: number }; cell: { styles: { fontSize: number; fontStyle: string } }; row: { index: number } }) => {
+    tableWidth: cw,
+    didParseCell: (data: { section: string; column: { index: number }; cell: { styles: { fontSize: number } }; row: { index: number } }) => {
       if (data.section === 'body' && data.column.index === 1) {
         const svc = proposal.services[data.row.index]
-        if (svc?.propertyAddress) {
-          data.cell.styles.fontSize = 8
-        }
+        if (svc?.propertyAddress) data.cell.styles.fontSize = 8
       }
     },
   })

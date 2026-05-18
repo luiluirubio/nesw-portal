@@ -175,6 +175,11 @@ function ProposalDetailPanel({
                       <td className="px-4 py-2.5">
                         <p className="font-medium" style={{ color: 'var(--foreground)' }}>{svc.name}</p>
                         <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{svc.category}</p>
+                        {svc.propertyAddress && (
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+                            📍 {svc.propertyAddress}
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-center text-xs" style={{ color: 'var(--foreground)' }}>{svc.qty}</td>
                       <td className="px-4 py-2.5 text-right font-semibold text-xs" style={{ color: 'var(--foreground)' }}>
