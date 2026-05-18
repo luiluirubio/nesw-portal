@@ -282,7 +282,8 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   doc.text(introLines, margin, y)
   y += introLines.length * 4.5 + 3
 
-  const svcBody = proposal.services.flatMap((svc, i) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svcBody: any[] = proposal.services.flatMap((svc, i) => {
     const bg = i % 2 === 0 ? [255, 255, 255] as [number,number,number] : BGROW
     const nameRow = [
       { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5, fillColor: bg } },
