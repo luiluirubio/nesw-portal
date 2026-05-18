@@ -282,25 +282,6 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
   doc.text(introLines, margin, y)
   y += introLines.length * 4.5 + 3
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const svcBody: any[] = proposal.services.flatMap((svc, i) => {
-    const bg = i % 2 === 0 ? [255, 255, 255] as [number,number,number] : BGROW
-    const nameRow = [
-      { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5, fillColor: bg } },
-      { content: svc.name, styles: { fontStyle: 'bold', textColor: BODY, fontSize: 9, fillColor: bg } },
-    ]
-    if (!svc.propertyAddress) return [nameRow]
-    const propRow = [
-      { content: '', styles: { fillColor: bg, cellPadding: { top: 0, bottom: 3, left: 5, right: 5 } } },
-      {
-        content: `Property Details: ${svc.propertyAddress}`,
-        styles: { fontStyle: 'italic', textColor: MUTED, fontSize: 7.5, fillColor: bg,
-          cellPadding: { top: 0, bottom: 3, left: 5, right: 5 } },
-      },
-    ]
-    return [nameRow, propRow]
-  })
-
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
@@ -308,21 +289,38 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
       { content: 'Service', styles: { halign: 'left' } },
       { content: 'Title / Description', styles: { halign: 'left' } },
     ]],
-    body: svcBody,
+    body: proposal.services.map(svc => [
+      { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5 } },
+      {
+        content: svc.propertyAddress
+          ? `${svc.name}\nProperty Details: ${svc.propertyAddress}`
+          : svc.name,
+        styles: { fontStyle: 'bold', textColor: BODY, fontSize: 9 },
+      },
+    ]),
     headStyles: {
       fillColor: NAVY, textColor: WHITE, fontSize: 8.5, fontStyle: 'bold',
       cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
     },
     bodyStyles: {
-      fontSize: 9, cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
-      overflow: 'linebreak',
+      fontSize: 9, cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
+      overflow: 'linebreak', minCellHeight: 10,
     },
+    alternateRowStyles: { fillColor: BGROW },
     columnStyles: {
       0: { cellWidth: 55 },
-      1: { cellWidth: cw - 55 },
+      1: { cellWidth: cw - 55, overflow: 'linebreak' },
     },
     tableLineColor: LGRAY,
     tableLineWidth: 0.2,
+    didParseCell: (data: { section: string; column: { index: number }; cell: { styles: { fontSize: number; fontStyle: string } }; row: { index: number } }) => {
+      if (data.section === 'body' && data.column.index === 1) {
+        const svc = proposal.services[data.row.index]
+        if (svc?.propertyAddress) {
+          data.cell.styles.fontSize = 8
+        }
+      }
+    },
   })
   y = (doc as DocAT).lastAutoTable.finalY + 6
 
