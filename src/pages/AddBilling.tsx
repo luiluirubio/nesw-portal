@@ -156,7 +156,7 @@ export function AddBilling() {
       setItems(bkg.services.length
         ? bkg.services.map(svc => ({
             description:    svc.name,
-            subDescription: svc.notes || '',
+            subDescription: svc.propertyAddress || svc.notes || '',
             amount:         svc.unitPrice * (svc.qty || 1),
             type:           'debit' as BillingItemType,
           }))
@@ -417,10 +417,10 @@ export function AddBilling() {
                         className={inputCls} style={{ ...inputStyle, backgroundColor: 'var(--background)' }} />
                     </Field>
                   </div>
-                  <Field label="Sub-description">
+                  <Field label="Property Address">
                     <input value={item.subDescription}
                       onChange={e => updateItem(idx, 'subDescription', e.target.value)}
-                      placeholder="e.g. Market Valuation / General Appraisal"
+                      placeholder="e.g. Lot 12, Scout Fuentebella St., Quezon City"
                       className={inputCls} style={{ ...inputStyle, backgroundColor: 'var(--background)' }} />
                   </Field>
                 </div>

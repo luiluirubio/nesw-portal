@@ -289,8 +289,8 @@ export async function generateProposalPDF(proposal: Proposal, returnBlob?: boole
     body: proposal.services.map(svc => [
       { content: svc.category || svc.name, styles: { textColor: MUTED, fontSize: 8.5 } },
       {
-        content: svc.propertyAddress ? `${svc.name}\n📍 ${svc.propertyAddress}` : svc.name,
-        styles: { fontStyle: 'bold', textColor: BODY },
+        content: svc.propertyAddress ? `${svc.name}\nProperty: ${svc.propertyAddress}` : svc.name,
+        styles: { fontStyle: 'bold', textColor: BODY, overflow: 'linebreak', cellWidth: 'wrap' },
       },
     ]),
     headStyles: {

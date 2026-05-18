@@ -1,13 +1,14 @@
 export type BookingStatus = 'draft' | 'active' | 'completed' | 'cancelled'
 
 export interface BookingService {
-  serviceId: string
-  category:  string
-  name:      string
-  qty:       number
-  unitPrice: number
-  timeline:  string
-  notes:     string
+  serviceId:        string
+  category:         string
+  name:             string
+  qty:              number
+  unitPrice:        number
+  timeline:         string
+  notes:            string
+  propertyAddress?: string
 }
 
 export interface Booking {

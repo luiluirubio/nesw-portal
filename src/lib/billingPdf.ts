@@ -248,7 +248,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     if (item.subDescription) {
       tableBody.push([
         {
-          content: sanitize(item.subDescription),
+          content: `Property: ${sanitize(item.subDescription)}`,
           styles: { fontStyle: 'italic', textColor: MUTED, fontSize: 8 },
         },
         { content: '', styles: {} },
