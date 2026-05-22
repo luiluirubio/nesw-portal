@@ -21,19 +21,19 @@ function formatDate(iso: string) {
 
 export function PaymentSuccess() {
   const [params]  = useSearchParams()
-  const ref       = params.get('ref') ?? ''
+  const token     = params.get('token') ?? ''
 
   const [status,  setStatus]  = useState<'loading' | 'success' | 'error'>('loading')
   const [data,    setData]    = useState<VerifyResult | null>(null)
 
   useEffect(() => {
-    if (!ref) { setStatus('error'); return }
+    if (!token) { setStatus('error'); return }
 
-    fetch(`${API}/billing/public/verify?ref=${encodeURIComponent(ref)}`)
+    fetch(`${API}/billing/public/verify?token=${encodeURIComponent(token)}`)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((d: VerifyResult) => { setData(d); setStatus('success') })
       .catch(() => setStatus('error'))
-  }, [ref])
+  }, [token])
 
   return (
     <div style={{

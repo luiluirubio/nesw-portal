@@ -19,7 +19,7 @@ async function nextBillingNo(): Promise<string> {
 // Create Xendit Invoice — returns { invoiceId, invoiceUrl } or null on failure
 // Uses Invoice API (covered by Money In permission); client scans QR → payment page
 async function createXenditInvoice(
-  billingNo: string, clientName: string, description: string, amount: number
+  billingNo: string, paymentToken: string, clientName: string, description: string, amount: number
 ): Promise<{ invoiceId: string; invoiceUrl: string } | null> {
   const secret = process.env.XENDIT_SECRET_KEY
   if (!secret) return null
@@ -33,7 +33,7 @@ async function createXenditInvoice(
       customer:             { given_names: clientName },
       currency:             'PHP',
       invoice_duration:     2592000, // 30 days
-      success_redirect_url: `${process.env.FRONTEND_URL ?? 'https://staging-portal.neswcorp.com'}/payment-success?ref=billing-${billingNo}`,
+      success_redirect_url: `${process.env.FRONTEND_URL ?? 'https://staging-portal.neswcorp.com'}/payment-success?token=${paymentToken}`,
     }
     const res = await fetch('https://api.xendit.co/v2/invoices', {
       method:  'POST',
@@ -149,11 +149,12 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: 'bookingId is required' }); return
     }
 
-    const billingNo = await nextBillingNo()
+    const billingNo    = await nextBillingNo()
+    const paymentToken = uuid()  // opaque token for public payment-success URL
 
     // Create Xendit Invoice (graceful — does not block billing creation)
     const desc = `${servicePurpose || 'Professional Services'} — ${clientName}`
-    const qr   = await createXenditInvoice(billingNo, clientName as string, desc, Number(total ?? 0))
+    const qr   = await createXenditInvoice(billingNo, paymentToken, clientName as string, desc, Number(total ?? 0))
 
     const item = {
       id:              `BILL-${uuid().slice(0, 8).toUpperCase()}`,
@@ -181,6 +182,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       dueDate:         (dueDate as string) ?? '',
       createdAt:       new Date().toISOString(),
       updatedAt:       new Date().toISOString(),
+      paymentToken,
       // paymentQrId = Xendit invoice ID, paymentQrString = invoice URL (QR generated client-side)
       ...(qr ? { paymentQrId: qr.invoiceId, paymentQrString: qr.invoiceUrl, paymentStatus: 'unpaid' } : {}),
     }
@@ -237,20 +239,18 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// GET /api/billing/public/verify?ref=billing-{billingNo} — no auth, public
+// GET /api/billing/public/verify?token={uuid} — no auth, public
 router.get('/public/verify', async (req: Request, res: Response) => {
   try {
-    const ref = (req.query.ref as string ?? '').trim()
-    if (!ref || !ref.startsWith('billing-')) {
-      res.status(400).json({ error: 'Invalid ref' }); return
+    const token = (req.query.token as string ?? '').trim()
+    if (!token || token.length < 10) {
+      res.status(400).json({ error: 'Invalid token' }); return
     }
-
-    const billingNo = ref.replace(/^billing-/, '')
 
     const result = await db.send(new ScanCommand({
       TableName:        Tables.billings,
-      FilterExpression: 'billingNo = :bn',
-      ExpressionAttributeValues: { ':bn': billingNo },
+      FilterExpression: 'paymentToken = :t',
+      ExpressionAttributeValues: { ':t': token },
     }))
 
     const billing = result.Items?.[0]
