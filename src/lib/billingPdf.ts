@@ -15,14 +15,14 @@ const BGROW  = [240, 244, 252] as [number, number, number]
 type DocAT = jsPDF & { lastAutoTable: { finalY: number } }
 
 function php(n: number) {
-  return `PHP ${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `₱ ${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function longDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-// Replace chars outside Latin-1 printable range that break jsPDF Helvetica
+// Normalize special chars for PDF rendering; ₱ is preserved (NotoSans supports it)
 function sanitize(s: string) {
   return s
     .replace(/±/g,   '+/-')
@@ -30,6 +30,7 @@ function sanitize(s: string) {
     .replace(/—/g,   '--')
     .replace(/'/g,  "'").replace(/'/g, "'")
     .replace(/"/g,  '"').replace(/"/g, '"')
+    .replace(/₱/g, '₱')
     .replace(/[^\x00-\xFF]/g, '?')
 }
 
@@ -39,6 +40,19 @@ function checkBreak(doc: jsPDF, y: number, need: number, margin: number): number
     return margin + 8
   }
   return y
+}
+
+async function fetchFontBase64(filename: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/fonts/${filename}`)
+    if (!res.ok) return null
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    let binary = ''
+    const chunk = 8192
+    for (let i = 0; i < bytes.length; i += chunk)
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+    return btoa(binary)
+  } catch { return null }
 }
 
 async function fetchLogoDataUrl(): Promise<string | null> {
@@ -55,10 +69,24 @@ async function fetchLogoDataUrl(): Promise<string | null> {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
+const FONT = 'NotoSans'
+
 export async function generateBillingPDF(billing: Billing, returnBlob?: boolean): Promise<Blob | void> {
-  const logoData = await fetchLogoDataUrl()
+  const [logoData, fontRegular, fontBold, fontItalic, fontBoldItalic] = await Promise.all([
+    fetchLogoDataUrl(),
+    fetchFontBase64('NotoSans-Regular.ttf'),
+    fetchFontBase64('NotoSans-Bold.ttf'),
+    fetchFontBase64('NotoSans-Italic.ttf'),
+    fetchFontBase64('NotoSans-BoldItalic.ttf'),
+  ])
 
   const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+  if (fontRegular)    { doc.addFileToVFS('NotoSans-Regular.ttf', fontRegular); doc.addFont('NotoSans-Regular.ttf', FONT, 'normal') }
+  if (fontBold)       { doc.addFileToVFS('NotoSans-Bold.ttf', fontBold); doc.addFont('NotoSans-Bold.ttf', FONT, 'bold') }
+  if (fontItalic)     { doc.addFileToVFS('NotoSans-Italic.ttf', fontItalic); doc.addFont('NotoSans-Italic.ttf', FONT, 'italic') }
+  if (fontBoldItalic) { doc.addFileToVFS('NotoSans-BoldItalic.ttf', fontBoldItalic); doc.addFont('NotoSans-BoldItalic.ttf', FONT, 'bolditalic') }
+
   const pw     = doc.internal.pageSize.getWidth()
   const margin = 16
   const cw     = pw - margin * 2
@@ -71,36 +99,36 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   } else {
     doc.setFillColor(220, 220, 220)
     doc.roundedRect(margin, y, 15, 15, 2, 2, 'F')
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(FONT,'normal')
     doc.setFontSize(6)
     doc.setTextColor(150, 150, 150)
     doc.text('LOGO', margin + 7.5, y + 8, { align: 'center' })
   }
   const textX = margin + 18
 
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(11)
   doc.setTextColor(...NAVY)
   doc.text('NESW Property & Planning Consultancy OPC', textX, y + 5)
 
-  doc.setFont('helvetica', 'normal')
+  doc.setFont(FONT,'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
   doc.text('PRC-Licensed Real Estate Brokerage and Appraisal', textX, y + 10)
   doc.text('www.neswcorp.com', textX, y + 15)
 
   // "BILLING STATEMENT" right-aligned
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(14)
   doc.setTextColor(...NAVY)
   doc.text('BILLING STATEMENT', pw - margin, y + 5, { align: 'right' })
 
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(9)
   doc.setTextColor(...NAVY)
   doc.text(billing.billingNo, pw - margin, y + 11, { align: 'right' })
 
-  doc.setFont('helvetica', 'normal')
+  doc.setFont(FONT,'normal')
   doc.setFontSize(8.5)
   doc.setTextColor(...MUTED)
   const issued = billing.dateIssued ? longDate(billing.dateIssued) : longDate(billing.createdAt)
@@ -166,33 +194,33 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.setLineWidth(0.2)
   doc.roundedRect(margin, y, halfW, boxH, 1.5, 1.5, 'S')
 
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(7)
   doc.setTextColor(...MUTED)
   doc.text('BILLED TO', margin + 4, y + 3.5)
 
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(8.5)
   doc.setTextColor(...NAVY)
   doc.text(clientNameLines, margin + 4, y + 7)
 
   let billedY = y + 7 + clientNameLines.length * 4
   if (companyLines.length) {
-    doc.setFont('helvetica', 'italic')
+    doc.setFont(FONT,'italic')
     doc.setFontSize(7)
     doc.setTextColor(...MUTED)
     doc.text(companyLines, margin + 4, billedY + 1)
     billedY += companyLines.length * 3.5 + 1
   }
   if (addrLines.length) {
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(FONT,'normal')
     doc.setFontSize(7)
     doc.setTextColor(...MUTED)
     doc.text(addrLines, margin + 4, billedY + 1.5)
     billedY += addrLines.length * 3 + 1
   }
   if (propLines.length) {
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(FONT,'normal')
     doc.setFontSize(7)
     doc.setTextColor(...MUTED)
     doc.text('Property: ', margin + 4, billedY + 2)
@@ -215,7 +243,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     doc.rect(rightX, y, qrBoxW, qrLabelH, 'F')
 
     // "SCAN TO PAY" — white horizontal text, centred in navy bar
-    doc.setFont('helvetica', 'bold')
+    doc.setFont(FONT,'bold')
     doc.setFontSize(7)
     doc.setTextColor(255, 255, 255)
     doc.text('SCAN TO PAY', rightX + qrBoxW / 2, y + qrLabelH / 2 + 1.5, { align: 'center' })
@@ -228,7 +256,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
 
   // ── ITEMIZED BILLING ──────────────────────────────────────────────────────────
   y = checkBreak(doc, y, 25, margin)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...NAVY)
   doc.text('ITEMIZED BILLING', margin, y)
@@ -282,16 +310,18 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     margin: { left: margin, right: margin },
     head: [[
       { content: 'DESCRIPTION', styles: { halign: 'left' } },
-      { content: 'AMOUNT (PHP)', styles: { halign: 'right' } },
+      { content: 'AMOUNT (₱)', styles: { halign: 'right' } },
     ]],
     body: tableBody,
     headStyles: {
       fillColor: NAVY, textColor: WHITE, fontSize: 8.5, fontStyle: 'bold',
       cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+      font: FONT,
     },
     bodyStyles: {
       fontSize: 8.5, textColor: BODY,
       cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
+      font: FONT,
     },
     alternateRowStyles: { fillColor: BGROW },
     columnStyles: {
@@ -307,14 +337,14 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   const totalH = 12
   doc.setFillColor(...NAVY)
   doc.rect(margin, y, cw, totalH, 'F')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(10)
   doc.setTextColor(...WHITE)
   doc.text('TOTAL AMOUNT DUE', margin + 5, y + 7.5)
   doc.text(php(billing.total), pw - margin - 5, y + 7.5, { align: 'right' })
   y += totalH + 1
 
-  doc.setFont('helvetica', 'italic')
+  doc.setFont(FONT,'italic')
   doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
   doc.text('VAT Exclusive', margin + 3, y + 3.5)
@@ -322,7 +352,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
 
   // ── PAYMENT DETAILS & TERMS ───────────────────────────────────────────────────
   y = checkBreak(doc, y, 45, margin)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...NAVY)
   doc.text('PAYMENT DETAILS & TERMS', margin, y)
@@ -336,33 +366,34 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   // ── Column headers ────────────────────────────────────────────────────────
   doc.setFillColor(...NAVY)
   doc.rect(margin, y, payW, 7, 'F')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(7)
   doc.setTextColor(...WHITE)
   doc.text('CORPORATE BANK ACCOUNT DETAILS', margin + 4, y + 4.5)
 
   doc.setFillColor(...ORANGE)
   doc.rect(termsX, y, payW, 7, 'F')
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(7)
   doc.setTextColor(...WHITE)
   doc.text('TERMS AND CONDITIONS', termsX + 4, y + 4.5)
 
   y += 9
 
-  // ── Bank details — Metrobank only ────────────────────────────────────────
+  // ── Bank details ─────────────────────────────────────────────────────────
   const bankItems = [
     { label: 'Account Name', value: 'NESW Property & Planning Consultancy OPC' },
     { label: 'Metrobank',    value: '225-3-92483176-7' },
+    { label: 'PNB',          value: '105270007615' },
   ]
   const contentStartY = y   // both bank and terms start at the same y
   bankItems.forEach(({ label, value }) => {
-    doc.setFont('helvetica', 'bold')
+    doc.setFont(FONT,'bold')
     doc.setFontSize(6.5)
     doc.setTextColor(...MUTED)
     doc.text(label, margin + 4, y)
     y += 3.5
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(FONT,'normal')
     doc.setFontSize(7.5)
     doc.setTextColor(...BODY)
     doc.text(value, margin + 4, y)
@@ -373,36 +404,35 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   // ── Terms text — starts at same y as bank content ─────────────────────────
   const termsText = billing.terms || ''
   if (termsText) {
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(FONT,'normal')
     doc.setFontSize(7.5)
     doc.setTextColor(...BODY)
     const tLines = doc.splitTextToSize(sanitize(termsText), payW - 8) as string[]
     doc.text(tLines, termsX + 4, contentStartY)
   }
 
-  y = bankEndY + 12
-
   // ── PREPARED BY ───────────────────────────────────────────────────────────────
-  y = checkBreak(doc, y, 35, margin)
+  y = checkBreak(doc, bankEndY, 40, margin)
+  y += 8
 
   doc.setDrawColor(...LGRAY)
   doc.setLineWidth(0.3)
   doc.line(margin, y, pw - margin, y)
   y += 4
 
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
   doc.text('PREPARED BY', margin, y)
   y += 4
 
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(FONT,'bold')
   doc.setFontSize(9.5)
   doc.setTextColor(...BODY)
   doc.text(sanitize(billing.agentName || '—'), margin, y)
   y += 4.5
 
-  doc.setFont('helvetica', 'normal')
+  doc.setFont(FONT,'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
   const agentLines = [
@@ -427,7 +457,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     doc.setLineWidth(0.3)
     doc.line(margin, ph - 11, pw - margin, ph - 11)
 
-    doc.setFont('helvetica', 'italic')
+    doc.setFont(FONT,'italic')
     doc.setFontSize(7.5)
     doc.setTextColor(...MUTED)
     doc.text(
@@ -435,7 +465,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
       pw / 2, ph - 8, { align: 'center' }
     )
 
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(FONT,'normal')
     doc.setFontSize(7)
     doc.text(`Page ${i} of ${totalPages}`, pw - margin, ph - 4, { align: 'right' })
     doc.text(`${billing.billingNo}  ·  ${billing.clientName}`, margin, ph - 4)
