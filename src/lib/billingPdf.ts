@@ -411,9 +411,33 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     doc.text(tLines, termsX + 4, contentStartY)
   }
 
-  // ── PREPARED BY ───────────────────────────────────────────────────────────────
-  y = checkBreak(doc, bankEndY, 40, margin)
-  y += 8
+  // ── PREPARED BY — anchored above footer on current page ──────────────────────
+  const contactVCard = [
+    'BEGIN:VCARD', 'VERSION:3.0',
+    `N:${sanitize(billing.agentName || 'Rubio;Jessamyn;;;')}`,
+    `FN:${sanitize(billing.agentName || 'Jessamyn Rubio')}`,
+    'TEL;TYPE=CELL:+63 998 859 0597',
+    'EMAIL:jrubio@neswcorp.com',
+    'END:VCARD',
+  ].join('\n')
+
+  let contactQrUrl: string | null = null
+  try {
+    contactQrUrl = await QRCode.toDataURL(contactVCard, {
+      width: 180, margin: 1, color: { dark: '#1b3864', light: '#ffffff' },
+    })
+  } catch { /* skip */ }
+
+  const qrSz       = 20   // mm — QR image size
+  const labelH     = 5    // mm — "SCAN CONTACT" label height
+  const sectionH   = 4 + 4 + 5 + 4 + 4   // divider-gap + label + name + email + phone = 21mm
+  const blockH     = Math.max(sectionH, qrSz + labelH) + 2
+  const ph0        = doc.internal.pageSize.getHeight()
+  const anchorY    = ph0 - 11 - 4 - blockH   // sit just above the footer line
+
+  // Only add a page if the payment section already consumed that space
+  if (bankEndY > anchorY) doc.addPage()
+  y = anchorY
 
   doc.setDrawColor(...LGRAY)
   doc.setLineWidth(0.3)
@@ -430,21 +454,25 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.setFontSize(9.5)
   doc.setTextColor(...BODY)
   doc.text(sanitize(billing.agentName || '—'), margin, y)
-  y += 4.5
+  y += 5
 
   doc.setFont(FONT,'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
-  const agentLines = [
-    'President, REA, REB, EnP.',
-    'NESW Property & Planning Consultancy OPC',
-    'E: jrubio@neswcorp.com',
-    'M: +63 998 859 0597',
-  ]
-  agentLines.forEach(line => {
-    doc.text(line, margin, y)
-    y += 4
-  })
+  doc.text('E: jrubio@neswcorp.com', margin, y)
+  y += 4
+  doc.text('M: +63 998 859 0597', margin, y)
+
+  // QR code — right-aligned
+  if (contactQrUrl) {
+    const qrX = pw - margin - qrSz
+    const qrY = anchorY + 4
+    doc.addImage(contactQrUrl, 'PNG', qrX, qrY, qrSz, qrSz)
+    doc.setFont(FONT,'bold')
+    doc.setFontSize(6)
+    doc.setTextColor(...NAVY)
+    doc.text('SCAN CONTACT', qrX + qrSz / 2, qrY + qrSz + 3.5, { align: 'center' })
+  }
 
   // ── FOOTER (matches proposalPdf) ─────────────────────────────────────────────
   const totalPages = (doc as jsPDF & { internal: { getNumberOfPages: () => number } })
