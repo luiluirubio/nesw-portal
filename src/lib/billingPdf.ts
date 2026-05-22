@@ -433,26 +433,26 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
     doc.addImage(contactQrData, 'JPEG', margin, y, qrSz, qrSz)
   }
 
-  const textX = margin + (contactQrData ? qrSz + 4 : 0)
+  const prepX = margin + (contactQrData ? qrSz + 4 : 0)
 
   doc.setFont(FONT,'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
-  doc.text('PREPARED BY', textX, y)
+  doc.text('PREPARED BY', prepX, y)
   y += 5
 
   doc.setFont(FONT,'bold')
   doc.setFontSize(9.5)
   doc.setTextColor(...BODY)
-  doc.text(sanitize(billing.agentName || '—'), textX, y)
+  doc.text(sanitize(billing.agentName || '—'), prepX, y)
   y += 5
 
   doc.setFont(FONT,'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
-  doc.text('E: jrubio@neswcorp.com', textX, y)
+  doc.text('E: jrubio@neswcorp.com', prepX, y)
   y += 4
-  doc.text('M: +63 998 859 0597', textX, y)
+  doc.text('M: +63 998 859 0597', prepX, y)
 
   // ── FOOTER (matches proposalPdf) ─────────────────────────────────────────────
   const totalPages = (doc as jsPDF & { internal: { getNumberOfPages: () => number } })
