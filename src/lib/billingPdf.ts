@@ -428,31 +428,37 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.line(margin, y, pw - margin, y)
   y += 4
 
-  // QR image — left-aligned
+  const qrStartY = y
+
+  // QR image — left-aligned, full block height
   if (contactQrData) {
-    doc.addImage(contactQrData, 'JPEG', margin, y, qrSz, qrSz)
+    doc.addImage(contactQrData, 'JPEG', margin, qrStartY, qrSz, qrSz)
   }
 
-  const prepX = margin + (contactQrData ? qrSz + 4 : 0)
+  // Text block — vertically centered within the QR height
+  // text span: 5 (label→name) + 5 (name→email) + 4 (email→phone) = 14mm between baselines
+  const textBlockSpan = 14
+  const prepX  = margin + (contactQrData ? qrSz + 5 : 0)
+  let   textY  = qrStartY + (qrSz - textBlockSpan) / 2
 
   doc.setFont(FONT,'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
-  doc.text('PREPARED BY', prepX, y)
-  y += 5
+  doc.text('PREPARED BY', prepX, textY)
+  textY += 5
 
   doc.setFont(FONT,'bold')
   doc.setFontSize(9.5)
   doc.setTextColor(...BODY)
-  doc.text(sanitize(billing.agentName || '—'), prepX, y)
-  y += 5
+  doc.text(sanitize(billing.agentName || '—'), prepX, textY)
+  textY += 5
 
   doc.setFont(FONT,'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
-  doc.text('E: jrubio@neswcorp.com', prepX, y)
-  y += 4
-  doc.text('M: +63 998 859 0597', prepX, y)
+  doc.text('E: jrubio@neswcorp.com', prepX, textY)
+  textY += 4
+  doc.text('M: +63 998 859 0597', prepX, textY)
 
   // ── FOOTER (matches proposalPdf) ─────────────────────────────────────────────
   const totalPages = (doc as jsPDF & { internal: { getNumberOfPages: () => number } })
