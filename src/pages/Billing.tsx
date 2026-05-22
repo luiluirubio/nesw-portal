@@ -280,10 +280,10 @@ function BillingDetailPanel({
             </div>
           </section>
 
-          {/* Terms */}
+          {/* Notes */}
           {billing.terms && (
             <section>
-              <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>Terms & Conditions</p>
+              <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>Notes</p>
               <p className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--muted-foreground)' }}>
                 {billing.terms}
               </p>

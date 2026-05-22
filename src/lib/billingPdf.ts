@@ -377,7 +377,7 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.setFont(FONT,'bold')
   doc.setFontSize(7)
   doc.setTextColor(...WHITE)
-  doc.text('TERMS AND CONDITIONS', termsX + 4, y + 4.5)
+  doc.text('NOTES', termsX + 4, y + 4.5)
 
   y += 9
 

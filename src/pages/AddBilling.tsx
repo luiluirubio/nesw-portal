@@ -12,8 +12,7 @@ import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateBillingDraftId } 
 import type { BillingDraft } from '@/types/draft'
 import { ClientSelector } from '@/components/ClientSelector'
 
-const DEFAULT_TERMS =
-  "For your convenience, we'll prepare everything for release and provide the final appraisal reports as soon as full payment has been received."
+const DEFAULT_TERMS = ''
 
 function Field({ label, required, children }: {
   label: string; required?: boolean; children: React.ReactNode
@@ -475,11 +474,11 @@ export function AddBilling() {
             </div>
           </section>
 
-          {/* ── SECTION C: Terms ───────────────────────────────────────────── */}
+          {/* ── SECTION C: Notes ───────────────────────────────────────────── */}
           <section className="rounded-xl border p-5 space-y-4"
             style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
             <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>
-              Terms & Conditions
+              Notes
             </h2>
             <textarea value={terms} onChange={e => setTerms(e.target.value)}
               rows={4} className={cn(inputCls, 'resize-none')} style={inputStyle} />
