@@ -21,6 +21,7 @@ import { Bookings } from '@/pages/Bookings'
 import { AddBooking } from '@/pages/AddBooking'
 import { ViewBooking } from '@/pages/ViewBooking'
 import { ViewProposal } from '@/pages/ViewProposal'
+import { PaymentSuccess } from '@/pages/PaymentSuccess'
 
 export default function App() {
   return (
@@ -32,7 +33,8 @@ export default function App() {
           <LogsProvider>
             <AppToaster />
             <Routes>
-              <Route path="/login" element={<Login />} />
+              <Route path="/login"           element={<Login />} />
+              <Route path="/payment-success" element={<PaymentSuccess />} />
               <Route path="/*" element={
                 <Layout>
                   <Routes>

@@ -33,7 +33,7 @@ async function createXenditInvoice(
       customer:             { given_names: clientName },
       currency:             'PHP',
       invoice_duration:     2592000, // 30 days
-      success_redirect_url: process.env.FRONTEND_URL ?? 'https://staging-portal.neswcorp.com',
+      success_redirect_url: `${process.env.FRONTEND_URL ?? 'https://staging-portal.neswcorp.com'}/payment-success?ref=billing-${billingNo}`,
     }
     const res = await fetch('https://api.xendit.co/v2/invoices', {
       method:  'POST',
@@ -234,6 +234,41 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to update billing' })
+  }
+})
+
+// GET /api/billing/public/verify?ref=billing-{billingNo} — no auth, public
+router.get('/public/verify', async (req: Request, res: Response) => {
+  try {
+    const ref = (req.query.ref as string ?? '').trim()
+    if (!ref || !ref.startsWith('billing-')) {
+      res.status(400).json({ error: 'Invalid ref' }); return
+    }
+
+    const billingNo = ref.replace(/^billing-/, '')
+
+    const result = await db.send(new ScanCommand({
+      TableName:        Tables.billings,
+      FilterExpression: 'billingNo = :bn',
+      ExpressionAttributeValues: { ':bn': billingNo },
+    }))
+
+    const billing = result.Items?.[0]
+
+    if (!billing || billing.paymentStatus !== 'paid') {
+      res.status(404).json({ error: 'Payment not verified' }); return
+    }
+
+    res.json({
+      verified:   true,
+      billingNo:  billing.billingNo,
+      clientName: billing.clientName,
+      total:      billing.total,
+      paidAt:     billing.updatedAt,
+    })
+  } catch (err) {
+    console.error('Payment verify error:', err)
+    res.status(500).json({ error: 'Verification failed' })
   }
 })
 
