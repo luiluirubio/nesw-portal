@@ -55,16 +55,16 @@ async function fetchFontBase64(filename: string): Promise<string | null> {
   } catch { return null }
 }
 
-async function fetchLogoDataUrl(): Promise<string | null> {
+async function fetchImageDataUrl(path: string, mime: string): Promise<string | null> {
   try {
-    const res   = await fetch('/nesw-logo.png')
+    const res   = await fetch(path)
     if (!res.ok) return null
     const bytes = new Uint8Array(await res.arrayBuffer())
     let binary  = ''
     const chunk = 8192
     for (let i = 0; i < bytes.length; i += chunk)
       binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-    return `data:image/png;base64,${btoa(binary)}`
+    return `data:${mime};base64,${btoa(binary)}`
   } catch { return null }
 }
 
@@ -72,8 +72,9 @@ async function fetchLogoDataUrl(): Promise<string | null> {
 const FONT = 'NotoSans'
 
 export async function generateBillingPDF(billing: Billing, returnBlob?: boolean): Promise<Blob | void> {
-  const [logoData, fontRegular, fontBold, fontItalic, fontBoldItalic] = await Promise.all([
-    fetchLogoDataUrl(),
+  const [logoData, contactQrData, fontRegular, fontBold, fontItalic, fontBoldItalic] = await Promise.all([
+    fetchImageDataUrl('/nesw-logo.png', 'image/png'),
+    fetchImageDataUrl('/jrubio-contact-billing.jpg', 'image/jpeg'),
     fetchFontBase64('NotoSans-Regular.ttf'),
     fetchFontBase64('NotoSans-Bold.ttf'),
     fetchFontBase64('NotoSans-Italic.ttf'),
@@ -412,28 +413,11 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   }
 
   // ── PREPARED BY — anchored above footer on current page ──────────────────────
-  const contactVCard = [
-    'BEGIN:VCARD', 'VERSION:3.0',
-    `N:${sanitize(billing.agentName || 'Rubio;Jessamyn;;;')}`,
-    `FN:${sanitize(billing.agentName || 'Jessamyn Rubio')}`,
-    'TEL;TYPE=CELL:+63 998 859 0597',
-    'EMAIL:jrubio@neswcorp.com',
-    'END:VCARD',
-  ].join('\n')
-
-  let contactQrUrl: string | null = null
-  try {
-    contactQrUrl = await QRCode.toDataURL(contactVCard, {
-      width: 180, margin: 1, color: { dark: '#1b3864', light: '#ffffff' },
-    })
-  } catch { /* skip */ }
-
-  const qrSz       = 20   // mm — QR image size
-  const labelH     = 5    // mm — "SCAN CONTACT" label height
-  const sectionH   = 4 + 4 + 5 + 4 + 4   // divider-gap + label + name + email + phone = 21mm
-  const blockH     = Math.max(sectionH, qrSz + labelH) + 2
-  const ph0        = doc.internal.pageSize.getHeight()
-  const anchorY    = ph0 - 11 - 4 - blockH   // sit just above the footer line
+  const qrSz     = 22   // mm — QR image size
+  const sectionH = 4 + 4 + 5 + 4 + 4   // divider-gap + label + name + email + phone = 21mm
+  const blockH   = Math.max(sectionH, qrSz) + 2
+  const ph0      = doc.internal.pageSize.getHeight()
+  const anchorY  = ph0 - 11 - 4 - blockH   // sit just above the footer line
 
   // Only add a page if the payment section already consumed that space
   if (bankEndY > anchorY) doc.addPage()
@@ -444,35 +428,31 @@ export async function generateBillingPDF(billing: Billing, returnBlob?: boolean)
   doc.line(margin, y, pw - margin, y)
   y += 4
 
+  // QR image — left-aligned
+  if (contactQrData) {
+    doc.addImage(contactQrData, 'JPEG', margin, y, qrSz, qrSz)
+  }
+
+  const textX = margin + (contactQrData ? qrSz + 4 : 0)
+
   doc.setFont(FONT,'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...MUTED)
-  doc.text('PREPARED BY', margin, y)
-  y += 4
+  doc.text('PREPARED BY', textX, y)
+  y += 5
 
   doc.setFont(FONT,'bold')
   doc.setFontSize(9.5)
   doc.setTextColor(...BODY)
-  doc.text(sanitize(billing.agentName || '—'), margin, y)
+  doc.text(sanitize(billing.agentName || '—'), textX, y)
   y += 5
 
   doc.setFont(FONT,'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
-  doc.text('E: jrubio@neswcorp.com', margin, y)
+  doc.text('E: jrubio@neswcorp.com', textX, y)
   y += 4
-  doc.text('M: +63 998 859 0597', margin, y)
-
-  // QR code — right-aligned
-  if (contactQrUrl) {
-    const qrX = pw - margin - qrSz
-    const qrY = anchorY + 4
-    doc.addImage(contactQrUrl, 'PNG', qrX, qrY, qrSz, qrSz)
-    doc.setFont(FONT,'bold')
-    doc.setFontSize(6)
-    doc.setTextColor(...NAVY)
-    doc.text('SCAN CONTACT', qrX + qrSz / 2, qrY + qrSz + 3.5, { align: 'center' })
-  }
+  doc.text('M: +63 998 859 0597', textX, y)
 
   // ── FOOTER (matches proposalPdf) ─────────────────────────────────────────────
   const totalPages = (doc as jsPDF & { internal: { getNumberOfPages: () => number } })
