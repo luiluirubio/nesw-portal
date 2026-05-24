@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import type { AccountInfo } from '@azure/msal-browser'
-import { getAccount, loginRedirect, logoutRedirect } from '@/lib/auth'
-import { setApiAgent, api } from '@/lib/api'
+import { getAccount, loginRedirect, logoutRedirect, getIdToken } from '@/lib/auth'
+import { api } from '@/lib/api'
 import type { LoginRecord, LoginMethod } from '@/types/loginHistory'
 
 export interface AuthUser {
@@ -21,7 +21,7 @@ interface AuthContextValue {
   isAuthenticated:  boolean
   isLoading:        boolean
   loginMethod:      'sso' | 'password' | null
-  login:            () => void                                   // M365 SSO
+  login:            () => void
   loginWithPassword:(email: string, password: string) => Promise<{ error?: string }>
   logout:           () => void
   loginHistory:     LoginRecord[]
@@ -30,8 +30,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const TOKEN_KEY  = 'nesw_token'
-const HISTORY_KEY = 'nesw_login_history'
+const TOKEN_KEY    = 'nesw_token'
+const HISTORY_KEY  = 'nesw_login_history'
 const SESSION_LOGGED = 'nesw_session_logged'
 
 function generateId() { return Math.random().toString(36).slice(2, 10).toUpperCase() }
@@ -60,18 +60,8 @@ async function recordLogin(agentId: string, agentName: string, method: LoginMeth
   const updated = [record, ...getStoredHistory()].slice(0, 200)
   localStorage.setItem(HISTORY_KEY, JSON.stringify(updated))
 
-  const apiBase = import.meta.env.VITE_API_URL
-  if (apiBase) {
-    const token = localStorage.getItem(TOKEN_KEY)
-    fetch(`${apiBase}/api/logs/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : { 'X-Agent-Id': agentId }),
-      },
-      body: JSON.stringify({ agentId, agentName, method, sessionId: record.sessionId, ipAddress: record.ipAddress, userAgent: record.userAgent }),
-    }).catch(() => {})
-  }
+  // Fire-and-forget: record login in backend (JWT is already stored at this point)
+  api.recordLogin({ agentId, agentName, method, sessionId: record.sessionId, ipAddress: record.ipAddress, userAgent: record.userAgent }).catch(() => {})
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -81,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loginMethod, setLoginMethod] = useState<'sso' | 'password' | null>(null)
   const [loginHistory, setLoginHistory] = useState<LoginRecord[]>(getStoredHistory)
 
-  // ── Try JWT token first (email/password session) ──────────────────────
+  // ── Try JWT token first (email/password or prior SSO session) ────────
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY)
     if (token) {
@@ -98,8 +88,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUser(u)
         setLoginMethod('password')
-        setApiAgent(u.id, u.email)
-        // Record session restore as a login (session guard prevents duplicates)
         recordLogin(u.id, u.name, 'manual').then(() => setLoginHistory(getStoredHistory()))
         setIsLoading(false)
         return
@@ -108,58 +96,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // ── Try MSAL (M365 SSO) ─────────────────────────────────────────────
+    // ── Try MSAL (M365 SSO) — exchange ID token for backend JWT ─────────
     getAccount()
       .then(async acc => {
         if (!acc) return
-        // Look up canonical profile from users table by email so the ID and
-        // role match what was set when the account was created (email/password
-        // login and M365 login would otherwise produce different user IDs).
-        let id   = acc.localAccountId
-        let name = acc.name ?? acc.username
-        let role: 'Admin' | 'Agent' = 'Agent'
-        let branch    = ''
-        let licenseNo = ''
-        try {
-          const apiBase = import.meta.env.VITE_API_URL ?? ''
-          const profileRes = await fetch(`${apiBase}/api/auth/profile`, {
-            headers: { 'X-Agent-Email': acc.username },
-          })
-          if (profileRes.ok) {
-            const profile = await profileRes.json() as {
-              id: string; name: string; role: 'Admin' | 'Agent'
-              branch: string; licenseNo: string
-            }
-            id        = profile.id
-            name      = profile.name
-            role      = profile.role
-            branch    = profile.branch ?? ''
-            licenseNo = profile.licenseNo ?? ''
-          }
-        } catch { /* non-critical — fall back to Azure AD values */ }
+        const idToken = await getIdToken()
+        if (!idToken) return
 
-        const u: AuthUser = {
-          id, name, email: acc.username,
-          role, branch, licenseNo,
-          status: 'active',
-          msAccount: acc,
+        try {
+          const { token, user: rawUser } = await api.ssoExchange(idToken)
+          localStorage.setItem(TOKEN_KEY, token)
+
+          const u: AuthUser = {
+            id:        rawUser.id as string,
+            name:      rawUser.name as string,
+            email:     rawUser.email as string,
+            role:      rawUser.role as 'Admin' | 'Agent',
+            branch:    (rawUser.branch as string) ?? '',
+            licenseNo: (rawUser.licenseNo as string) ?? '',
+            status:    (rawUser.status as 'active' | 'inactive') ?? 'active',
+            msAccount: acc,
+          }
+          setUser(u)
+          setMsAccount(acc)
+          setLoginMethod('sso')
+          recordLogin(u.id, u.name, 'microsoft_sso').then(() => setLoginHistory(getStoredHistory()))
+        } catch {
+          // SSO exchange failed — user may not exist in the system
         }
-        setUser(u)
-        setMsAccount(acc)
-        setLoginMethod('sso')
-        setApiAgent(id, acc.username)
-        recordLogin(id, name, 'microsoft_sso').then(() =>
-          setLoginHistory(getStoredHistory())
-        )
       })
       .catch(() => {})
       .finally(() => setIsLoading(false))
   }, [])
 
-  // ── M365 SSO login ────────────────────────────────────────────────────
   function login() { loginRedirect() }
 
-  // ── Email/password login ──────────────────────────────────────────────
   async function loginWithPassword(email: string, password: string): Promise<{ error?: string }> {
     try {
       const res = await api.login(email, password)
@@ -171,13 +142,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name:      rawUser.name as string,
         email:     rawUser.email as string,
         role:      rawUser.role as 'Admin' | 'Agent',
-        branch:    rawUser.branch as string ?? '',
-        licenseNo: rawUser.licenseNo as string ?? '',
+        branch:    (rawUser.branch as string) ?? '',
+        licenseNo: (rawUser.licenseNo as string) ?? '',
         status:    rawUser.status as 'active' | 'inactive',
       }
       setUser(u)
       setLoginMethod('password')
-      setApiAgent(u.id, u.email)
       recordLogin(u.id, u.name, 'manual').then(() => setLoginHistory(getStoredHistory()))
       return {}
     } catch (err) {
@@ -185,7 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // ── Logout ─────────────────────────────────────────────────────────────
   function logout() {
     localStorage.removeItem(TOKEN_KEY)
     sessionStorage.removeItem(SESSION_LOGGED)

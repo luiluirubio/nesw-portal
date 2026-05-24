@@ -36,6 +36,9 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.send(new GetCommand({ TableName: Tables.bookings, Key: { id: req.params.id } }))
     if (!result.Item) { res.status(404).json({ error: 'Booking not found' }); return }
+    if (req.userRole !== 'Admin' && result.Item.agentId !== req.userId) {
+      res.status(403).json({ error: 'Forbidden' }); return
+    }
     res.json(result.Item)
   } catch (err) {
     console.error(err)

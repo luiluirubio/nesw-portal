@@ -2,28 +2,16 @@ import type { ListingDraft } from '@/types/draft'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
-// Agent context set once after MSAL login
-let _agentId    = ''
-let _agentEmail = ''
-
-export function setApiAgent(id: string, email: string) {
-  _agentId    = id
-  _agentEmail = email
-}
+const TOKEN_KEY = 'nesw_token'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('nesw_token')
-
-  // Only send X-Agent-Id when there is no JWT token (M365 SSO path only)
-  const agentHeaders: Record<string, string> = (!token && _agentId)
-    ? { 'X-Agent-Id': _agentId, ...(_agentEmail ? { 'X-Agent-Email': _agentEmail } : {}) }
-    : {}
+  const token = localStorage.getItem(TOKEN_KEY)
 
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : agentHeaders),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   })
@@ -73,6 +61,10 @@ export const api = {
     request<{ token: string; user: Record<string, unknown> }>('/api/auth/login', {
       method: 'POST', body: JSON.stringify({ email, password }),
     }),
+  ssoExchange: (idToken: string) =>
+    request<{ token: string; user: Record<string, unknown> }>('/api/auth/sso', {
+      method: 'POST', body: JSON.stringify({ idToken }),
+    }),
 
   // Users (admin)
   getUsers:     ()                          => request<unknown[]>('/api/users'),
@@ -117,5 +109,5 @@ export const api = {
     request<{ success: boolean }>('/api/email/send', { method: 'POST', body: JSON.stringify(body) }),
 
   // Health
-  health: () => request<{ status: string; stage: string; ts: string }>('/api/health'),
+  health: () => request<{ status: string }>('/api/health'),
 }

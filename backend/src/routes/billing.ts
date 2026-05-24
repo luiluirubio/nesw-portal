@@ -58,9 +58,13 @@ async function createXenditInvoice(
 // POST /api/billing/xendit-webhook — Xendit payment callback (no auth required)
 router.post('/xendit-webhook', async (req: Request, res: Response) => {
   try {
-    // Xendit sends X-CALLBACK-TOKEN header for verification
+    const XENDIT_WEBHOOK_TOKEN = process.env.XENDIT_WEBHOOK_TOKEN
+    if (!XENDIT_WEBHOOK_TOKEN) {
+      console.error('XENDIT_WEBHOOK_TOKEN not set — rejecting webhook')
+      res.status(503).json({ error: 'Webhook not configured' }); return
+    }
     const token = req.headers['x-callback-token']
-    if (process.env.XENDIT_WEBHOOK_TOKEN && token !== process.env.XENDIT_WEBHOOK_TOKEN) {
+    if (token !== XENDIT_WEBHOOK_TOKEN) {
       res.status(401).json({ error: 'Invalid callback token' }); return
     }
 
@@ -126,6 +130,9 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.send(new GetCommand({ TableName: Tables.billings, Key: { id: req.params.id } }))
     if (!result.Item) { res.status(404).json({ error: 'Billing not found' }); return }
+    if (req.userRole !== 'Admin' && result.Item.agentId !== req.userId) {
+      res.status(403).json({ error: 'Forbidden' }); return
+    }
     res.json(result.Item)
   } catch (err) {
     console.error(err)

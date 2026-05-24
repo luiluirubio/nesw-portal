@@ -50,3 +50,19 @@ export async function getAccessToken(): Promise<string | null> {
     return null
   }
 }
+
+export async function getIdToken(): Promise<string | null> {
+  const msal = getMsal()
+  await msal.initialize()
+  const accounts = msal.getAllAccounts()
+  if (!accounts.length) return null
+  try {
+    const result = await msal.acquireTokenSilent({
+      scopes: ['openid', 'profile', 'email'],
+      account: accounts[0],
+    })
+    return result.idToken
+  } catch {
+    return null
+  }
+}

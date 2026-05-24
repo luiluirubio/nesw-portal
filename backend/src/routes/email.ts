@@ -43,6 +43,9 @@ function buildMime(opts: {
   return Buffer.from(lines.join('\r\n'))
 }
 
+const ALLOWED_EMAIL_DOMAINS = ['neswcorp.com', 'nesw.com']
+const MAX_RECIPIENTS = 10
+
 // POST /api/email/send
 router.post('/send', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -56,6 +59,13 @@ router.post('/send', requireAuth, async (req: AuthRequest, res: Response) => {
     if (!Array.isArray(to) || to.length === 0) {
       res.status(400).json({ error: 'to is required' }); return
     }
+    if (to.length > MAX_RECIPIENTS) {
+      res.status(400).json({ error: `Too many recipients (max ${MAX_RECIPIENTS})` }); return
+    }
+    const invalid = to.filter(addr => !ALLOWED_EMAIL_DOMAINS.some(d => addr.toLowerCase().endsWith(`@${d}`)))
+    if (invalid.length > 0) {
+      res.status(400).json({ error: 'All recipients must be neswcorp.com or nesw.com addresses' }); return
+    }
     if (!subject) { res.status(400).json({ error: 'subject is required' }); return }
 
     const raw = buildMime({ from: FROM, to, subject, bodyHtml: bodyHtml ?? '', attachment })
@@ -67,7 +77,7 @@ router.post('/send', requireAuth, async (req: AuthRequest, res: Response) => {
     res.json({ success: true })
   } catch (err) {
     console.error('Email error:', err)
-    res.status(500).json({ error: (err as Error).message })
+    res.status(500).json({ error: 'Failed to send email' })
   }
 })
 

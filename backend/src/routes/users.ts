@@ -24,8 +24,11 @@ router.get('/', requireAuth, requireAdmin, async (_req: AuthRequest, res: Respon
   }
 })
 
-// GET /api/users/:id
+// GET /api/users/:id — admin or own profile only
 router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+  if (req.userRole !== 'Admin' && req.userId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
   try {
     const result = await db.send(new GetCommand({
       TableName:            Tables.users,

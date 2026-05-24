@@ -90,21 +90,28 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     }))
     if (!existing.Item) { res.status(404).json({ error: 'Property not found' }); return }
 
-    // build update expression dynamically
-    const updates = { ...req.body, updatedAt: new Date().toISOString() }
-    delete updates.id
+    if (req.userRole !== 'Admin' && existing.Item.agentId !== req.userId) {
+      res.status(403).json({ error: 'Forbidden' }); return
+    }
 
-    const setExpressions: string[] = []
-    const names: Record<string, string> = {}
-    const values: Record<string, unknown> = {}
+    const allowed = [
+      'title', 'price', 'type', 'status', 'description', 'address', 'images',
+      'features', 'bedrooms', 'bathrooms', 'area', 'lotArea', 'parkingSpots',
+      'amenities', 'notes', 'tags',
+      ...(req.userRole === 'Admin' ? ['agentId'] : []),
+    ]
 
-    Object.entries(updates).forEach(([k, v]) => {
-      const nameKey  = `#${k}`
-      const valueKey = `:${k}`
-      setExpressions.push(`${nameKey} = ${valueKey}`)
-      names[nameKey]  = k
-      values[valueKey] = v
-    })
+    const setExpressions: string[] = ['#ua = :ua']
+    const names: Record<string, string> = { '#ua': 'updatedAt' }
+    const values: Record<string, unknown> = { ':ua': new Date().toISOString() }
+
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        setExpressions.push(`#${key} = :${key}`)
+        names[`#${key}`]  = key
+        values[`:${key}`] = req.body[key]
+      }
+    }
 
     await db.send(new UpdateCommand({
       TableName: Tables.properties,
@@ -114,7 +121,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       ExpressionAttributeValues: values,
     }))
 
-    res.json({ id: req.params.id, ...existing.Item, ...updates })
+    res.json({ id: req.params.id, ...existing.Item, ...req.body, updatedAt: values[':ua'] })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to update property' })
@@ -124,6 +131,16 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // DELETE /api/properties/:id
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const existing = await db.send(new GetCommand({
+      TableName: Tables.properties,
+      Key: { id: req.params.id },
+    }))
+    if (!existing.Item) { res.status(404).json({ error: 'Property not found' }); return }
+
+    if (req.userRole !== 'Admin' && existing.Item.agentId !== req.userId) {
+      res.status(403).json({ error: 'Forbidden' }); return
+    }
+
     await db.send(new DeleteCommand({
       TableName: Tables.properties,
       Key: { id: req.params.id },

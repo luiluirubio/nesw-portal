@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET ?? 'nesw-portal-jwt-secret-staging-2025'
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable must be set')
+}
+const JWT_SECRET = process.env.JWT_SECRET
 
 export interface AuthRequest extends Request {
   userId?:    string
@@ -43,15 +46,6 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       res.status(401).json({ error: 'Invalid or expired token' })
       return
     }
-  }
-
-  // ── M365 SSO fallback — X-Agent-Id header (staging only) ─────────────
-  const agentId = req.headers['x-agent-id'] as string
-  if (agentId) {
-    req.userId    = agentId
-    req.userEmail = req.headers['x-agent-email'] as string | undefined
-    req.userRole  = 'Agent'
-    return next()
   }
 
   res.status(401).json({ error: 'Authentication required' })
