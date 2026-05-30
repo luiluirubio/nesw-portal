@@ -25,13 +25,14 @@ const MAX_FILE_MB = 20
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const propertyTypes: { value: PropertyType; label: string }[] = [
-  { value: 'house_and_lot', label: 'House & Lot' },
-  { value: 'condo',         label: 'Condominium' },
-  { value: 'lot_only',      label: 'Lot Only' },
-  { value: 'commercial',    label: 'Commercial' },
-  { value: 'townhouse',     label: 'Townhouse' },
-  { value: 'warehouse',     label: 'Warehouse' },
-  { value: 'farm_lot',      label: 'Farm Lot' },
+  { value: 'residential_lot_only',             label: 'Residential Lot Only' },
+  { value: 'commercial_lot_only',              label: 'Commercial Lot Only' },
+  { value: 'industrial_lot_only',              label: 'Industrial Lot Only' },
+  { value: 'agricultural_lot_only',            label: 'Agricultural Lot Only' },
+  { value: 'residential_lot_with_improvement', label: 'Residential Lot with Improvement' },
+  { value: 'commercial_lot_with_improvement',  label: 'Commercial Lot with Improvement' },
+  { value: 'industrial_lot_with_improvement',  label: 'Industrial Lot with Improvement' },
+  { value: 'agricultural_lot_with_improvement',label: 'Agricultural Lot with Improvement' },
 ]
 
 const commonFeatures = [
@@ -107,7 +108,7 @@ export function AddListing() {
   const draftId    = draftIdRef.current
 
   const blankForm = {
-    title: '', type: 'house_and_lot' as PropertyType, listingType: 'for_sale' as ListingType,
+    title: '', type: 'residential_lot_only' as PropertyType, listingType: 'for_sale' as ListingType,
     price: '', commission: '3',
     ownerName: '', nameInTitle: '', taxDeclarationNo: '',
     address: '', barangay: '', city: '', province: '',
@@ -374,9 +375,9 @@ export function AddListing() {
   const Err  = ({ field }: { field: string }) =>
     errors[field] ? <p className="text-xs mt-1 text-red-500">{errors[field]}</p> : null
 
-  const needsBedBath = ['house_and_lot','condo','townhouse'].includes(form.type)
-  const needsFloor   = !['lot_only','farm_lot'].includes(form.type)
-  const needsLot     = ['house_and_lot','lot_only','townhouse','commercial','warehouse','farm_lot'].includes(form.type)
+  const needsBedBath = (['residential_lot_with_improvement'] as PropertyType[]).includes(form.type)
+  const needsFloor   = (form.type as string).endsWith('_with_improvement')
+  const needsLot     = true
   const typeLabel    = propertyTypes.find(t => t.value === form.type)?.label ?? form.type
 
   // ── Review rows ────────────────────────────────────────────────────────

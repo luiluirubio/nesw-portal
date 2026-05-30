@@ -1,11 +1,12 @@
 export type PropertyType =
-  | 'house_and_lot'
-  | 'condo'
-  | 'lot_only'
-  | 'commercial'
-  | 'townhouse'
-  | 'warehouse'
-  | 'farm_lot'
+  | 'residential_lot_only'
+  | 'commercial_lot_only'
+  | 'industrial_lot_only'
+  | 'agricultural_lot_only'
+  | 'residential_lot_with_improvement'
+  | 'commercial_lot_with_improvement'
+  | 'industrial_lot_with_improvement'
+  | 'agricultural_lot_with_improvement'
 
 export type PropertyStatus = 'available' | 'reserved' | 'under_contract' | 'sold' | 'off_market' | 'expired'
 

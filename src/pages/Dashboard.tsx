@@ -17,13 +17,14 @@ const statusConfig = {
 }
 
 const typeLabels: Record<string, string> = {
-  house_and_lot: 'House & Lot',
-  condo:         'Condo',
-  lot_only:      'Lot Only',
-  commercial:    'Commercial',
-  townhouse:     'Townhouse',
-  warehouse:     'Warehouse',
-  farm_lot:      'Farm Lot',
+  residential_lot_only:             'Residential Lot Only',
+  commercial_lot_only:              'Commercial Lot Only',
+  industrial_lot_only:              'Industrial Lot Only',
+  agricultural_lot_only:            'Agricultural Lot Only',
+  residential_lot_with_improvement: 'Residential Lot with Improvement',
+  commercial_lot_with_improvement:  'Commercial Lot with Improvement',
+  industrial_lot_with_improvement:  'Industrial Lot with Improvement',
+  agricultural_lot_with_improvement:'Agricultural Lot with Improvement',
 }
 
 export function Dashboard() {
