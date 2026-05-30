@@ -67,10 +67,30 @@ const LABELS = [
   { id: 'purple', name: 'Purple', bg: '#f3e8ff', text: '#6b21a8', pill: '#a855f7' },
 ]
 
+function useLabelNames() {
+  const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('nesw_label_names') ?? '{}') } catch { return {} }
+  })
+  function setName(id: string, name: string) {
+    const next = { ...customNames, [id]: name }
+    setCustomNames(next)
+    localStorage.setItem('nesw_label_names', JSON.stringify(next))
+  }
+  function getName(id: string, fallback: string) { return customNames[id] ?? fallback }
+  return { getName, setName }
+}
+
 function LabelPicker({ active, onToggle }: { active: string[]; onToggle: (id: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
+  const [open, setOpen]         = useState(false)
+  const [search, setSearch]     = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const { getName, setName }    = useLabelNames()
   const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) { setEditingId(null); setSearch('') }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -81,7 +101,20 @@ function LabelPicker({ active, onToggle }: { active: string[]; onToggle: (id: st
     return () => document.removeEventListener('mousedown', handle)
   }, [open])
 
-  const filtered = LABELS.filter(l => l.name.toLowerCase().includes(search.toLowerCase()))
+  function startEdit(id: string, currentName: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(id)
+    setEditValue(currentName)
+  }
+
+  function commitEdit(id: string) {
+    if (editValue.trim()) setName(id, editValue.trim())
+    setEditingId(null)
+  }
+
+  const filtered = LABELS.filter(l =>
+    getName(l.id, l.name).toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <div ref={ref} className="relative inline-block">
@@ -95,12 +128,13 @@ function LabelPicker({ active, onToggle }: { active: string[]; onToggle: (id: st
 
       {open && (
         <div className="absolute left-0 top-full mt-1 z-[60] rounded-[var(--radius)] shadow-xl border overflow-hidden"
-          style={{ width: 220, backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+          style={{ width: 230, backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+          {/* Search */}
           <div className="p-2 border-b" style={{ borderColor: 'var(--border)' }}>
             <div className="relative">
               <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
               <input
-                autoFocus
+                autoFocus={!editingId}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search for label"
@@ -108,23 +142,59 @@ function LabelPicker({ active, onToggle }: { active: string[]; onToggle: (id: st
                 style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
             </div>
           </div>
-          <div className="py-1 max-h-52 overflow-y-auto">
+
+          {/* Label rows */}
+          <div className="py-1 max-h-64 overflow-y-auto">
             {filtered.map(l => {
+              const name     = getName(l.id, l.name)
               const isActive = active.includes(l.id)
+              const isEditing = editingId === l.id
               return (
-                <button key={l.id} type="button"
-                  onClick={() => { onToggle(l.id); setSearch('') }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
-                  style={{ backgroundColor: isActive ? 'var(--accent)' : 'transparent' }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = isActive ? 'var(--accent)' : 'transparent')}>
-                  <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-bold"
-                    style={{ backgroundColor: l.bg, color: l.text }}>
-                    {l.name}
-                  </span>
-                  <span className="flex-1" />
-                  {isActive && <Check size={13} style={{ color: 'var(--primary)' }} />}
-                </button>
+                <div key={l.id}>
+                  {/* Row */}
+                  <div
+                    className="flex items-center gap-2 px-3 py-1.5 group cursor-pointer transition-colors"
+                    style={{ backgroundColor: isActive && !isEditing ? 'var(--accent)' : 'transparent' }}
+                    onMouseEnter={e => { if (!isEditing) e.currentTarget.style.backgroundColor = 'var(--accent)' }}
+                    onMouseLeave={e => { if (!isEditing) e.currentTarget.style.backgroundColor = isActive ? 'var(--accent)' : 'transparent' }}
+                    onClick={() => { if (!isEditing) { onToggle(l.id); setSearch('') } }}>
+                    <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-bold"
+                      style={{ backgroundColor: l.bg, color: l.text }}>
+                      {name}
+                    </span>
+                    <span className="flex-1" />
+                    {isActive && !isEditing && <Check size={13} style={{ color: 'var(--primary)' }} />}
+                    <button
+                      type="button"
+                      onClick={e => startEdit(l.id, name, e)}
+                      title="Edit label name"
+                      className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      style={{ color: 'var(--muted-foreground)' }}
+                      onMouseEnter={e => { e.stopPropagation(); (e.currentTarget as HTMLButtonElement).style.color = 'var(--foreground)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted-foreground)' }}>
+                      <Pencil size={12} />
+                    </button>
+                  </div>
+
+                  {/* Inline edit panel */}
+                  {isEditing && (
+                    <div className="mx-2 mb-2 p-2.5 rounded-[var(--radius-sm)] border"
+                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--primary)' }}>
+                      <p className="text-xs font-bold mb-1.5" style={{ color: 'var(--foreground)' }}>Edit label</p>
+                      <input
+                        autoFocus
+                        value={editValue}
+                        onChange={e => setEditValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter')  { e.preventDefault(); commitEdit(l.id) }
+                          if (e.key === 'Escape') setEditingId(null)
+                        }}
+                        onBlur={() => commitEdit(l.id)}
+                        className="w-full px-2 py-1.5 text-xs rounded-[var(--radius-sm)] focus:outline-none"
+                        style={{ border: '1px solid var(--primary)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
+                    </div>
+                  )}
+                </div>
               )
             })}
             {filtered.length === 0 && (
@@ -207,6 +277,7 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   const [pendingDocs, setPendingDocs] = useState<DocFile[]>([])
 
   const [labels, setLabels] = useState<string[]>(orig.labels ?? [])
+  const { getName: getLabelName } = useLabelNames()
 
   async function toggleLabel(id: string) {
     const next = labels.includes(id) ? labels.filter(l => l !== id) : [...labels, id]
@@ -377,7 +448,7 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
               const l = LABELS.find(x => x.id === id)
               return l ? (
                 <span key={id} className="px-2 py-0.5 rounded-full text-xs font-bold"
-                  style={{ backgroundColor: l.bg, color: l.text }}>{l.name}</span>
+                  style={{ backgroundColor: l.bg, color: l.text }}>{getLabelName(l.id, l.name)}</span>
               ) : null
             })}
           </div>
@@ -412,8 +483,8 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
                       className={cn('px-2.5 py-1 rounded-full text-xs font-bold', canEdit ? 'cursor-pointer hover:opacity-70' : '')}
                       style={{ backgroundColor: l.bg, color: l.text }}
                       onClick={() => canEdit && toggleLabel(id)}
-                      title={canEdit ? `Remove ${l.name}` : l.name}>
-                      {l.name}
+                      title={canEdit ? `Remove ${getLabelName(l.id, l.name)}` : getLabelName(l.id, l.name)}>
+                      {getLabelName(l.id, l.name)}
                     </span>
                   ) : null
                 })}
