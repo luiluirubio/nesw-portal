@@ -25,6 +25,14 @@ const typeLabels: Record<string, string> = {
   commercial_lot_with_improvement:  'Commercial Lot with Improvement',
   industrial_lot_with_improvement:  'Industrial Lot with Improvement',
   agricultural_lot_with_improvement:'Agricultural Lot with Improvement',
+  // Legacy
+  house_and_lot: 'House & Lot',
+  condo:         'Condominium',
+  lot_only:      'Lot Only',
+  commercial:    'Commercial',
+  townhouse:     'Townhouse',
+  warehouse:     'Warehouse',
+  farm_lot:      'Farm Lot',
 }
 
 export function Dashboard() {

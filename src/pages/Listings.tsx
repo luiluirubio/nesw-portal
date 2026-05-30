@@ -37,7 +37,8 @@ const statusConfig: Record<PropertyStatus, { label: string; bg: string; text: st
   expired:        { label: 'Expired',        bg: 'bg-orange-50',  text: 'text-orange-600',  dot: 'bg-orange-400',  color: '#ea580c' },
 }
 
-const typeLabels: Record<PropertyType, string> = {
+const typeLabels: Record<string, string> = {
+  // Current types
   residential_lot_only:             'Residential Lot Only',
   commercial_lot_only:              'Commercial Lot Only',
   industrial_lot_only:              'Industrial Lot Only',
@@ -46,6 +47,14 @@ const typeLabels: Record<PropertyType, string> = {
   commercial_lot_with_improvement:  'Commercial Lot with Improvement',
   industrial_lot_with_improvement:  'Industrial Lot with Improvement',
   agricultural_lot_with_improvement:'Agricultural Lot with Improvement',
+  // Legacy types (existing DB records)
+  house_and_lot: 'House & Lot',
+  condo:         'Condominium',
+  lot_only:      'Lot Only',
+  commercial:    'Commercial',
+  townhouse:     'Townhouse',
+  warehouse:     'Warehouse',
+  farm_lot:      'Farm Lot',
 }
 
 // ── Label system ─────────────────────────────────────────────────────────────
@@ -360,7 +369,7 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
             <X size={13} className="text-white" />
           </button>
           <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">{typeLabels[current.type]}</span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">{typeLabels[current.type] ?? current.type}</span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">
               {current.listingType === 'for_rent' ? 'For Rent' : 'For Sale'}
             </span>
@@ -1156,7 +1165,7 @@ export function Listings({ myOnly = false }: ListingsProps) {
                     <td className="hidden sm:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium"
                         style={{ backgroundColor: 'var(--accent)', color: 'var(--foreground)' }}>
-                        {typeLabels[p.type]}
+                        {typeLabels[p.type] ?? p.type}
                       </span>
                     </td>
                     <td className="hidden sm:table-cell px-3 md:px-4 py-3">
