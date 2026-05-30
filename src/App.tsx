@@ -17,6 +17,8 @@ import { AddProposal } from '@/pages/AddProposal'
 import { Clients } from '@/pages/Clients'
 import { Billing } from '@/pages/Billing'
 import { AddBilling } from '@/pages/AddBilling'
+import { Expenses } from '@/pages/Expenses'
+import { AddExpense } from '@/pages/AddExpense'
 import { Bookings } from '@/pages/Bookings'
 import { AddBooking } from '@/pages/AddBooking'
 import { ViewBooking } from '@/pages/ViewBooking'
@@ -54,6 +56,9 @@ export default function App() {
                     <Route path="/billing"            element={<Billing />} />
                     <Route path="/add-billing"        element={<AddBilling />} />
                     <Route path="/billing/:id/edit"   element={<AddBilling />} />
+                    <Route path="/expenses"           element={<Expenses />} />
+                    <Route path="/add-expense"        element={<AddExpense />} />
+                    <Route path="/expenses/:id/edit"  element={<AddExpense />} />
                   </Routes>
                 </Layout>
               } />
