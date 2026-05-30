@@ -15,6 +15,7 @@ import { Services } from '@/pages/Services'
 import { Proposals } from '@/pages/Proposals'
 import { AddProposal } from '@/pages/AddProposal'
 import { Clients } from '@/pages/Clients'
+import { Payees } from '@/pages/Payees'
 import { Billing } from '@/pages/Billing'
 import { AddBilling } from '@/pages/AddBilling'
 import { Expenses } from '@/pages/Expenses'
@@ -47,6 +48,7 @@ export default function App() {
                     <Route path="/logs"         element={<Logs />} />
                     <Route path="/services"     element={<Services />} />
                     <Route path="/clients"            element={<Clients />} />
+                    <Route path="/payees"             element={<Payees />} />
                     <Route path="/proposals"         element={<Proposals />} />
                     <Route path="/proposals/:id"     element={<ViewProposal />} />
                     <Route path="/add-proposal"      element={<AddProposal />} />

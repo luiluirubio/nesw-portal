@@ -1,14 +1,61 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { Save, ArrowLeft, Trash2, Paperclip } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import {
+  Save, ArrowLeft, ArrowRight, Trash2, Paperclip, CheckCircle,
+  Search, ReceiptText, FileImage,
+} from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { toaster } from '@/components/ui/toast'
-import { cn, formatDate, inputCls, inputStyle } from '@/lib/utils'
-import { loadExpenses, createExpense, updateExpense, MAX_RECEIPT_BYTES } from '@/lib/expenses'
+import { cn, formatPHP, formatDate, inputCls, inputStyle } from '@/lib/utils'
+import { loadExpenses, createExpense, updateExpense, uploadReceipt, MAX_RECEIPT_BYTES } from '@/lib/expenses'
+import { upsertPayeeByName, loadPayees } from '@/lib/payees'
+import { PayeeSelector } from '@/components/PayeeSelector'
+import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateExpenseDraftId } from '@/lib/drafts'
+import type { ExpenseDraft } from '@/types/draft'
+import type { Payee } from '@/types/payee'
 import {
   CATEGORY_LABELS, METHOD_LABELS, USED_FOR_LABELS,
   type Expense, type ExpenseCategory, type PaymentMethod, type ExpenseStatus, type ExpenseUsedFor,
 } from '@/types/expense'
+
+const STEPS = [
+  { number: 1, label: 'Payee',          icon: Search       },
+  { number: 2, label: 'Details',        icon: ReceiptText  },
+  { number: 3, label: 'Receipt & Review', icon: FileImage  },
+]
+
+function StepIndicator({ current }: { current: number }) {
+  return (
+    <div className="flex items-center justify-between mb-8">
+      {STEPS.map((step, i) => {
+        const done   = current > step.number
+        const active = current === step.number
+        const Icon   = step.icon
+        return (
+          <div key={step.number} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0"
+                style={{
+                  backgroundColor: done || active ? 'var(--primary)' : 'var(--accent)',
+                  color: done || active ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
+                }}>
+                {done ? <CheckCircle size={16} /> : <Icon size={15} />}
+              </div>
+              <span className="text-xs font-medium hidden sm:block whitespace-nowrap"
+                style={{ color: active ? 'var(--foreground)' : 'var(--muted-foreground)' }}>
+                {step.label}
+              </span>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className="flex-1 h-0.5 mx-2 rounded transition-colors"
+                style={{ backgroundColor: current > step.number ? 'var(--primary)' : 'var(--border)' }} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 function Field({ label, required, children }: {
   label: string; required?: boolean; children: React.ReactNode
@@ -23,29 +70,53 @@ function Field({ label, required, children }: {
   )
 }
 
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 py-1.5 text-sm">
+      <span style={{ color: 'var(--muted-foreground)' }}>{label}</span>
+      <span className="font-medium text-right" style={{ color: 'var(--foreground)' }}>{value}</span>
+    </div>
+  )
+}
+
 export function AddExpense() {
   const navigate     = useNavigate()
   const { id }       = useParams<{ id: string }>()
+  const [params]     = useSearchParams()
   const { user }     = useAuth()
   const isEdit       = Boolean(id)
 
+  // Draft (new expenses only)
+  const draftIdRef   = useRef<string>(params.get('draft') ?? generateExpenseDraftId())
+  const draftId      = draftIdRef.current
+  const [loadingDraft, setLoadingDraft] = useState(!isEdit && !!params.get('draft'))
+  const [submitted, setSubmitted]       = useState(false)
+
+  const [step, setStep]       = useState(1)
   const [saving, setSaving]   = useState(false)
   const [existing, setExisting] = useState<Expense | null>(null)
 
   // Form state
+  const [selectedPayee, setSelectedPayee] = useState<Payee | null>(null)
+  const [payee,         setPayee]         = useState('')       // resolved name (lookup, new, or skipped/manual)
+  const [payeeId,       setPayeeId]       = useState<string>('')
   const [date,          setDate]          = useState(new Date().toISOString().slice(0, 10))
   const [category,      setCategory]      = useState<ExpenseCategory>('marketing')
   const [amount,        setAmount]        = useState<number>(0)
-  const [payee,         setPayee]         = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [usedFor,       setUsedFor]       = useState<ExpenseUsedFor>('office')
   const [projectName,   setProjectName]   = useState('')
   const [status,        setStatus]        = useState<ExpenseStatus>('pending')
   const [notes,         setNotes]         = useState('')
-  const [receiptName,   setReceiptName]   = useState<string | undefined>()
-  const [receiptDataUrl, setReceiptDataUrl] = useState<string | undefined>()
 
-  // Load existing expense when editing
+  // Receipt
+  const [receiptFile, setReceiptFile]     = useState<File | null>(null)
+  const [receiptName, setReceiptName]     = useState<string | undefined>()
+  const [receiptUrl,  setReceiptUrl]      = useState<string | undefined>()       // existing S3 url (edit)
+  const [receiptDataUrl, setReceiptDataUrl] = useState<string | undefined>()     // legacy inline (edit)
+  const [previewUrl,  setPreviewUrl]      = useState<string | undefined>()       // object URL for new file
+
+  // ── Load existing expense (edit mode) ─────────────────────────────────────
   useEffect(() => {
     if (!isEdit || !id) return
     const found = loadExpenses().find(e => e.id === id)
@@ -55,53 +126,140 @@ export function AddExpense() {
       return
     }
     setExisting(found)
+    if (found.payeeId) {
+      const p = loadPayees().find(x => x.id === found.payeeId)
+      if (p) setSelectedPayee(p)
+    }
+    setPayee(found.payee)
+    setPayeeId(found.payeeId ?? '')
     setDate(found.date)
     setCategory(found.category)
     setAmount(found.amount)
-    setPayee(found.payee)
     setPaymentMethod(found.paymentMethod)
     setUsedFor(found.usedFor)
     setProjectName(found.projectName ?? '')
     setStatus(found.status)
     setNotes(found.notes)
     setReceiptName(found.receiptName)
+    setReceiptUrl(found.receiptUrl)
     setReceiptDataUrl(found.receiptDataUrl)
   }, [id, isEdit, navigate])
 
+  // ── Load draft on resume (new only) ───────────────────────────────────────
+  useEffect(() => {
+    const draftParam = params.get('draft')
+    if (!draftParam || isEdit) return
+    fetchDraft<ExpenseDraft>(draftParam).then(d => {
+      if (d) {
+        setStep(d.lastStep || 1)
+        setPayee(d.payee || '')
+        setPayeeId(d.payeeId || '')
+        if (d.payeeId) {
+          const p = loadPayees().find(x => x.id === d.payeeId)
+          if (p) setSelectedPayee(p)
+        }
+        if (d.date) setDate(d.date)
+        setCategory((d.category as ExpenseCategory) || 'marketing')
+        setAmount(d.amount || 0)
+        setPaymentMethod((d.paymentMethod as PaymentMethod) || 'cash')
+        setUsedFor((d.usedFor as ExpenseUsedFor) || 'office')
+        setProjectName(d.projectName || '')
+        setStatus((d.status as ExpenseStatus) || 'pending')
+        setNotes(d.notes || '')
+        setReceiptName(d.receiptName)
+      }
+    }).finally(() => setLoadingDraft(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-save draft on change (new only) ──────────────────────────────────
+  const autoSave = useCallback(() => {
+    if (!user || isEdit || submitted || loadingDraft) return
+    saveDraftCloud({
+      id: draftId, agentId: user.id, agentName: user.name,
+      draftType: 'expense', savedAt: new Date().toISOString(),
+      lastStep: step,
+      payeeId, payee, date, amount, category, paymentMethod, usedFor, projectName, status, notes,
+      receiptName,
+    })
+  }, [draftId, user, isEdit, submitted, loadingDraft, step, payeeId, payee, date, amount, category, paymentMethod, usedFor, projectName, status, notes, receiptName])
+
+  useEffect(() => {
+    if (isEdit || submitted || loadingDraft) return
+    const t = setTimeout(autoSave, 800)
+    return () => clearTimeout(t)
+  }, [autoSave, isEdit, submitted, loadingDraft])
+
+  // Clean up object URL
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
+
+  // ── Receipt handling ──────────────────────────────────────────────────────
   function handleReceiptChange(file: File | undefined) {
     if (!file) return
     if (file.size > MAX_RECEIPT_BYTES) {
-      toaster.create({ title: 'Receipt too large', description: 'Please use a file under 1MB.', type: 'error' })
+      toaster.create({ title: 'Receipt too large', description: 'Please use a file under 5MB.', type: 'error' })
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      setReceiptDataUrl(reader.result as string)
-      setReceiptName(file.name)
-    }
-    reader.readAsDataURL(file)
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setReceiptFile(file)
+    setReceiptName(file.name)
+    setReceiptUrl(undefined)
+    setReceiptDataUrl(undefined)
+    setPreviewUrl(file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined)
   }
 
-  function handleSave() {
-    if (!payee.trim()) {
-      toaster.create({ title: 'Payee is required', type: 'error' }); return
+  function clearReceipt() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setReceiptFile(null)
+    setReceiptName(undefined)
+    setReceiptUrl(undefined)
+    setReceiptDataUrl(undefined)
+    setPreviewUrl(undefined)
+  }
+
+  // ── Payee handlers ────────────────────────────────────────────────────────
+  function pickPayee(p: Payee) { setSelectedPayee(p); setPayee(p.name); setPayeeId(p.id) }
+  function useNewPayee(name: string) {
+    // Create/lookup the payee immediately so it becomes reusable master data.
+    const p = upsertPayeeByName(name)
+    setSelectedPayee(p); setPayee(p.name); setPayeeId(p.id)
+  }
+  function clearPayee() { setSelectedPayee(null); setPayee(''); setPayeeId('') }
+
+  // ── Navigation / validation ───────────────────────────────────────────────
+  function next() {
+    if (step === 2) {
+      if (!payee.trim()) { toaster.create({ title: 'Payee is required', type: 'error' }); return }
+      if (!amount || amount <= 0) { toaster.create({ title: 'Amount must be greater than 0', type: 'error' }); return }
     }
-    if (!amount || amount <= 0) {
-      toaster.create({ title: 'Amount must be greater than 0', type: 'error' }); return
-    }
+    setStep(s => Math.min(s + 1, STEPS.length))
+  }
+  function back() { setStep(s => Math.max(s - 1, 1)) }
+
+  async function handleSubmit() {
+    if (!payee.trim()) { setStep(2); toaster.create({ title: 'Payee is required', type: 'error' }); return }
+    if (!amount || amount <= 0) { setStep(2); toaster.create({ title: 'Amount must be greater than 0', type: 'error' }); return }
     setSaving(true)
     try {
+      // Upload a freshly attached receipt to S3
+      let finalUrl = receiptUrl
+      if (receiptFile) {
+        finalUrl = await uploadReceipt(receiptFile)
+      }
       const payload = {
-        date, category, amount: Number(amount), payee: payee.trim(), paymentMethod,
-        usedFor,
+        date, category, amount: Number(amount),
+        payeeId: payeeId || undefined, payee: payee.trim(),
+        paymentMethod, usedFor,
         projectName: usedFor === 'project' ? projectName.trim() : undefined,
         status, notes,
-        receiptName, receiptDataUrl,
+        receiptName, receiptUrl: finalUrl,
+        receiptDataUrl: receiptDataUrl,  // preserve legacy inline if present
         agentId:   existing?.agentId   ?? user?.id   ?? '',
         agentName: existing?.agentName ?? user?.name ?? '',
       }
       if (isEdit && id) updateExpense(id, payload)
       else createExpense(payload)
+      setSubmitted(true)
+      if (!isEdit) deleteDraftCloud(draftId)
       toaster.create({ title: isEdit ? 'Expense updated' : 'Expense recorded', type: 'success' })
       navigate('/expenses')
     } catch (err) {
@@ -111,157 +269,178 @@ export function AddExpense() {
     }
   }
 
-  const isImage = receiptDataUrl?.startsWith('data:image/')
+  const hasReceipt = !!(receiptFile || receiptUrl || receiptDataUrl)
+  const isImagePreview = !!previewUrl
+  const existingImage = !receiptFile && !!(receiptUrl?.match(/\.(png|jpe?g|webp|gif)$/i) || receiptDataUrl?.startsWith('data:image/'))
 
   return (
     <div className="flex flex-col h-full">
       {/* Page header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b shrink-0"
-        style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/expenses')}
-            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--accent)]"
-            style={{ color: 'var(--muted-foreground)' }}>
+            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--accent)]" style={{ color: 'var(--muted-foreground)' }}>
             <ArrowLeft size={16} />
           </button>
           <div>
             <h1 className="text-lg font-bold" style={{ color: 'var(--foreground)' }}>
               {isEdit ? 'Edit Expense' : 'New Expense'}
             </h1>
-            {existing && (
-              <p className="text-xs font-mono" style={{ color: 'var(--primary)' }}>{existing.expenseNo}</p>
-            )}
+            {existing
+              ? <p className="text-xs font-mono" style={{ color: 'var(--primary)' }}>{existing.expenseNo}</p>
+              : <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Auto-saved as you go</p>}
           </div>
         </div>
-        <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: 'var(--primary)' }}>
-          <Save size={15} />
-          {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Expense'}
-        </button>
       </div>
 
       {/* Form body */}
       <div className="flex-1 overflow-auto px-6 py-6">
-        <div className="max-w-2xl mx-auto space-y-8">
+        <div className="max-w-2xl mx-auto">
+          <StepIndicator current={step} />
 
-          {/* ── Expense Details ───────────────────────────────────────────── */}
-          <section className="rounded-xl border p-5 space-y-4"
-            style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>
-              Expense Details
-            </h2>
+          {/* ── STEP 1: Payee ─────────────────────────────────────────────── */}
+          {step === 1 && (
+            <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Who was paid?</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+                  Look up a saved payee, type a new one (it gets saved for next time), or skip and enter a name manually.
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Date" required>
-                <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                  className={inputCls} style={inputStyle} />
-              </Field>
-              <Field label="Amount (PHP)" required>
-                <input type="number" min={0} value={amount || ''}
-                  onChange={e => setAmount(Number(e.target.value))}
-                  placeholder="0" className={inputCls} style={inputStyle} />
-              </Field>
-              <Field label="Category" required>
-                <select value={category} onChange={e => setCategory(e.target.value as ExpenseCategory)}
-                  className={inputCls} style={inputStyle}>
-                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </Field>
-              <Field label="Payment Method" required>
-                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
-                  className={inputCls} style={inputStyle}>
-                  {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </Field>
-              <Field label="Payee / Vendor" required>
-                <input value={payee} onChange={e => setPayee(e.target.value)}
-                  placeholder="Who was paid" className={inputCls} style={inputStyle} />
-              </Field>
-              <Field label="Used For" required>
-                <select value={usedFor} onChange={e => setUsedFor(e.target.value as ExpenseUsedFor)}
-                  className={inputCls} style={inputStyle}>
-                  {Object.entries(USED_FOR_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </Field>
-              {usedFor === 'project' && (
-                <Field label="Project Name">
-                  <input value={projectName} onChange={e => setProjectName(e.target.value)}
-                    placeholder="e.g. Apalit Subdivision" className={inputCls} style={inputStyle} />
+              <PayeeSelector value={selectedPayee} onSelect={pickPayee} onUseNew={useNewPayee} onClear={clearPayee} />
+
+              {!selectedPayee && (
+                <Field label="…or enter payee name manually">
+                  <input value={payee} onChange={e => { setPayee(e.target.value); setPayeeId('') }}
+                    placeholder="Payee / vendor name" className={inputCls} style={inputStyle} />
                 </Field>
               )}
-              <Field label="Status">
-                <select value={status} onChange={e => setStatus(e.target.value as ExpenseStatus)}
-                  className={inputCls} style={inputStyle}>
-                  <option value="pending">Pending</option>
-                  <option value="paid">Paid</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </Field>
-            </div>
-
-            <Field label="Notes">
-              <textarea value={notes} onChange={e => setNotes(e.target.value)}
-                rows={3} placeholder="Optional details about this expense"
-                className={cn(inputCls, 'resize-none')} style={inputStyle} />
-            </Field>
-          </section>
-
-          {/* ── Receipt ───────────────────────────────────────────────────── */}
-          <section className="rounded-xl border p-5 space-y-4"
-            style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>
-              Receipt
-            </h2>
-
-            {receiptDataUrl ? (
-              <div className="flex items-start gap-4">
-                {isImage ? (
-                  <img src={receiptDataUrl} alt={receiptName || 'Receipt'}
-                    className="max-h-40 rounded-lg border object-contain" style={{ borderColor: 'var(--border)' }} />
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg border"
-                    style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
-                    <Paperclip size={14} /> {receiptName || 'receipt'}
-                  </div>
-                )}
-                <button type="button"
-                  onClick={() => { setReceiptDataUrl(undefined); setReceiptName(undefined) }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors hover:bg-red-50"
-                  style={{ borderColor: 'var(--border)', color: '#dc2626' }}>
-                  <Trash2 size={13} /> Remove
-                </button>
-              </div>
-            ) : (
-              <label className="flex h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-sm)] border-2 border-dashed transition-colors select-none border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)]">
-                <Paperclip size={18} style={{ color: 'var(--muted-foreground)' }} />
-                <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>Attach a receipt</p>
-                <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Image or PDF — max 1MB</p>
-                <input type="file" accept="image/*,.pdf" className="hidden"
-                  onChange={e => { handleReceiptChange(e.target.files?.[0]); e.target.value = '' }} />
-              </label>
-            )}
-          </section>
-
-          {existing && (
-            <p className="text-xs text-center" style={{ color: 'var(--muted-foreground)' }}>
-              Recorded by {existing.agentName || '—'} on {formatDate(existing.createdAt)}
-            </p>
+            </section>
           )}
 
-          {/* Bottom action bar */}
-          <div className="flex gap-3 justify-end pb-4">
-            <button onClick={() => navigate('/expenses')}
-              className="px-4 py-2 rounded-lg text-sm border transition-colors hover:bg-[var(--accent)]"
+          {/* ── STEP 2: Details ───────────────────────────────────────────── */}
+          {step === 2 && (
+            <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Expense Details</h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Date" required>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} style={inputStyle} />
+                </Field>
+                <Field label="Amount (PHP)" required>
+                  <input type="number" min={0} value={amount || ''} onChange={e => setAmount(Number(e.target.value))}
+                    placeholder="0" className={inputCls} style={inputStyle} />
+                </Field>
+                <Field label="Category" required>
+                  <select value={category} onChange={e => setCategory(e.target.value as ExpenseCategory)} className={inputCls} style={inputStyle}>
+                    {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field label="Payment Method" required>
+                  <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethod)} className={inputCls} style={inputStyle}>
+                    {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field label="Used For" required>
+                  <select value={usedFor} onChange={e => setUsedFor(e.target.value as ExpenseUsedFor)} className={inputCls} style={inputStyle}>
+                    {Object.entries(USED_FOR_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </Field>
+                {usedFor === 'project' && (
+                  <Field label="Project Name">
+                    <input value={projectName} onChange={e => setProjectName(e.target.value)}
+                      placeholder="e.g. Apalit Subdivision" className={inputCls} style={inputStyle} />
+                  </Field>
+                )}
+                <Field label="Status">
+                  <select value={status} onChange={e => setStatus(e.target.value as ExpenseStatus)} className={inputCls} style={inputStyle}>
+                    <option value="pending">Pending</option>
+                    <option value="paid">Paid</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Notes">
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                  placeholder="Optional details about this expense" className={cn(inputCls, 'resize-none')} style={inputStyle} />
+              </Field>
+            </section>
+          )}
+
+          {/* ── STEP 3: Receipt & Review ──────────────────────────────────── */}
+          {step === 3 && (
+            <div className="space-y-6">
+              <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Receipt</h2>
+
+                {hasReceipt ? (
+                  <div className="flex items-start gap-4">
+                    {isImagePreview ? (
+                      <img src={previewUrl} alt={receiptName} className="max-h-40 rounded-lg border object-contain" style={{ borderColor: 'var(--border)' }} />
+                    ) : existingImage ? (
+                      <img src={receiptUrl || receiptDataUrl} alt={receiptName} className="max-h-40 rounded-lg border object-contain" style={{ borderColor: 'var(--border)' }} />
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+                        <Paperclip size={14} /> {receiptName || 'receipt'}
+                      </div>
+                    )}
+                    <button type="button" onClick={clearReceipt}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors hover:bg-red-50"
+                      style={{ borderColor: 'var(--border)', color: '#dc2626' }}>
+                      <Trash2 size={13} /> Remove
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-sm)] border-2 border-dashed transition-colors select-none border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)]">
+                    <Paperclip size={18} style={{ color: 'var(--muted-foreground)' }} />
+                    <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>Attach a receipt</p>
+                    <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Image or PDF — max 5MB</p>
+                    <input type="file" accept="image/*,.pdf" className="hidden"
+                      onChange={e => { handleReceiptChange(e.target.files?.[0]); e.target.value = '' }} />
+                  </label>
+                )}
+              </section>
+
+              <section className="rounded-xl border p-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <h2 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--foreground)' }}>Review</h2>
+                <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                  <ReviewRow label="Payee" value={payee || '—'} />
+                  <ReviewRow label="Date" value={formatDate(date)} />
+                  <ReviewRow label="Amount" value={formatPHP(Number(amount) || 0)} />
+                  <ReviewRow label="Category" value={CATEGORY_LABELS[category]} />
+                  <ReviewRow label="Payment Method" value={METHOD_LABELS[paymentMethod]} />
+                  <ReviewRow label="Used For" value={usedFor === 'project' && projectName ? `${USED_FOR_LABELS[usedFor]}: ${projectName}` : USED_FOR_LABELS[usedFor]} />
+                  <ReviewRow label="Status" value={status.charAt(0).toUpperCase() + status.slice(1)} />
+                  <ReviewRow label="Receipt" value={hasReceipt ? (receiptName || 'Attached') : 'None'} />
+                  {notes && <ReviewRow label="Notes" value={notes} />}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {/* Bottom nav */}
+          <div className="flex items-center justify-between gap-3 mt-6 pb-4">
+            <button onClick={step === 1 ? () => navigate('/expenses') : back}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border transition-colors hover:bg-[var(--accent)]"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
-              Cancel
+              <ArrowLeft size={15} /> {step === 1 ? 'Cancel' : 'Back'}
             </button>
-            <button onClick={handleSave} disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: 'var(--primary)' }}>
-              <Save size={15} />
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Expense'}
-            </button>
+
+            {step < STEPS.length ? (
+              <button onClick={next}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--primary)' }}>
+                Next <ArrowRight size={15} />
+              </button>
+            ) : (
+              <button onClick={handleSubmit} disabled={saving}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--primary)' }}>
+                <Save size={15} /> {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Expense'}
+              </button>
+            )}
           </div>
         </div>
       </div>

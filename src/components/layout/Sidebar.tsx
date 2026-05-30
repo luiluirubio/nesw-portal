@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase, Receipt, BookOpen, Users2, Wallet } from 'lucide-react'
+import { LayoutDashboard, Building2, Users, PanelLeftClose, LogOut, Settings, ScrollText, X, FileText, Briefcase, Receipt, BookOpen, Users2, Wallet, Store } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
@@ -126,6 +126,7 @@ export function Sidebar() {
       <nav className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'md:px-2 md:space-y-1 px-3 space-y-0.5' : 'px-3 space-y-0.5')}>
         <SectionLabel label="MASTER DATA" collapsed={collapsed} />
         <NavItem to="/clients" icon={Users2} label="Clients" collapsed={collapsed} end onNavigate={closeMobile} />
+        <NavItem to="/payees" icon={Store} label="Payees" collapsed={collapsed} end onNavigate={closeMobile} />
 
         <SectionLabel label="LISTINGS" collapsed={collapsed} />
         <NavItem to="/listings" icon={Building2} label="All Listings" collapsed={collapsed} end onNavigate={closeMobile} />

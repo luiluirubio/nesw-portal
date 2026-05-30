@@ -6,7 +6,7 @@ export interface BaseDraft {
   id:        string
   agentId:   string
   agentName: string
-  draftType: 'listing' | 'proposal' | 'booking' | 'billing'
+  draftType: 'listing' | 'proposal' | 'booking' | 'billing' | 'expense'
   savedAt:   string
 }
 
@@ -70,6 +70,23 @@ export interface BillingDraft extends BaseDraft {
   items:           BillingItem[]
   discount:        number
   terms:           string
+}
+
+// ── Expense draft ─────────────────────────────────────────────────────────────
+export interface ExpenseDraft extends BaseDraft {
+  draftType:     'expense'
+  lastStep:      number
+  payeeId?:      string
+  payee:         string
+  date:          string
+  amount:        number
+  category:      string
+  paymentMethod: string
+  usedFor:       string
+  projectName:   string
+  status:        string
+  notes:         string
+  receiptName?:  string   // file name only; the file itself is uploaded on submit
 }
 
 // ── Listing draft (existing) ──────────────────────────────────────────────────

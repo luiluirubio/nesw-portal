@@ -21,14 +21,16 @@ export interface Expense {
   date:          string         // ISO yyyy-mm-dd
   category:      ExpenseCategory
   amount:        number
-  payee:         string         // vendor / who was paid
+  payeeId?:      string         // links to Payee master data when picked from lookup
+  payee:         string         // vendor / who was paid (name)
   paymentMethod: PaymentMethod
   usedFor:       ExpenseUsedFor  // cost center: what the expense was for
   projectName?:  string         // free text, only when usedFor === 'project'
   status:        ExpenseStatus
   notes:         string
   receiptName?:    string        // original file name
-  receiptDataUrl?: string        // base64 data URL (image or PDF)
+  receiptUrl?:     string        // S3 public URL (large files up to 5MB)
+  receiptDataUrl?: string        // legacy inline base64 (older records)
   agentId:       string
   agentName:     string
   createdAt:     string

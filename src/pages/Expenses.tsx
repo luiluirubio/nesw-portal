@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Wallet, Pencil, Trash2, X, Eye } from 'lucide-react'
+import { Plus, Wallet, Pencil, Trash2, X, Eye, PenLine } from 'lucide-react'
 import { toaster } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
 import { loadExpenses, updateExpense, deleteExpense } from '@/lib/expenses'
+import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
+import type { ExpenseDraft } from '@/types/draft'
 import {
   CATEGORY_LABELS, METHOD_LABELS, USED_FOR_LABELS,
   type Expense, type ExpenseStatus, type ExpenseCategory, type ExpenseUsedFor,
@@ -38,7 +40,8 @@ function ExpenseDetailPanel({
   onDelete: (e: Expense) => void
 }) {
   const sc = STATUS_COLORS[expense.status]
-  const isImage = expense.receiptDataUrl?.startsWith('data:image/')
+  const receiptSrc = expense.receiptUrl || expense.receiptDataUrl
+  const isImage = !!(expense.receiptDataUrl?.startsWith('data:image/') || expense.receiptUrl?.match(/\.(png|jpe?g|webp|gif)$/i))
 
   return (
     <>
@@ -138,16 +141,16 @@ function ExpenseDetailPanel({
           )}
 
           {/* Receipt */}
-          {expense.receiptDataUrl && (
+          {receiptSrc && (
             <section>
               <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--muted-foreground)' }}>Receipt</p>
               {isImage ? (
-                <a href={expense.receiptDataUrl} target="_blank" rel="noreferrer">
-                  <img src={expense.receiptDataUrl} alt={expense.receiptName || 'Receipt'}
+                <a href={receiptSrc} target="_blank" rel="noreferrer">
+                  <img src={receiptSrc} alt={expense.receiptName || 'Receipt'}
                     className="max-h-72 rounded-xl border object-contain" style={{ borderColor: 'var(--border)' }} />
                 </a>
               ) : (
-                <a href={expense.receiptDataUrl} target="_blank" rel="noreferrer"
+                <a href={receiptSrc} target="_blank" rel="noreferrer"
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors hover:bg-[var(--accent)]"
                   style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}>
                   <Eye size={14} /> View {expense.receiptName || 'receipt'}
@@ -184,8 +187,12 @@ export function Expenses() {
   const [usedForFilter, setUsedForFilter]   = useState<ExpenseUsedFor | 'all'>('all')
   const [selected, setSelected]       = useState<Expense | null>(null)
   const [toDelete, setToDelete]       = useState<Expense | null>(null)
+  const [drafts, setDrafts]           = useState<ExpenseDraft[]>([])
 
-  useEffect(() => { setExpenses(loadExpenses()) }, [])
+  useEffect(() => {
+    setExpenses(loadExpenses())
+    fetchDrafts('expense').then(d => setDrafts(d as ExpenseDraft[])).catch(() => {})
+  }, [])
 
   const filtered = useMemo(() => expenses.filter(e =>
     (statusFilter === 'all'   || e.status   === statusFilter) &&
@@ -276,6 +283,53 @@ export function Expenses() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-6 py-4">
+
+        {/* Draft expenses banner */}
+        {drafts.length > 0 && (
+          <div className="rounded-xl border overflow-hidden mb-4" style={{ borderColor: '#f59e0b', backgroundColor: '#fffbeb' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: '#fde68a', backgroundColor: '#fef3c7' }}>
+              <PenLine size={14} style={{ color: '#b45309' }} />
+              <p className="text-xs font-bold" style={{ color: '#b45309' }}>
+                {drafts.length} Incomplete Expense{drafts.length > 1 ? 's' : ''} — Draft
+              </p>
+              <span className="text-xs" style={{ color: '#92400e' }}>· Auto-saved. Continue where you left off.</span>
+            </div>
+            <div className="divide-y" style={{ borderColor: '#fde68a' }}>
+              {drafts.map(d => {
+                const diff = Date.now() - new Date(d.savedAt).getTime()
+                const mins = Math.floor(diff / 60000), hrs = Math.floor(mins / 60)
+                const savedAgo = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago`
+                return (
+                  <div key={d.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: '#92400e' }}>
+                        {d.payee || 'Untitled Expense'}
+                        {d.amount ? <span className="ml-2 text-xs">({formatPHP(Number(d.amount))})</span> : null}
+                      </p>
+                      <p className="text-xs" style={{ color: '#b45309' }}>Saved {savedAgo}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => navigate(`/add-expense?draft=${d.id}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white hover:opacity-90"
+                        style={{ backgroundColor: '#b45309' }}>
+                        <PenLine size={12} /> Continue
+                      </button>
+                      <button onClick={() => { deleteDraftCloud(d.id); setDrafts(ds => ds.filter(x => x.id !== d.id)) }}
+                        title="Discard draft"
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: '#b45309' }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fde68a')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-2" style={{ color: 'var(--muted-foreground)' }}>
             <Wallet size={32} className="opacity-30" />

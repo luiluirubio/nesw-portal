@@ -4,9 +4,9 @@
  * feels instant; the cloud is the source of truth.
  */
 import { api } from '@/lib/api'
-import type { ListingDraft, ProposalDraft, BookingDraft, BillingDraft } from '@/types/draft'
+import type { ListingDraft, ProposalDraft, BookingDraft, BillingDraft, ExpenseDraft } from '@/types/draft'
 
-export type AnyDraft = ListingDraft | ProposalDraft | BookingDraft | BillingDraft
+export type AnyDraft = ListingDraft | ProposalDraft | BookingDraft | BillingDraft | ExpenseDraft
 
 const LS_KEY = 'nesw_draft_wab'   // write-ahead buffer
 
@@ -65,3 +65,4 @@ export function generateDraftId():        string { return 'DRAFT-'    + Math.ran
 export function generateProposalDraftId():string { return 'QDRAFT-'   + Math.random().toString(36).slice(2, 9).toUpperCase() }
 export function generateBookingDraftId(): string { return 'BKGDRAFT-' + Math.random().toString(36).slice(2, 9).toUpperCase() }
 export function generateBillingDraftId(): string { return 'BILLDRAFT-'+ Math.random().toString(36).slice(2, 9).toUpperCase() }
+export function generateExpenseDraftId(): string { return 'EXPDRAFT-' + Math.random().toString(36).slice(2, 9).toUpperCase() }
