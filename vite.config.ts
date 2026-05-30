@@ -31,7 +31,7 @@ export default defineConfig({
       },
       workbox: {
         // Bump cacheId to invalidate all previously cached assets
-        cacheId: 'nesw-portal-v2',
+        cacheId: 'nesw-portal-v3',
         // Force new SW to activate immediately (skipWaiting + clientsClaim)
         skipWaiting: true,
         clientsClaim: true,
