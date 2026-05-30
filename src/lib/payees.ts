@@ -1,9 +1,11 @@
+import { api } from '@/lib/api'
 import type { Payee } from '@/types/payee'
 
 // ── localStorage-backed Payee (vendor) master data ───────────────────────────
 // Mirrors the shape of the Clients master data but stored client-side, matching
-// the Expenses module's localStorage decision. The lookup auto-grows: typing a
-// new payee on an expense upserts it here for next time.
+// the Expenses module's localStorage decision. Payees are created from inside
+// the expense form's Payee Details step (there is no "Add Payee" on the Payees
+// page); the lookup then reuses them.
 
 const LS_KEY = 'nesw_payees'
 
@@ -21,12 +23,25 @@ export function savePayees(list: Payee[]): void {
   localStorage.setItem(LS_KEY, JSON.stringify(list))
 }
 
-export type PayeeInput = Omit<Payee, 'id' | 'createdAt' | 'updatedAt'>
+// PAY-<year>-<zero-padded running count within that year>
+function nextAccountNumber(list: Payee[]): string {
+  const year = new Date().getFullYear()
+  const countThisYear = list.filter(p => p.accountNumber?.startsWith(`PAY-${year}-`)).length
+  return `PAY-${year}-${String(countThisYear + 1).padStart(4, '0')}`
+}
+
+export type PayeeInput = Omit<Payee, 'id' | 'accountNumber' | 'createdAt' | 'updatedAt'>
 
 export function createPayee(input: PayeeInput): Payee {
   const list = loadPayees()
   const now = new Date().toISOString()
-  const payee: Payee = { ...input, id: crypto.randomUUID(), createdAt: now, updatedAt: now }
+  const payee: Payee = {
+    ...input,
+    id:            crypto.randomUUID(),
+    accountNumber: nextAccountNumber(list),
+    createdAt:     now,
+    updatedAt:     now,
+  }
   savePayees([payee, ...list])
   return payee
 }
@@ -47,11 +62,11 @@ export function deletePayee(id: string): void {
   savePayees(loadPayees().filter(p => p.id !== id))
 }
 
-// Find an existing payee by (case-insensitive) name, or create one. Used by the
-// expense form so manually-typed payees become reusable master data.
-export function upsertPayeeByName(name: string): Payee {
-  const trimmed = name.trim()
-  const existing = loadPayees().find(p => p.name.toLowerCase() === trimmed.toLowerCase())
-  if (existing) return existing
-  return createPayee({ name: trimmed, status: 'active' })
+// Upload an attached ID to S3 and return its public URL.
+export async function uploadPayeeId(file: File): Promise<string> {
+  const fileType = file.type || 'application/octet-stream'
+  const { url, publicUrl } = await api.presign({ fileName: file.name, fileType })
+  const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': fileType }, body: file })
+  if (!res.ok) throw new Error('Failed to upload ID')
+  return publicUrl
 }

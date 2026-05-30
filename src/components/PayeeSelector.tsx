@@ -1,73 +1,59 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, Plus, X, UserCheck } from 'lucide-react'
+import { Search, X, UserCheck } from 'lucide-react'
 import { inputStyle } from '@/lib/utils'
 import type { Payee } from '@/types/payee'
 import { loadPayees } from '@/lib/payees'
 
-// Mirrors ClientSelector, but reads from the localStorage Payee master data and
-// lets the user pick an existing payee, type a brand-new one, or skip entirely.
+// Mirrors ClientSelector (Proposal step 1): search the Payee master data by
+// account number or name. Selecting auto-fills details on the next step.
+// Creating a brand-new payee is done via the form's "Skip" → Payee Details step.
 
 interface PayeeSelectorProps {
-  value:     Payee | null
-  onSelect:  (payee: Payee) => void
-  onUseNew:  (name: string) => void   // user typed a name not in master data
-  onClear:   () => void
+  value:    Payee | null
+  onSelect: (payee: Payee) => void
+  onClear:  () => void
 }
 
-export function PayeeSelector({ value, onSelect, onUseNew, onClear }: PayeeSelectorProps) {
+export function PayeeSelector({ value, onSelect, onClear }: PayeeSelectorProps) {
   const [payees, setPayees] = useState<Payee[]>([])
-  const [open, setOpen]     = useState(false)
   const [query, setQuery]   = useState('')
+  const [open, setOpen]     = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => { setPayees(loadPayees()) }, [])
 
-  // Close dropdown on outside click
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
+    function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const q = query.trim().toLowerCase()
-  const filtered = (q
-    ? payees.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        (p.company || '').toLowerCase().includes(q))
-    : payees).slice(0, 8)
-
-  const exactMatch = payees.some(p => p.name.toLowerCase() === q)
-
-  function selectPayee(p: Payee) {
-    onSelect(p)
-    setQuery('')
-    setOpen(false)
-  }
-
-  function handleUseNew() {
-    if (!query.trim()) return
-    onUseNew(query.trim())
-    setQuery('')
-    setOpen(false)
-  }
+  const filtered = payees.filter(p => {
+    if (!query.trim()) return true
+    const q = query.toLowerCase()
+    return (
+      p.accountNumber?.toLowerCase().includes(q) ||
+      p.name.toLowerCase().includes(q) ||
+      (p.company ?? '').toLowerCase().includes(q)
+    )
+  }).slice(0, 8)
 
   // Selected state
   if (value && !open) {
     return (
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>
-          Payee / Vendor
+          Payee <span className="text-red-500 ml-0.5">*</span>
         </label>
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg border"
           style={{ borderColor: 'var(--primary)', backgroundColor: 'var(--background)' }}>
           <UserCheck size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
           <div className="flex-1 min-w-0">
-            <span className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{value.name}</span>
-            {value.company && (
-              <span className="text-xs ml-1" style={{ color: 'var(--muted-foreground)' }}>({value.company})</span>
-            )}
+            <span className="font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>{value.accountNumber}</span>
+            <span className="text-sm font-medium ml-2" style={{ color: 'var(--foreground)' }}>{value.name}</span>
+            {value.company && <span className="text-xs ml-1" style={{ color: 'var(--muted-foreground)' }}>({value.company})</span>}
           </div>
           <button type="button" onClick={() => { onClear(); setQuery('') }}
             className="p-0.5 rounded hover:bg-[var(--accent)] shrink-0" style={{ color: 'var(--muted-foreground)' }}>
@@ -80,9 +66,9 @@ export function PayeeSelector({ value, onSelect, onUseNew, onClear }: PayeeSelec
 
   // Search state
   return (
-    <div className="relative" ref={ref}>
+    <div ref={ref} className="relative">
       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>
-        Payee / Vendor <span className="font-normal">(optional — you can skip)</span>
+        Payee <span className="text-red-500 ml-0.5">*</span>
       </label>
 
       <div className="relative">
@@ -92,7 +78,7 @@ export function PayeeSelector({ value, onSelect, onUseNew, onClear }: PayeeSelec
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
-          placeholder="Search payees or type a new one…"
+          placeholder="Search by account number or name…"
           className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2"
           style={inputStyle}
         />
@@ -101,33 +87,20 @@ export function PayeeSelector({ value, onSelect, onUseNew, onClear }: PayeeSelec
       {open && (
         <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl border shadow-xl overflow-hidden"
           style={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
-
-          {filtered.length > 0 && (
+          {filtered.length > 0 ? (
             <div className="max-h-48 overflow-y-auto divide-y" style={{ borderColor: 'var(--border)' }}>
               {filtered.map(p => (
-                <button key={p.id} type="button" onClick={() => selectPayee(p)}
+                <button key={p.id} type="button" onClick={() => { onSelect(p); setQuery(''); setOpen(false) }}
                   className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-[var(--accent)]">
+                  <span className="font-mono text-xs font-semibold mr-2" style={{ color: 'var(--primary)' }}>{p.accountNumber}</span>
                   <span className="font-medium" style={{ color: 'var(--foreground)' }}>{p.name}</span>
-                  {p.company && (
-                    <span className="text-xs ml-1" style={{ color: 'var(--muted-foreground)' }}>— {p.company}</span>
-                  )}
+                  {p.company && <span className="text-xs ml-1" style={{ color: 'var(--muted-foreground)' }}>— {p.company}</span>}
                 </button>
               ))}
             </div>
-          )}
-
-          {/* Offer to create a new payee from typed text */}
-          {query.trim() && !exactMatch && (
-            <button type="button" onClick={handleUseNew}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-t transition-colors hover:bg-[var(--accent)]"
-              style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}>
-              <Plus size={14} /> Use “{query.trim()}” as new payee
-            </button>
-          )}
-
-          {filtered.length === 0 && !query.trim() && (
+          ) : (
             <div className="px-4 py-3 text-sm" style={{ color: 'var(--muted-foreground)' }}>
-              No payees yet — type a name to add one.
+              {query ? 'No payees match your search. Click Skip to add a new one.' : 'Type to search payees…'}
             </div>
           )}
         </div>

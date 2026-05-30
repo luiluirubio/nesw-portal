@@ -2,13 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Save, ArrowLeft, ArrowRight, Trash2, Paperclip, CheckCircle,
-  Search, ReceiptText, FileImage,
+  Search, UserSquare, ReceiptText, FileImage,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP, formatDate, inputCls, inputStyle } from '@/lib/utils'
 import { loadExpenses, createExpense, updateExpense, uploadReceipt, MAX_RECEIPT_BYTES } from '@/lib/expenses'
-import { upsertPayeeByName, loadPayees } from '@/lib/payees'
+import { loadPayees, createPayee, updatePayee, uploadPayeeId } from '@/lib/payees'
 import { PayeeSelector } from '@/components/PayeeSelector'
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateExpenseDraftId } from '@/lib/drafts'
 import type { ExpenseDraft } from '@/types/draft'
@@ -19,10 +19,22 @@ import {
 } from '@/types/expense'
 
 const STEPS = [
-  { number: 1, label: 'Payee',          icon: Search       },
-  { number: 2, label: 'Details',        icon: ReceiptText  },
-  { number: 3, label: 'Receipt & Review', icon: FileImage  },
+  { number: 1, label: 'Payee Lookup',     icon: Search       },
+  { number: 2, label: 'Payee Details',    icon: UserSquare   },
+  { number: 3, label: 'Expense Details',  icon: ReceiptText  },
+  { number: 4, label: 'Receipt & Review', icon: FileImage    },
 ]
+
+// ── Validation helpers ────────────────────────────────────────────────────────
+function isValidEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+}
+// PH mobile (09xx / +639xx) or general 7–15 digit phone, spaces/dashes allowed
+function isValidPhone(v: string): boolean {
+  const c = v.replace(/[\s-]/g, '')
+  if (/^(\+?63)?9\d{9}$/.test(c)) return true
+  return /^\+?\d{7,15}$/.test(c)
+}
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -33,8 +45,8 @@ function StepIndicator({ current }: { current: number }) {
         const Icon   = step.icon
         return (
           <div key={step.number} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0"
+            <div className="flex flex-col items-center gap-1.5 shrink-0">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
                 style={{
                   backgroundColor: done || active ? 'var(--primary)' : 'var(--accent)',
                   color: done || active ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
@@ -57,8 +69,8 @@ function StepIndicator({ current }: { current: number }) {
   )
 }
 
-function Field({ label, required, children }: {
-  label: string; required?: boolean; children: React.ReactNode
+function Field({ label, required, error, children }: {
+  label: string; required?: boolean; error?: string; children: React.ReactNode
 }) {
   return (
     <div>
@@ -66,6 +78,7 @@ function Field({ label, required, children }: {
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   )
 }
@@ -95,11 +108,25 @@ export function AddExpense() {
   const [step, setStep]       = useState(1)
   const [saving, setSaving]   = useState(false)
   const [existing, setExisting] = useState<Expense | null>(null)
+  const [errors, setErrors]   = useState<Record<string, string>>({})
 
-  // Form state
+  // ── Payee (steps 1–2) ─────────────────────────────────────────────────────
   const [selectedPayee, setSelectedPayee] = useState<Payee | null>(null)
-  const [payee,         setPayee]         = useState('')       // resolved name (lookup, new, or skipped/manual)
-  const [payeeId,       setPayeeId]       = useState<string>('')
+  const [payeeId, setPayeeId]             = useState<string>('')
+  const [accountNumber, setAccountNumber] = useState<string>('')   // read-only, master-data assigned
+  const [pName,    setPName]    = useState('')
+  const [pCompany, setPCompany] = useState('')
+  const [pContact, setPContact] = useState('')   // contact person
+  const [pNumber,  setPNumber]  = useState('')   // contact number
+  const [pEmail,   setPEmail]   = useState('')
+  const [pAddress, setPAddress] = useState('')   // company address
+  // ID attachment
+  const [idFile, setIdFile]       = useState<File | null>(null)
+  const [idName, setIdName]       = useState<string | undefined>()
+  const [idUrl, setIdUrl]         = useState<string | undefined>()
+  const [idPreview, setIdPreview] = useState<string | undefined>()
+
+  // ── Expense (step 3) ──────────────────────────────────────────────────────
   const [date,          setDate]          = useState(new Date().toISOString().slice(0, 10))
   const [category,      setCategory]      = useState<ExpenseCategory>('marketing')
   const [amount,        setAmount]        = useState<number>(0)
@@ -109,12 +136,12 @@ export function AddExpense() {
   const [status,        setStatus]        = useState<ExpenseStatus>('pending')
   const [notes,         setNotes]         = useState('')
 
-  // Receipt
-  const [receiptFile, setReceiptFile]     = useState<File | null>(null)
-  const [receiptName, setReceiptName]     = useState<string | undefined>()
-  const [receiptUrl,  setReceiptUrl]      = useState<string | undefined>()       // existing S3 url (edit)
-  const [receiptDataUrl, setReceiptDataUrl] = useState<string | undefined>()     // legacy inline (edit)
-  const [previewUrl,  setPreviewUrl]      = useState<string | undefined>()       // object URL for new file
+  // ── Receipt (step 4) ──────────────────────────────────────────────────────
+  const [receiptFile, setReceiptFile]       = useState<File | null>(null)
+  const [receiptName, setReceiptName]       = useState<string | undefined>()
+  const [receiptUrl,  setReceiptUrl]        = useState<string | undefined>()
+  const [receiptDataUrl, setReceiptDataUrl] = useState<string | undefined>()
+  const [previewUrl,  setPreviewUrl]        = useState<string | undefined>()
 
   // ── Load existing expense (edit mode) ─────────────────────────────────────
   useEffect(() => {
@@ -126,12 +153,12 @@ export function AddExpense() {
       return
     }
     setExisting(found)
+    setPayeeId(found.payeeId ?? '')
+    setPName(found.payee)
     if (found.payeeId) {
       const p = loadPayees().find(x => x.id === found.payeeId)
-      if (p) setSelectedPayee(p)
+      if (p) fillFromPayee(p)
     }
-    setPayee(found.payee)
-    setPayeeId(found.payeeId ?? '')
     setDate(found.date)
     setCategory(found.category)
     setAmount(found.amount)
@@ -143,7 +170,8 @@ export function AddExpense() {
     setReceiptName(found.receiptName)
     setReceiptUrl(found.receiptUrl)
     setReceiptDataUrl(found.receiptDataUrl)
-  }, [id, isEdit, navigate])
+    setStep(3)  // edit jumps straight to expense details
+  }, [id, isEdit, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load draft on resume (new only) ───────────────────────────────────────
   useEffect(() => {
@@ -152,11 +180,12 @@ export function AddExpense() {
     fetchDraft<ExpenseDraft>(draftParam).then(d => {
       if (d) {
         setStep(d.lastStep || 1)
-        setPayee(d.payee || '')
         setPayeeId(d.payeeId || '')
         if (d.payeeId) {
           const p = loadPayees().find(x => x.id === d.payeeId)
-          if (p) setSelectedPayee(p)
+          if (p) { setSelectedPayee(p); fillFromPayee(p) }
+        } else {
+          setPName(d.payee || '')
         }
         if (d.date) setDate(d.date)
         setCategory((d.category as ExpenseCategory) || 'marketing')
@@ -178,10 +207,10 @@ export function AddExpense() {
       id: draftId, agentId: user.id, agentName: user.name,
       draftType: 'expense', savedAt: new Date().toISOString(),
       lastStep: step,
-      payeeId, payee, date, amount, category, paymentMethod, usedFor, projectName, status, notes,
+      payeeId, payee: pName, date, amount, category, paymentMethod, usedFor, projectName, status, notes,
       receiptName,
     })
-  }, [draftId, user, isEdit, submitted, loadingDraft, step, payeeId, payee, date, amount, category, paymentMethod, usedFor, projectName, status, notes, receiptName])
+  }, [draftId, user, isEdit, submitted, loadingDraft, step, payeeId, pName, date, amount, category, paymentMethod, usedFor, projectName, status, notes, receiptName])
 
   useEffect(() => {
     if (isEdit || submitted || loadingDraft) return
@@ -189,15 +218,60 @@ export function AddExpense() {
     return () => clearTimeout(t)
   }, [autoSave, isEdit, submitted, loadingDraft])
 
-  // Clean up object URL
+  // Clean up object URLs
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
+  useEffect(() => () => { if (idPreview)  URL.revokeObjectURL(idPreview)  }, [idPreview])
 
-  // ── Receipt handling ──────────────────────────────────────────────────────
+  // ── Payee helpers ─────────────────────────────────────────────────────────
+  function fillFromPayee(p: Payee) {
+    setPayeeId(p.id)
+    setAccountNumber(p.accountNumber)
+    setPName(p.name)
+    setPCompany(p.company ?? '')
+    setPContact(p.contactPerson ?? '')
+    setPNumber(p.contactNumber ?? '')
+    setPEmail(p.email ?? '')
+    setPAddress(p.address ?? '')
+    setIdName(p.idName)
+    setIdUrl(p.idUrl)
+  }
+
+  function handleSelectPayee(p: Payee) {
+    setSelectedPayee(p)
+    fillFromPayee(p)
+  }
+
+  function clearPayeeFields() {
+    setSelectedPayee(null)
+    setPayeeId(''); setAccountNumber('')
+    setPName(''); setPCompany(''); setPContact(''); setPNumber(''); setPEmail(''); setPAddress('')
+    setIdFile(null); setIdName(undefined); setIdUrl(undefined)
+    if (idPreview) URL.revokeObjectURL(idPreview)
+    setIdPreview(undefined)
+  }
+
+  function handleIdChange(file: File | undefined) {
+    if (!file) return
+    if (file.size > MAX_RECEIPT_BYTES) {
+      toaster.create({ title: 'ID file too large', description: 'Please use a file under 5MB.', type: 'error' }); return
+    }
+    if (idPreview) URL.revokeObjectURL(idPreview)
+    setIdFile(file)
+    setIdName(file.name)
+    setIdUrl(undefined)
+    setIdPreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined)
+  }
+
+  function clearId() {
+    if (idPreview) URL.revokeObjectURL(idPreview)
+    setIdFile(null); setIdName(undefined); setIdUrl(undefined); setIdPreview(undefined)
+  }
+
+  // ── Receipt helpers ───────────────────────────────────────────────────────
   function handleReceiptChange(file: File | undefined) {
     if (!file) return
     if (file.size > MAX_RECEIPT_BYTES) {
-      toaster.create({ title: 'Receipt too large', description: 'Please use a file under 5MB.', type: 'error' })
-      return
+      toaster.create({ title: 'Receipt too large', description: 'Please use a file under 5MB.', type: 'error' }); return
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setReceiptFile(file)
@@ -209,50 +283,79 @@ export function AddExpense() {
 
   function clearReceipt() {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
-    setReceiptFile(null)
-    setReceiptName(undefined)
-    setReceiptUrl(undefined)
-    setReceiptDataUrl(undefined)
-    setPreviewUrl(undefined)
+    setReceiptFile(null); setReceiptName(undefined); setReceiptUrl(undefined); setReceiptDataUrl(undefined); setPreviewUrl(undefined)
   }
 
-  // ── Payee handlers ────────────────────────────────────────────────────────
-  function pickPayee(p: Payee) { setSelectedPayee(p); setPayee(p.name); setPayeeId(p.id) }
-  function useNewPayee(name: string) {
-    // Create/lookup the payee immediately so it becomes reusable master data.
-    const p = upsertPayeeByName(name)
-    setSelectedPayee(p); setPayee(p.name); setPayeeId(p.id)
+  // ── Validation ────────────────────────────────────────────────────────────
+  function validatePayeeDetails(): boolean {
+    const e: Record<string, string> = {}
+    if (!pName.trim()) e.pName = 'Payee name is required'
+    if (pEmail.trim() && !isValidEmail(pEmail.trim())) e.pEmail = 'Enter a valid email address'
+    if (pNumber.trim() && !isValidPhone(pNumber.trim())) e.pNumber = 'Enter a valid contact number'
+    setErrors(e)
+    return Object.keys(e).length === 0
   }
-  function clearPayee() { setSelectedPayee(null); setPayee(''); setPayeeId('') }
 
-  // ── Navigation / validation ───────────────────────────────────────────────
-  function next() {
-    if (step === 2) {
-      if (!payee.trim()) { toaster.create({ title: 'Payee is required', type: 'error' }); return }
-      if (!amount || amount <= 0) { toaster.create({ title: 'Amount must be greater than 0', type: 'error' }); return }
+  function validateExpense(): boolean {
+    const e: Record<string, string> = {}
+    if (!amount || amount <= 0) e.amount = 'Amount must be greater than 0'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  function handleNext() {
+    if (step === 1) {
+      if (!selectedPayee) { toaster.create({ title: 'Select a payee or click Skip', type: 'error' }); return }
     }
-    setStep(s => Math.min(s + 1, STEPS.length))
+    if (step === 2 && !validatePayeeDetails()) return
+    if (step === 3 && !validateExpense()) return
+    setStep(s => Math.min(s + 1, STEPS.length)); window.scrollTo(0, 0)
   }
-  function back() { setStep(s => Math.max(s - 1, 1)) }
 
+  function handleSkip() {
+    // No existing payee — enter details manually on step 2 (creates a new payee on submit)
+    clearPayeeFields()
+    setStep(2); window.scrollTo(0, 0)
+  }
+
+  function handleBack() { setStep(s => Math.max(s - 1, 1)); window.scrollTo(0, 0) }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit() {
-    if (!payee.trim()) { setStep(2); toaster.create({ title: 'Payee is required', type: 'error' }); return }
-    if (!amount || amount <= 0) { setStep(2); toaster.create({ title: 'Amount must be greater than 0', type: 'error' }); return }
+    if (!validatePayeeDetails()) { setStep(2); return }
+    if (!validateExpense()) { setStep(3); return }
     setSaving(true)
     try {
-      // Upload a freshly attached receipt to S3
-      let finalUrl = receiptUrl
-      if (receiptFile) {
-        finalUrl = await uploadReceipt(receiptFile)
+      // Resolve/persist the payee in master data
+      let finalIdUrl = idUrl
+      if (idFile) finalIdUrl = await uploadPayeeId(idFile)
+
+      const payeeFields = {
+        name: pName.trim(), company: pCompany.trim(), contactPerson: pContact.trim(),
+        contactNumber: pNumber.trim(), email: pEmail.trim(), address: pAddress.trim(),
+        idName, idUrl: finalIdUrl, status: 'active' as const,
       }
+      let resolvedPayeeId = payeeId
+      if (payeeId) {
+        updatePayee(payeeId, payeeFields)
+      } else {
+        const created = createPayee(payeeFields)
+        resolvedPayeeId = created.id
+        setAccountNumber(created.accountNumber)
+      }
+
+      // Upload a freshly attached receipt
+      let finalReceiptUrl = receiptUrl
+      if (receiptFile) finalReceiptUrl = await uploadReceipt(receiptFile)
+
       const payload = {
         date, category, amount: Number(amount),
-        payeeId: payeeId || undefined, payee: payee.trim(),
+        payeeId: resolvedPayeeId, payee: pName.trim(),
         paymentMethod, usedFor,
         projectName: usedFor === 'project' ? projectName.trim() : undefined,
         status, notes,
-        receiptName, receiptUrl: finalUrl,
-        receiptDataUrl: receiptDataUrl,  // preserve legacy inline if present
+        receiptName, receiptUrl: finalReceiptUrl, receiptDataUrl,
         agentId:   existing?.agentId   ?? user?.id   ?? '',
         agentName: existing?.agentName ?? user?.name ?? '',
       }
@@ -272,6 +375,7 @@ export function AddExpense() {
   const hasReceipt = !!(receiptFile || receiptUrl || receiptDataUrl)
   const isImagePreview = !!previewUrl
   const existingImage = !receiptFile && !!(receiptUrl?.match(/\.(png|jpe?g|webp|gif)$/i) || receiptDataUrl?.startsWith('data:image/'))
+  const idIsImage = !!idPreview || !!idUrl?.match(/\.(png|jpe?g|webp|gif)$/i)
 
   return (
     <div className="flex flex-col h-full">
@@ -288,7 +392,7 @@ export function AddExpense() {
             </h1>
             {existing
               ? <p className="text-xs font-mono" style={{ color: 'var(--primary)' }}>{existing.expenseNo}</p>
-              : <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Auto-saved as you go</p>}
+              : <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Record an expense · auto-saved as you go</p>}
           </div>
         </div>
       </div>
@@ -298,39 +402,104 @@ export function AddExpense() {
         <div className="max-w-2xl mx-auto">
           <StepIndicator current={step} />
 
-          {/* ── STEP 1: Payee ─────────────────────────────────────────────── */}
+          {/* ── STEP 1: Payee Lookup ──────────────────────────────────────── */}
           {step === 1 && (
             <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Who was paid?</h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-                  Look up a saved payee, type a new one (it gets saved for next time), or skip and enter a name manually.
-                </p>
-              </div>
-
-              <PayeeSelector value={selectedPayee} onSelect={pickPayee} onUseNew={useNewPayee} onClear={clearPayee} />
-
-              {!selectedPayee && (
-                <Field label="…or enter payee name manually">
-                  <input value={payee} onChange={e => { setPayee(e.target.value); setPayeeId('') }}
-                    placeholder="Payee / vendor name" className={inputCls} style={inputStyle} />
-                </Field>
-              )}
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--foreground)' }}>
+                Search for an existing payee by account number or name to auto-fill their details.
+                If the payee is not yet registered, click <strong>Skip</strong> to enter details manually.
+              </p>
+              <PayeeSelector value={selectedPayee} onSelect={handleSelectPayee} onClear={clearPayeeFields} />
             </section>
           )}
 
-          {/* ── STEP 2: Details ───────────────────────────────────────────── */}
+          {/* ── STEP 2: Payee Details ─────────────────────────────────────── */}
           {step === 2 && (
             <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Expense Details</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Payee Details</h2>
+                {accountNumber && (
+                  <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: 'var(--accent)', color: 'var(--primary)' }}>{accountNumber}</span>
+                )}
+              </div>
+              {!accountNumber && (
+                <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                  A Payee Account Number will be assigned automatically when you save.
+                </p>
+              )}
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Name" required error={errors.pName}>
+                  <input value={pName} onChange={e => { setPName(e.target.value); setErrors(x => ({ ...x, pName: '' })) }}
+                    placeholder="Payee / vendor name"
+                    className={cn(inputCls, errors.pName && 'border-red-400')} style={inputStyle} />
+                </Field>
+                <Field label="Company">
+                  <input value={pCompany} onChange={e => setPCompany(e.target.value)}
+                    placeholder="Company name" className={inputCls} style={inputStyle} />
+                </Field>
+                <Field label="Contact Person">
+                  <input value={pContact} onChange={e => setPContact(e.target.value)}
+                    placeholder="Contact person" className={inputCls} style={inputStyle} />
+                </Field>
+                <Field label="Contact Number" error={errors.pNumber}>
+                  <input value={pNumber} onChange={e => { setPNumber(e.target.value); setErrors(x => ({ ...x, pNumber: '' })) }}
+                    placeholder="e.g. 0917 123 4567" inputMode="tel"
+                    className={cn(inputCls, errors.pNumber && 'border-red-400')} style={inputStyle} />
+                </Field>
+                <Field label="Email" error={errors.pEmail}>
+                  <input value={pEmail} onChange={e => { setPEmail(e.target.value); setErrors(x => ({ ...x, pEmail: '' })) }}
+                    placeholder="name@example.com" type="email"
+                    className={cn(inputCls, errors.pEmail && 'border-red-400')} style={inputStyle} />
+                </Field>
+                <Field label="Company Address">
+                  <input value={pAddress} onChange={e => setPAddress(e.target.value)}
+                    placeholder="Address" className={inputCls} style={inputStyle} />
+                </Field>
+              </div>
+
+              {/* ID attachment */}
+              <Field label="ID Attached">
+                {idName ? (
+                  <div className="flex items-start gap-4">
+                    {idIsImage ? (
+                      <img src={idPreview || idUrl} alt={idName} className="max-h-32 rounded-lg border object-contain" style={{ borderColor: 'var(--border)' }} />
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+                        <Paperclip size={14} /> {idName}
+                      </div>
+                    )}
+                    <button type="button" onClick={clearId}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors hover:bg-red-50"
+                      style={{ borderColor: 'var(--border)', color: '#dc2626' }}>
+                      <Trash2 size={13} /> Remove
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border-2 border-dashed transition-colors select-none border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)]">
+                    <Paperclip size={16} style={{ color: 'var(--muted-foreground)' }} />
+                    <p className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>Attach ID</p>
+                    <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Image or PDF — max 5MB</p>
+                    <input type="file" accept="image/*,.pdf" className="hidden"
+                      onChange={e => { handleIdChange(e.target.files?.[0]); e.target.value = '' }} />
+                  </label>
+                )}
+              </Field>
+            </section>
+          )}
+
+          {/* ── STEP 3: Expense Details ───────────────────────────────────── */}
+          {step === 3 && (
+            <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Expense Details</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Date" required>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} style={inputStyle} />
                 </Field>
-                <Field label="Amount (PHP)" required>
-                  <input type="number" min={0} value={amount || ''} onChange={e => setAmount(Number(e.target.value))}
-                    placeholder="0" className={inputCls} style={inputStyle} />
+                <Field label="Amount (PHP)" required error={errors.amount}>
+                  <input type="number" min={0} value={amount || ''} onChange={e => { setAmount(Number(e.target.value)); setErrors(x => ({ ...x, amount: '' })) }}
+                    placeholder="0" className={cn(inputCls, errors.amount && 'border-red-400')} style={inputStyle} />
                 </Field>
                 <Field label="Category" required>
                   <select value={category} onChange={e => setCategory(e.target.value as ExpenseCategory)} className={inputCls} style={inputStyle}>
@@ -361,7 +530,6 @@ export function AddExpense() {
                   </select>
                 </Field>
               </div>
-
               <Field label="Notes">
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
                   placeholder="Optional details about this expense" className={cn(inputCls, 'resize-none')} style={inputStyle} />
@@ -369,12 +537,11 @@ export function AddExpense() {
             </section>
           )}
 
-          {/* ── STEP 3: Receipt & Review ──────────────────────────────────── */}
-          {step === 3 && (
+          {/* ── STEP 4: Receipt & Review ──────────────────────────────────── */}
+          {step === 4 && (
             <div className="space-y-6">
               <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
                 <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Receipt</h2>
-
                 {hasReceipt ? (
                   <div className="flex items-start gap-4">
                     {isImagePreview ? (
@@ -406,7 +573,9 @@ export function AddExpense() {
               <section className="rounded-xl border p-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
                 <h2 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--foreground)' }}>Review</h2>
                 <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                  <ReviewRow label="Payee" value={payee || '—'} />
+                  <ReviewRow label="Payee" value={pName || '—'} />
+                  {pCompany && <ReviewRow label="Company" value={pCompany} />}
+                  {accountNumber && <ReviewRow label="Account No." value={accountNumber} />}
                   <ReviewRow label="Date" value={formatDate(date)} />
                   <ReviewRow label="Amount" value={formatPHP(Number(amount) || 0)} />
                   <ReviewRow label="Category" value={CATEGORY_LABELS[category]} />
@@ -420,27 +589,37 @@ export function AddExpense() {
             </div>
           )}
 
-          {/* Bottom nav */}
-          <div className="flex items-center justify-between gap-3 mt-6 pb-4">
-            <button onClick={step === 1 ? () => navigate('/expenses') : back}
+          {/* Navigation */}
+          <div className="flex items-center justify-between gap-3 mt-6 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+            <button onClick={step === 1 ? () => navigate('/expenses') : handleBack}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border transition-colors hover:bg-[var(--accent)]"
               style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
               <ArrowLeft size={15} /> {step === 1 ? 'Cancel' : 'Back'}
             </button>
 
-            {step < STEPS.length ? (
-              <button onClick={next}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ backgroundColor: 'var(--primary)' }}>
-                Next <ArrowRight size={15} />
-              </button>
-            ) : (
-              <button onClick={handleSubmit} disabled={saving}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ backgroundColor: 'var(--primary)' }}>
-                <Save size={15} /> {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Expense'}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {step === 1 && !selectedPayee && (
+                <button onClick={handleSkip}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors hover:bg-[var(--accent)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}>
+                  Skip <ArrowRight size={15} />
+                </button>
+              )}
+              {step < STEPS.length && (step !== 1 || selectedPayee) && (
+                <button onClick={handleNext}
+                  className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--primary)' }}>
+                  Next <ArrowRight size={15} />
+                </button>
+              )}
+              {step === STEPS.length && (
+                <button onClick={handleSubmit} disabled={saving}
+                  className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--primary)' }}>
+                  <Save size={15} /> {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Expense'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
