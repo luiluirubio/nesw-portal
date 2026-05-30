@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Search, X, Eye, MapPin, Home, Calendar, Maximize2,
   Upload, ChevronDown, Paperclip, Pencil, Check, ArrowLeft,
-  Phone, Mail, User, PenLine, Trash2, ImagePlus,
+  Phone, Mail, User, PenLine, Trash2, ImagePlus, Tag,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useApp } from '@/context/AppContext'
@@ -46,6 +46,86 @@ const typeLabels: Record<PropertyType, string> = {
   commercial_lot_with_improvement:  'Commercial Lot with Improvement',
   industrial_lot_with_improvement:  'Industrial Lot with Improvement',
   agricultural_lot_with_improvement:'Agricultural Lot with Improvement',
+}
+
+// ── Label system ─────────────────────────────────────────────────────────────
+const LABELS = [
+  { id: 'pink',   name: 'Pink',   bg: '#fce7f3', text: '#9d174d', pill: '#ec4899' },
+  { id: 'red',    name: 'Red',    bg: '#fee2e2', text: '#991b1b', pill: '#ef4444' },
+  { id: 'yellow', name: 'Yellow', bg: '#fef9c3', text: '#854d0e', pill: '#eab308' },
+  { id: 'green',  name: 'Green',  bg: '#dcfce7', text: '#166534', pill: '#22c55e' },
+  { id: 'blue',   name: 'Blue',   bg: '#dbeafe', text: '#1e40af', pill: '#3b82f6' },
+  { id: 'purple', name: 'Purple', bg: '#f3e8ff', text: '#6b21a8', pill: '#a855f7' },
+]
+
+function LabelPicker({ active, onToggle }: { active: string[]; onToggle: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [open])
+
+  const filtered = LABELS.filter(l => l.name.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-[var(--radius-sm)] transition-all"
+        style={{ color: 'var(--primary)', backgroundColor: 'var(--accent)' }}>
+        <Tag size={11} />Label
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-[60] rounded-[var(--radius)] shadow-xl border overflow-hidden"
+          style={{ width: 220, backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}>
+          <div className="p-2 border-b" style={{ borderColor: 'var(--border)' }}>
+            <div className="relative">
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
+              <input
+                autoFocus
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search for label"
+                className="w-full pl-7 pr-3 py-1.5 text-xs rounded-[var(--radius-sm)] focus:outline-none"
+                style={{ border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }} />
+            </div>
+          </div>
+          <div className="py-1 max-h-52 overflow-y-auto">
+            {filtered.map(l => {
+              const isActive = active.includes(l.id)
+              return (
+                <button key={l.id} type="button"
+                  onClick={() => { onToggle(l.id); setSearch('') }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
+                  style={{ backgroundColor: isActive ? 'var(--accent)' : 'transparent' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = isActive ? 'var(--accent)' : 'transparent')}>
+                  <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-bold"
+                    style={{ backgroundColor: l.bg, color: l.text }}>
+                    {l.name}
+                  </span>
+                  <span className="flex-1" />
+                  {isActive && <Check size={13} style={{ color: 'var(--primary)' }} />}
+                </button>
+              )
+            })}
+            {filtered.length === 0 && (
+              <p className="px-3 py-4 text-xs text-center" style={{ color: 'var(--muted-foreground)' }}>No labels found</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Editable fields tracked for change log ────────────────────────────────────
@@ -116,6 +196,19 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   const [pendingPhotos, setPendingPhotos] = useState<PhotoFile[]>([])
   const [liveDocs, setLiveDocs]       = useState<Property['documents']>(orig.documents ?? [])
   const [pendingDocs, setPendingDocs] = useState<DocFile[]>([])
+
+  const [labels, setLabels] = useState<string[]>(orig.labels ?? [])
+
+  async function toggleLabel(id: string) {
+    const next = labels.includes(id) ? labels.filter(l => l !== id) : [...labels, id]
+    setLabels(next)
+    try {
+      const updated = { ...current, labels: next }
+      await api.updateProperty(orig.id, updated)
+      setCurrent(c => ({ ...c, labels: next }))
+      onSaved(updated as Property)
+    } catch { setLabels(labels) }
+  }
 
   // Deletion confirmation
   const [confirmDelete, setConfirmDelete] = useState<
@@ -271,6 +364,13 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">
               {current.listingType === 'for_rent' ? 'For Rent' : 'For Sale'}
             </span>
+            {labels.map(id => {
+              const l = LABELS.find(x => x.id === id)
+              return l ? (
+                <span key={id} className="px-2 py-0.5 rounded-full text-xs font-bold"
+                  style={{ backgroundColor: l.bg, color: l.text }}>{l.name}</span>
+              ) : null
+            })}
           </div>
           <div className="flex items-end justify-between">
             <div>
@@ -287,6 +387,34 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
 
         {/* Body */}
         <div className="flex-1 px-6 py-4 flex flex-col gap-3 overflow-y-auto">
+
+          {/* Labels */}
+          <div className="pb-3 border-b border-dashed" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Labels</p>
+              {canEdit && <LabelPicker active={labels} onToggle={toggleLabel} />}
+            </div>
+            {labels.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {labels.map(id => {
+                  const l = LABELS.find(x => x.id === id)
+                  return l ? (
+                    <span key={id}
+                      className={cn('px-2.5 py-1 rounded-full text-xs font-bold', canEdit ? 'cursor-pointer hover:opacity-70' : '')}
+                      style={{ backgroundColor: l.bg, color: l.text }}
+                      onClick={() => canEdit && toggleLabel(id)}
+                      title={canEdit ? `Remove ${l.name}` : l.name}>
+                      {l.name}
+                    </span>
+                  ) : null
+                })}
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                {canEdit ? 'No labels. Click "Label" to add one.' : 'No labels.'}
+              </p>
+            )}
+          </div>
 
           {/* Property Details */}
           <div>
@@ -1015,9 +1143,15 @@ export function Listings({ myOnly = false }: ListingsProps) {
                     <td className="hidden lg:table-cell px-3 md:px-4 py-3 font-mono text-xs" style={{ color: 'var(--muted-foreground)' }}>{p.id}</td>
                     <td className="px-3 md:px-4 py-3 max-w-[160px] md:max-w-48">
                       <p className="font-semibold truncate text-xs md:text-sm" style={{ color: 'var(--foreground)' }}>{p.title}</p>
-                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                        {p.listingType === 'for_rent' ? '🔑 Rent' : '🏷️ Sale'}
-                      </p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                          {p.listingType === 'for_rent' ? '🔑 Rent' : '🏷️ Sale'}
+                        </span>
+                        {(p.labels ?? []).map(id => {
+                          const l = LABELS.find(x => x.id === id)
+                          return l ? <span key={id} className="w-2.5 h-2.5 rounded-full shrink-0 inline-block" style={{ backgroundColor: l.pill }} title={l.name} /> : null
+                        })}
+                      </div>
                     </td>
                     <td className="hidden sm:table-cell px-3 md:px-4 py-3 whitespace-nowrap">
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium"

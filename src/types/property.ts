@@ -58,6 +58,8 @@ export interface Property {
   contactPhone: string
   // Optional
   subdivision?: string
+  // Labels (Planner-style color tags)
+  labels?: string[]
   // Co-Broker (optional — present only when a co-broker is involved)
   coBroker?: {
     name:        string
