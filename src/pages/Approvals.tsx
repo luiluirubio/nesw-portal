@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle, XCircle, Eye, Clock, Building2, MapPin } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { formatPHP, daysSince, cn } from '@/lib/utils'
 import { toaster } from '@/components/ui/toast'
 import { api } from '@/lib/api'
@@ -27,6 +28,7 @@ const typeLabels: Record<string, string> = {
 
 export function Approvals() {
   const { user } = useAuth()
+  const { addLog } = useLogs()
   const isAdmin = user?.role === 'Admin'
 
   const [properties, setProperties] = useState<Property[]>([])
@@ -45,12 +47,22 @@ export function Approvals() {
   function handleApprove(id: string) {
     setApprovedIds(prev => new Set([...prev, id]))
     const prop = properties.find(p => p.id === id)
+    addLog({
+      action: 'edited', propertyId: id, propertyTitle: prop?.title ?? id,
+      agentId: user?.id ?? '', agentName: user?.name ?? '',
+      changes: [{ field: 'Approval', oldValue: 'Pending', newValue: 'Approved' }],
+    })
     toaster.create({ type: 'success', title: 'Listing Approved', description: `"${prop?.title}" has been approved and published.` })
   }
 
   function handleReject(id: string) {
     setRejectedIds(prev => new Set([...prev, id]))
     const prop = properties.find(p => p.id === id)
+    addLog({
+      action: 'edited', propertyId: id, propertyTitle: prop?.title ?? id,
+      agentId: user?.id ?? '', agentName: user?.name ?? '',
+      changes: [{ field: 'Approval', oldValue: 'Pending', newValue: 'Rejected' }],
+    })
     toaster.create({ type: 'error', title: 'Listing Rejected', description: `"${prop?.title}" has been sent back for revision.` })
   }
 

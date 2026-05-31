@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Receipt, Download, Pencil, PenLine, Trash2, X, Eye, Mail } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
+import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
 import type { Billing, BillingStatus } from '@/types/billing'
 import { generateBillingPDF } from '@/lib/billingPdf'
@@ -303,6 +305,8 @@ function BillingDetailPanel({
 
 export function Billing() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const { addLog } = useLogs()
   const [billings, setBillings]           = useState<Billing[]>([])
   const [loading, setLoading]             = useState(true)
   const [filter, setFilter]               = useState<BillingStatus | 'all'>('all')
@@ -320,11 +324,21 @@ export function Billing() {
   const filtered = filter === 'all' ? billings : billings.filter(b => b.status === filter)
 
   async function handleStatusChange(b: Billing, status: BillingStatus) {
+    if (status === b.status) return
     try {
       await api.updateBilling(b.id, { status })
       const updated = { ...b, status }
       setBillings(bs => bs.map(x => x.id === b.id ? updated : x))
       if (selectedBilling?.id === b.id) setSelectedBilling(updated)
+      addLog({
+        action: 'edited', propertyId: b.billingNo, propertyTitle: `Billing · ${b.clientName}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [{
+          field: 'Status',
+          oldValue: b.status.charAt(0).toUpperCase() + b.status.slice(1),
+          newValue: status.charAt(0).toUpperCase() + status.slice(1),
+        }],
+      })
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
     }

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
 import { generateProposalPDF } from '@/lib/proposalPdf'
@@ -212,6 +213,7 @@ function newRowId() { return `row-${++rowCounter}` }
 export function AddProposal() {
   const navigate = useNavigate()
   const { user }  = useAuth()
+  const { addLog } = useLogs()
   const [searchParams] = useSearchParams()
 
   // Draft ID — stable for this session
@@ -429,6 +431,14 @@ export function AddProposal() {
       }) as Proposal
       setSubmitted(true)
       deleteDraftCloud(draftId)
+      addLog({
+        action: 'created', propertyId: result.proposalNo, propertyTitle: `Proposal · ${client.name}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [
+          { field: 'Client', oldValue: '—', newValue: client.name },
+          { field: 'Total',  oldValue: '—', newValue: formatPHP(total) },
+        ],
+      })
       toaster.create({ title: `Proposal ${result.proposalNo} saved`, type: 'success' })
       setTimeout(() => navigate('/proposals'), 1200)
     } catch (err) {

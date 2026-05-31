@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, BookOpen, Eye, PenLine, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
+import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
 import type { Booking, BookingStatus } from '@/types/booking'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
@@ -18,6 +20,8 @@ const STATUS_STYLE: Record<BookingStatus, string> = {
 
 export function Bookings() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const { addLog } = useLogs()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading]   = useState(true)
   const [filter, setFilter]     = useState<BookingStatus | 'all'>('all')
@@ -34,9 +38,19 @@ export function Bookings() {
   const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status === filter)
 
   async function handleStatusChange(b: Booking, status: BookingStatus) {
+    if (status === b.status) return
     try {
       await api.updateBooking(b.id, { status })
       setBookings(bs => bs.map(x => x.id === b.id ? { ...x, status } : x))
+      addLog({
+        action: 'edited', propertyId: b.bookingNo, propertyTitle: `Booking · ${b.clientName}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [{
+          field: 'Status',
+          oldValue: b.status.charAt(0).toUpperCase() + b.status.slice(1),
+          newValue: status.charAt(0).toUpperCase() + status.slice(1),
+        }],
+      })
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
     }

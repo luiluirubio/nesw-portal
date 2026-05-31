@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, Pencil, ToggleLeft, ToggleRight, Briefcase, X, ChevronDown } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP } from '@/lib/utils'
 import type { Service } from '@/types/service'
@@ -174,6 +175,7 @@ function ServiceForm({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function Services() {
   const { user } = useAuth()
+  const { addLog } = useLogs()
   const isAdmin = user?.role === 'Admin'
 
   const [services, setServices]     = useState<Service[]>([])
@@ -197,12 +199,30 @@ export function Services() {
   async function handleSave(data: Partial<Service>) {
     try {
       if (editing) {
+        const before = editing
         const updated = await api.updateService(editing.id, data) as Service
         setServices(s => s.map(x => x.id === editing.id ? { ...x, ...updated } : x))
+        const labels: Record<string, string> = { category: 'Category', name: 'Name', defaultPrice: 'Price', timeline: 'Timeline', description: 'Description' }
+        const changes = Object.keys(labels).flatMap(k => {
+          const oldVal = String((before as unknown as Record<string, unknown>)[k] ?? '')
+          const newVal = String((data as Record<string, unknown>)[k] ?? oldVal)
+          return newVal !== oldVal ? [{ field: labels[k], oldValue: oldVal || '—', newValue: newVal || '—' }] : []
+        })
+        if (changes.length) {
+          addLog({ action: 'edited', propertyId: before.id, propertyTitle: `Service · ${updated.name || before.name}`,
+            agentId: user?.id ?? '', agentName: user?.name ?? '', changes })
+        }
         toaster.create({ title: 'Service updated', type: 'success' })
       } else {
         const created = await api.createService(data) as Service
         setServices(s => [created, ...s])
+        addLog({ action: 'created', propertyId: created.id, propertyTitle: `Service · ${created.name}`,
+          agentId: user?.id ?? '', agentName: user?.name ?? '',
+          changes: [
+            { field: 'Name',     oldValue: '—', newValue: created.name },
+            { field: 'Category', oldValue: '—', newValue: created.category },
+            { field: 'Price',    oldValue: '—', newValue: formatPHP(created.defaultPrice) },
+          ] })
         toaster.create({ title: 'Service added', type: 'success' })
       }
       closeDrawer()
@@ -215,6 +235,9 @@ export function Services() {
     try {
       const result = await api.toggleService(svc.id) as { status: 'active' | 'inactive' }
       setServices(s => s.map(x => x.id === svc.id ? { ...x, status: result.status } : x))
+      addLog({ action: 'edited', propertyId: svc.id, propertyTitle: `Service · ${svc.name}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [{ field: 'Status', oldValue: svc.status === 'active' ? 'Active' : 'Inactive', newValue: result.status === 'active' ? 'Active' : 'Inactive' }] })
       toaster.create({
         title: `Service ${result.status === 'active' ? 'activated' : 'deactivated'}`,
         type: 'success',

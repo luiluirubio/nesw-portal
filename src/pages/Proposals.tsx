@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Download, PenLine, Trash2, X, BookmarkPlus, Search, ChevronDown, Eye, Mail } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
+import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
 import type { Proposal, ProposalStatus } from '@/types/proposal'
 import { generateProposalPDF } from '@/lib/proposalPdf'
@@ -246,6 +248,8 @@ const STATUS_CFG: Record<ProposalStatus, { bg: string; text: string; dot: string
 
 export function Proposals() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const { addLog } = useLogs()
   const [proposals, setProposals]               = useState<Proposal[]>([])
   const [loading, setLoading]                   = useState(true)
   const [filterStatus, setFilterStatus]         = useState<ProposalStatus | 'all'>('all')
@@ -271,11 +275,21 @@ export function Proposals() {
   }, [])
 
   async function handleStatusChange(p: Proposal, status: ProposalStatus) {
+    if (status === p.status) return
     try {
       await api.updateProposal(p.id, { status })
       const updated = { ...p, status }
       setProposals(ps => ps.map(x => x.id === p.id ? updated : x))
       if (selectedProposal?.id === p.id) setSelectedProposal(updated)
+      addLog({
+        action: 'edited', propertyId: p.proposalNo, propertyTitle: `Proposal · ${p.clientName}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [{
+          field: 'Status',
+          oldValue: p.status.charAt(0).toUpperCase() + p.status.slice(1),
+          newValue: status.charAt(0).toUpperCase() + status.slice(1),
+        }],
+      })
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
     }

@@ -280,13 +280,19 @@ function PropertyDetailPanel({ property: orig, onClose, onSaved }: {
   const { getName: getLabelName } = useLabelNames()
 
   async function toggleLabel(id: string) {
-    const next = labels.includes(id) ? labels.filter(l => l !== id) : [...labels, id]
+    const adding = !labels.includes(id)
+    const next = adding ? [...labels, id] : labels.filter(l => l !== id)
     setLabels(next)
     try {
       const updated = { ...current, labels: next }
       await api.updateProperty(orig.id, updated)
       setCurrent(c => ({ ...c, labels: next }))
       onSaved(updated as Property)
+      addLog({
+        action: 'edited', propertyId: orig.id, propertyTitle: orig.title,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [{ field: 'Label', oldValue: adding ? '—' : id, newValue: adding ? id : 'Removed' }],
+      })
     } catch { setLabels(labels) }
   }
 

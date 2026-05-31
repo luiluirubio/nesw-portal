@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, Download, Save, ArrowLeft } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { toaster } from '@/components/ui/toast'
 import { cn, formatPHP, inputCls, inputStyle, addWorkingDays } from '@/lib/utils'
 import { generateBillingPDF } from '@/lib/billingPdf'
@@ -36,6 +37,7 @@ export function AddBilling() {
   const { id }        = useParams<{ id: string }>()
   const [params]      = useSearchParams()
   const { user }      = useAuth()
+  const { addLog }    = useLogs()
   const isEdit        = Boolean(id)
 
   // Pre-fill from booking URL params (from ViewBooking "New Billing" button)
@@ -218,6 +220,14 @@ export function AddBilling() {
       }
       setSubmitted(true)
       if (!isEdit) deleteDraftCloud(draftId)
+      addLog({
+        action: isEdit ? 'edited' : 'created', propertyId: saved.billingNo, propertyTitle: `Billing · ${saved.clientName}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [
+          { field: isEdit ? 'Updated' : 'Client', oldValue: '—', newValue: isEdit ? 'Details edited' : saved.clientName },
+          { field: 'Total', oldValue: '—', newValue: formatPHP(saved.total) },
+        ],
+      })
       toaster.create({ title: isEdit ? 'Billing updated' : 'Billing created', type: 'success' })
       if (andPrint) {
         await generateBillingPDF({

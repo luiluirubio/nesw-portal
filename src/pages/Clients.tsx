@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react'
 import { Pencil, ToggleLeft, ToggleRight, Users2, X, Search } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toaster } from '@/components/ui/toast'
+import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { cn, inputCls, inputStyle } from '@/lib/utils'
 import type { Client, ClientStatus } from '@/types/client'
+import type { FieldChange } from '@/types/activityLog'
 import { ComboBox } from '@/components/ui/combo-box'
 import type { ComboBoxOption } from '@/components/ui/combo-box'
 import { phLgusSorted } from '@/data/philippines'
@@ -157,6 +160,8 @@ function ClientForm({ initial, onSave, onClose }: {
 }
 
 export function Clients() {
+  const { user } = useAuth()
+  const { addLog } = useLogs()
   const [clients, setClients]   = useState<Client[]>([])
   const [loading, setLoading]   = useState(true)
   const [filter, setFilter]     = useState<ClientStatus | 'all'>('all')
@@ -188,8 +193,26 @@ export function Clients() {
   async function handleSave(data: Partial<Client>) {
     if (!editing) return
     try {
+      const before = editing
       const updated = await api.updateClient(editing.id, data) as Client
       setClients(cs => cs.map(c => c.id === editing.id ? { ...c, ...updated } : c))
+      // Field-level diff for the audit log
+      const labels: Record<string, string> = {
+        name: 'Name', company: 'Company', email: 'Email', phone: 'Phone',
+        street: 'Street', barangay: 'Barangay', city: 'City', province: 'Province', notes: 'Notes',
+      }
+      const changes: FieldChange[] = []
+      for (const k of Object.keys(labels)) {
+        const oldVal = String((before as unknown as Record<string, unknown>)[k] ?? '')
+        const newVal = String((data as Record<string, unknown>)[k] ?? oldVal)
+        if (newVal !== oldVal) changes.push({ field: labels[k], oldValue: oldVal || '—', newValue: newVal || '—' })
+      }
+      if (changes.length) {
+        addLog({
+          action: 'edited', propertyId: before.clientCode || before.id, propertyTitle: `Client · ${updated.name || before.name}`,
+          agentId: user?.id ?? '', agentName: user?.name ?? '', changes,
+        })
+      }
       toaster.create({ title: 'Client updated', type: 'success' })
       closeDrawer()
     } catch (err) {
@@ -204,6 +227,15 @@ export function Clients() {
       const newStatus: ClientStatus = c.status === 'active' ? 'inactive' : 'active'
       await api.updateClient(c.id, { status: newStatus })
       setClients(cs => cs.map(x => x.id === c.id ? { ...x, status: newStatus } : x))
+      addLog({
+        action: 'edited', propertyId: c.clientCode || c.id, propertyTitle: `Client · ${c.name}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [{
+          field: 'Status',
+          oldValue: c.status.charAt(0).toUpperCase() + c.status.slice(1),
+          newValue: newStatus.charAt(0).toUpperCase() + newStatus.slice(1),
+        }],
+      })
     } catch (err) {
       toaster.create({ title: (err as Error).message, type: 'error' })
     } finally {

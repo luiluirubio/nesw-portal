@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { Search, X, Plus, Shield, Clock, Eye, EyeOff, RefreshCw,
          CheckCircle, XCircle, Pencil, KeyRound, ChevronDown, Lock } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Navigate } from 'react-router-dom'
+import type { FieldChange } from '@/types/activityLog'
 
 interface PortalUser {
   id: string; name: string; email: string; role: 'Admin' | 'Agent'
@@ -28,6 +30,8 @@ function timeAgo(iso?: string) {
 
 // ── Change Password Modal ─────────────────────────────────────────────────────
 function ChangePasswordModal({ user, onClose }: { user: PortalUser; onClose: () => void }) {
+  const { user: actor } = useAuth()
+  const { addLog } = useLogs()
   const [password, setPassword]   = useState('')
   const [confirm, setConfirm]     = useState('')
   const [showPw, setShowPw]       = useState(false)
@@ -45,6 +49,11 @@ function ChangePasswordModal({ user, onClose }: { user: PortalUser; onClose: () 
     setError(''); setSaving(true)
     try {
       await api.updateUser(user.id, { password })
+      addLog({
+        action: 'edited', propertyId: user.email, propertyTitle: `User · ${user.name}`,
+        agentId: actor?.id ?? '', agentName: actor?.name ?? '',
+        changes: [{ field: 'Password', oldValue: '••••••', newValue: 'Reset' }],
+      })
       setDone(true)
       setTimeout(onClose, 1500)
     } catch (e) { setError((e as Error).message) }
@@ -130,6 +139,8 @@ function UserModal({ user, onClose, onSaved }: {
   onSaved:  () => void
 }) {
   const isEdit = !!user
+  const { user: actor } = useAuth()
+  const { addLog } = useLogs()
   const [form, setForm] = useState({
     name:      user?.name      ?? '',
     email:     user?.email     ?? '',
@@ -159,8 +170,28 @@ function UserModal({ user, onClose, onSaved }: {
         const body: Record<string, string> = { name: form.name, role: form.role, branch: form.branch, licenseNo: form.licenseNo }
         if (form.password) body.password = form.password
         await api.updateUser(user!.id, body)
+        // Audit-log changed fields (password noted, never its value)
+        const labels: Record<string, keyof PortalUser> = { Name: 'name', Role: 'role', Branch: 'branch', 'License No.': 'licenseNo' }
+        const changes: FieldChange[] = []
+        for (const [label, key] of Object.entries(labels)) {
+          const oldVal = String(user![key] ?? '')
+          const newVal = String(form[key as 'name' | 'role' | 'branch' | 'licenseNo'] ?? '')
+          if (oldVal !== newVal) changes.push({ field: label, oldValue: oldVal || '—', newValue: newVal || '—' })
+        }
+        if (form.password) changes.push({ field: 'Password', oldValue: '••••••', newValue: 'Changed' })
+        if (changes.length) {
+          addLog({ action: 'edited', propertyId: user!.email, propertyTitle: `User · ${form.name}`,
+            agentId: actor?.id ?? '', agentName: actor?.name ?? '', changes })
+        }
       } else {
         await api.createUser({ name: form.name, email: form.email, role: form.role, branch: form.branch, licenseNo: form.licenseNo, password: form.password })
+        addLog({ action: 'created', propertyId: form.email, propertyTitle: `User · ${form.name}`,
+          agentId: actor?.id ?? '', agentName: actor?.name ?? '',
+          changes: [
+            { field: 'Email', oldValue: '—', newValue: form.email },
+            { field: 'Role',  oldValue: '—', newValue: form.role },
+            { field: 'Branch', oldValue: '—', newValue: form.branch },
+          ] })
       }
       onSaved(); onClose()
     } catch (e) {
@@ -306,6 +337,8 @@ export function Users() {
   const [editTarget, setEditTarget] = useState<PortalUser | null | 'new'>(null)
   const [pwTarget, setPwTarget]   = useState<PortalUser | null>(null)
   const [toggling, setToggling]   = useState<string | null>(null)
+  const { user: actor } = useAuth()
+  const { addLog } = useLogs()
 
   async function loadUsers() {
     setLoading(true)
@@ -321,6 +354,15 @@ export function Users() {
     try {
       await api.setUserStatus(u.id, newStatus)
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: newStatus } : x))
+      addLog({
+        action: 'edited', propertyId: u.email, propertyTitle: `User · ${u.name}`,
+        agentId: actor?.id ?? '', agentName: actor?.name ?? '',
+        changes: [{
+          field: 'Status',
+          oldValue: u.status.charAt(0).toUpperCase() + u.status.slice(1),
+          newValue: newStatus.charAt(0).toUpperCase() + newStatus.slice(1),
+        }],
+      })
     } catch { /* ignore */ } finally { setToggling(null) }
   }
 

@@ -3,8 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Save } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { toaster } from '@/components/ui/toast'
-import { cn, inputCls, inputStyle } from '@/lib/utils'
+import { cn, formatPHP, inputCls, inputStyle } from '@/lib/utils'
 import type { Proposal } from '@/types/proposal'
 import type { Booking } from '@/types/booking'
 import type { Client } from '@/types/client'
@@ -28,6 +29,7 @@ export function AddBooking() {
   const navigate        = useNavigate()
   const [params]        = useSearchParams()
   const { user }        = useAuth()
+  const { addLog }      = useLogs()
   const preselectedId   = params.get('proposalId') ?? ''
 
   // Draft
@@ -140,6 +142,15 @@ export function AddBooking() {
 
       setSubmitted(true)
       deleteDraftCloud(draftId)
+      addLog({
+        action: 'created', propertyId: booking.bookingNo, propertyTitle: `Booking · ${clientName}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '',
+        changes: [
+          { field: 'Client', oldValue: '—', newValue: clientName },
+          { field: 'Total',  oldValue: '—', newValue: formatPHP(selectedProposal?.total ?? 0) },
+          { field: 'Status', oldValue: '—', newValue: asDraft ? 'Draft' : 'Active' },
+        ],
+      })
       toaster.create({ title: `Booking ${booking.bookingNo} ${asDraft ? 'saved as draft' : 'activated'}`, type: 'success' })
       navigate(`/bookings/${booking.id}`)
     } catch (err) {
