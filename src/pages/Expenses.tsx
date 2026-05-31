@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Wallet, Pencil, Trash2, X, Eye, PenLine } from 'lucide-react'
 import { toaster } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { cn, formatPHP, formatDate } from '@/lib/utils'
 import { loadExpenses, updateExpense, deleteExpense } from '@/lib/expenses'
 import { fetchDrafts, deleteDraftCloud } from '@/lib/drafts'
@@ -182,6 +184,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 export function Expenses() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const { addLog } = useLogs()
   const [expenses, setExpenses]       = useState<Expense[]>([])
   const [statusFilter, setStatusFilter]     = useState<ExpenseStatus | 'all'>('all')
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all')
@@ -207,16 +211,32 @@ export function Expenses() {
   )
 
   function handleStatusChange(exp: Expense, status: ExpenseStatus) {
+    if (status === exp.status) return
     const updated = updateExpense(exp.id, { status })
     if (!updated) return
     setExpenses(es => es.map(x => x.id === exp.id ? updated : x))
     if (selected?.id === exp.id) setSelected(updated)
+    // Audit-log the status change (who + when recorded by LogsContext)
+    addLog({
+      action: 'edited', propertyId: exp.expenseNo, propertyTitle: `Expense · ${exp.payee}`,
+      agentId: user?.id ?? '', agentName: user?.name ?? '',
+      changes: [{
+        field: 'Status',
+        oldValue: exp.status.charAt(0).toUpperCase() + exp.status.slice(1),
+        newValue: status.charAt(0).toUpperCase() + status.slice(1),
+      }],
+    })
   }
 
   function handleDelete(exp: Expense) {
     deleteExpense(exp.id)
     setExpenses(es => es.filter(x => x.id !== exp.id))
     if (selected?.id === exp.id) setSelected(null)
+    addLog({
+      action: 'edited', propertyId: exp.expenseNo, propertyTitle: `Expense · ${exp.payee}`,
+      agentId: user?.id ?? '', agentName: user?.name ?? '',
+      changes: [{ field: 'Deleted', oldValue: formatPHP(exp.amount), newValue: 'Removed' }],
+    })
     toaster.create({ title: 'Expense deleted', type: 'success' })
   }
 

@@ -5,10 +5,12 @@ import {
   Search, UserSquare, ReceiptText, FileImage,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
 import { toaster } from '@/components/ui/toast'
-import { cn, formatPHP, formatDate, inputCls, inputStyle } from '@/lib/utils'
+import { cn, formatPHP, formatDate, inputCls, inputStyle, isValidEmail, isValidPhone } from '@/lib/utils'
 import { loadExpenses, createExpense, updateExpense, uploadReceipt, MAX_RECEIPT_BYTES } from '@/lib/expenses'
 import { loadPayees, createPayee, updatePayee, uploadPayeeId } from '@/lib/payees'
+import { diffExpense } from '@/lib/expenseLog'
 import { PayeeSelector } from '@/components/PayeeSelector'
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateExpenseDraftId } from '@/lib/drafts'
 import type { ExpenseDraft } from '@/types/draft'
@@ -24,17 +26,6 @@ const STEPS = [
   { number: 3, label: 'Expense Details',  icon: ReceiptText  },
   { number: 4, label: 'Receipt & Review', icon: FileImage    },
 ]
-
-// ── Validation helpers ────────────────────────────────────────────────────────
-function isValidEmail(v: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
-}
-// PH mobile (09xx / +639xx) or general 7–15 digit phone, spaces/dashes allowed
-function isValidPhone(v: string): boolean {
-  const c = v.replace(/[\s-]/g, '')
-  if (/^(\+?63)?9\d{9}$/.test(c)) return true
-  return /^\+?\d{7,15}$/.test(c)
-}
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -97,6 +88,7 @@ export function AddExpense() {
   const { id }       = useParams<{ id: string }>()
   const [params]     = useSearchParams()
   const { user }     = useAuth()
+  const { addLog }   = useLogs()
   const isEdit       = Boolean(id)
 
   // Draft (new expenses only)
@@ -367,8 +359,29 @@ export function AddExpense() {
         agentId:   existing?.agentId   ?? user?.id   ?? '',
         agentName: existing?.agentName ?? user?.name ?? '',
       }
-      if (isEdit && id) updateExpense(id, payload)
-      else createExpense(payload)
+      let saved: Expense | null
+      if (isEdit && id) {
+        // Log only the fields that actually changed
+        const changes = existing ? diffExpense(existing, payload) : []
+        saved = updateExpense(id, payload)
+        if (saved && changes.length) {
+          addLog({
+            action: 'edited', propertyId: saved.expenseNo, propertyTitle: `Expense · ${saved.payee}`,
+            agentId: user?.id ?? '', agentName: user?.name ?? '', changes,
+          })
+        }
+      } else {
+        saved = createExpense(payload)
+        addLog({
+          action: 'created', propertyId: saved.expenseNo, propertyTitle: `Expense · ${saved.payee}`,
+          agentId: user?.id ?? '', agentName: user?.name ?? '',
+          changes: [
+            { field: 'Amount',  oldValue: '—', newValue: formatPHP(saved.amount) },
+            { field: 'Payee',   oldValue: '—', newValue: saved.payee || '—' },
+            { field: 'Status',  oldValue: '—', newValue: saved.status.charAt(0).toUpperCase() + saved.status.slice(1) },
+          ],
+        })
+      }
       setSubmitted(true)
       if (!isEdit) deleteDraftCloud(draftId)
       toaster.create({ title: isEdit ? 'Expense updated' : 'Expense recorded', type: 'success' })

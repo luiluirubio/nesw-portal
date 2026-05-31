@@ -41,3 +41,22 @@ export function addWorkingDays(from: Date, days: number): string {
 // Shared form input styling — used across add/edit form pages
 export const inputCls = 'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors focus:ring-2'
 export const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' } as const
+
+// ── Shared field validation ────────────────────────────────────────────────
+// Email must contain an "@" with text before it and a dotted domain after.
+export function isValidEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
+}
+
+// Philippine phone validation.
+// Mobile: 11 digits starting 09 (e.g. 0917 123 4567) or +63 / 63 + 9XXXXXXXXX.
+// Landline: 7–10 digits (optionally with +63 / area code). Spaces, dashes and
+// a leading "+" are ignored when counting digits.
+export function isValidPhone(v: string): boolean {
+  const digits = v.replace(/[\s\-()]/g, '').replace(/^\+/, '')
+  // Mobile forms → must normalise to exactly 11 digits (09XXXXXXXXX)
+  if (/^09\d{9}$/.test(digits)) return true             // 09XXXXXXXXX  (11 digits)
+  if (/^639\d{9}$/.test(digits)) return true            // 639XXXXXXXXX (12 digits)
+  // Landline / other → 7 to 12 digits total
+  return /^\d{7,12}$/.test(digits)
+}

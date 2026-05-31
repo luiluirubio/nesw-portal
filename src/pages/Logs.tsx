@@ -239,7 +239,7 @@ export function Logs() {
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Logs</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-            Audit trail — property changes and user login history
+            Audit trail — record, expense & payee changes and user login history
           </p>
         </div>
         <button onClick={refresh} disabled={loading}
@@ -369,7 +369,7 @@ export function Logs() {
               <thead>
                 <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)' }}>
                   <th className="px-3 py-3 w-8" />
-                  {['Timestamp', 'Action', 'Property', 'Agent', 'Changes'].map(h => (
+                  {['Timestamp', 'Action', 'Record', 'User', 'Changes'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wide whitespace-nowrap"
                       style={{ color: 'var(--muted-foreground)' }}>{h}</th>
                   ))}

@@ -3,16 +3,12 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Users2, Pencil, Trash2, Search, X, Paperclip, ExternalLink } from 'lucide-react'
 import { toaster } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { cn, inputCls, inputStyle } from '@/lib/utils'
+import { useAuth } from '@/context/AuthContext'
+import { useLogs } from '@/context/LogsContext'
+import { cn, inputCls, inputStyle, isValidEmail, isValidPhone } from '@/lib/utils'
 import { loadPayees, updatePayee, deletePayee } from '@/lib/payees'
 import type { Payee, PayeeType } from '@/types/payee'
-
-// Email / phone validation (kept in sync with AddExpense)
-function isValidEmail(v: string): boolean { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) }
-function isValidPhone(v: string): boolean {
-  const c = v.replace(/[\s-]/g, '')
-  return /^(\+?63)?9\d{9}$/.test(c) || /^\+?\d{7,15}$/.test(c)
-}
+import type { FieldChange } from '@/types/activityLog'
 
 function Field({ label, required, error, children }: {
   label: string; required?: boolean; error?: string; children: React.ReactNode
@@ -29,6 +25,8 @@ function Field({ label, required, error, children }: {
 }
 
 export function Payees() {
+  const { user } = useAuth()
+  const { addLog } = useLogs()
   const [payees, setPayees]     = useState<Payee[]>([])
   const [search, setSearch]     = useState('')
   const [editing, setEditing]   = useState<Payee | null>(null)
@@ -66,12 +64,30 @@ export function Payees() {
     if (form.contactNumber.trim() && !isValidPhone(form.contactNumber.trim())) e.contactNumber = 'Enter a valid contact number'
     setErrors(e)
     if (Object.keys(e).length) return
-    updatePayee(editing.id, {
+    const next = {
       ...form,
       company:       form.payeeType === 'company' ? form.company : '',
       contactPerson: form.payeeType === 'company' ? form.contactPerson : '',
-    })
+    }
+    // Build a field-level diff for the audit log
+    const labels: Record<string, string> = {
+      payeeType: 'Payee Type', name: 'Name', company: 'Company', contactPerson: 'Contact Person',
+      contactNumber: 'Contact Number', email: 'Email', address: 'Address', notes: 'Notes', status: 'Status',
+    }
+    const changes: FieldChange[] = []
+    for (const k of Object.keys(labels) as (keyof typeof next)[]) {
+      const oldVal = String((editing as unknown as Record<string, unknown>)[k] ?? '')
+      const newVal = String(next[k] ?? '')
+      if (oldVal !== newVal) changes.push({ field: labels[k], oldValue: oldVal || '—', newValue: newVal || '—' })
+    }
+    updatePayee(editing.id, next)
     setPayees(loadPayees())
+    if (changes.length) {
+      addLog({
+        action: 'edited', propertyId: editing.accountNumber || editing.id, propertyTitle: `Payee · ${next.name}`,
+        agentId: user?.id ?? '', agentName: user?.name ?? '', changes,
+      })
+    }
     setEditing(null)
     toaster.create({ title: 'Payee updated', type: 'success' })
   }
@@ -79,6 +95,11 @@ export function Payees() {
   function handleDelete(p: Payee) {
     deletePayee(p.id)
     setPayees(loadPayees())
+    addLog({
+      action: 'edited', propertyId: p.accountNumber || p.id, propertyTitle: `Payee · ${p.name}`,
+      agentId: user?.id ?? '', agentName: user?.name ?? '',
+      changes: [{ field: 'Deleted', oldValue: p.name, newValue: 'Removed' }],
+    })
     toaster.create({ title: 'Payee deleted', type: 'success' })
   }
 
