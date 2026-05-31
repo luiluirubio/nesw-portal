@@ -5,7 +5,7 @@ import { toaster } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn, inputCls, inputStyle } from '@/lib/utils'
 import { loadPayees, updatePayee, deletePayee } from '@/lib/payees'
-import type { Payee } from '@/types/payee'
+import type { Payee, PayeeType } from '@/types/payee'
 
 // Email / phone validation (kept in sync with AddExpense)
 function isValidEmail(v: string): boolean { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) }
@@ -32,7 +32,7 @@ export function Payees() {
   const [payees, setPayees]     = useState<Payee[]>([])
   const [search, setSearch]     = useState('')
   const [editing, setEditing]   = useState<Payee | null>(null)
-  const [form, setForm]         = useState({ name: '', company: '', contactPerson: '', contactNumber: '', email: '', address: '', notes: '', status: 'active' as 'active' | 'inactive' })
+  const [form, setForm]         = useState({ payeeType: 'company' as PayeeType, name: '', company: '', contactPerson: '', contactNumber: '', email: '', address: '', notes: '', status: 'active' as 'active' | 'inactive' })
   const [errors, setErrors]     = useState<Record<string, string>>({})
   const [toDelete, setToDelete] = useState<Payee | null>(null)
 
@@ -51,6 +51,7 @@ export function Payees() {
     setEditing(p)
     setErrors({})
     setForm({
+      payeeType: p.payeeType ?? 'company',
       name: p.name, company: p.company ?? '', contactPerson: p.contactPerson ?? '',
       contactNumber: p.contactNumber ?? '', email: p.email ?? '', address: p.address ?? '',
       notes: p.notes ?? '', status: p.status,
@@ -60,12 +61,16 @@ export function Payees() {
   function handleSave() {
     if (!editing) return
     const e: Record<string, string> = {}
-    if (!form.name.trim()) e.name = 'Name is required'
+    if (!form.name.trim()) e.name = form.payeeType === 'company' ? 'Company name is required' : 'Full name is required'
     if (form.email.trim() && !isValidEmail(form.email.trim())) e.email = 'Enter a valid email address'
     if (form.contactNumber.trim() && !isValidPhone(form.contactNumber.trim())) e.contactNumber = 'Enter a valid contact number'
     setErrors(e)
     if (Object.keys(e).length) return
-    updatePayee(editing.id, form)
+    updatePayee(editing.id, {
+      ...form,
+      company:       form.payeeType === 'company' ? form.company : '',
+      contactPerson: form.payeeType === 'company' ? form.contactPerson : '',
+    })
     setPayees(loadPayees())
     setEditing(null)
     toaster.create({ title: 'Payee updated', type: 'success' })
@@ -117,8 +122,8 @@ export function Payees() {
               <thead>
                 <tr style={{ backgroundColor: 'var(--card)', color: 'var(--muted-foreground)' }}>
                   <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wide">Account No.</th>
+                  <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wide">Type</th>
                   <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wide">Name</th>
-                  <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wide">Company</th>
                   <th className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wide">Contact</th>
                   <th className="text-center px-4 py-3 font-bold text-xs uppercase tracking-wide">ID</th>
                   <th className="text-center px-4 py-3 font-bold text-xs uppercase tracking-wide">Status</th>
@@ -131,10 +136,20 @@ export function Payees() {
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--accent)')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}>
                     <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--primary)' }}>{p.accountNumber || '—'}</td>
-                    <td className="px-4 py-3 font-semibold" style={{ color: 'var(--foreground)' }}>{p.name}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--muted-foreground)' }}>{p.company || '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ backgroundColor: 'var(--accent)', color: 'var(--muted-foreground)' }}>
+                        {(p.payeeType ?? 'company') === 'company' ? 'Company' : 'Individual'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3" style={{ color: 'var(--foreground)' }}>
+                      <p className="font-semibold">{p.name}</p>
+                      {(p.payeeType ?? 'company') === 'company' && p.contactPerson && (
+                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{p.contactPerson}</p>
+                      )}
+                    </td>
                     <td className="px-4 py-3" style={{ color: 'var(--muted-foreground)' }}>
-                      {p.contactPerson || '—'}{p.contactNumber ? ` · ${p.contactNumber}` : ''}
+                      {p.contactNumber || p.email || '—'}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {p.idUrl ? (
@@ -189,17 +204,34 @@ export function Payees() {
               </Dialog.Close>
             </div>
             <div className="px-6 py-5 space-y-4 overflow-y-auto">
-              <Field label="Name" required error={errors.name}>
+              {/* Company / Individual toggle */}
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>Payee Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['company', 'individual'] as PayeeType[]).map(t => (
+                    <button key={t} type="button" onClick={() => setForm(f => ({ ...f, payeeType: t }))}
+                      className="px-3 py-2 rounded-lg text-sm font-medium border transition-colors"
+                      style={{
+                        borderColor: form.payeeType === t ? 'var(--primary)' : 'var(--border)',
+                        backgroundColor: form.payeeType === t ? 'var(--primary)' : 'var(--background)',
+                        color: form.payeeType === t ? 'var(--primary-foreground)' : 'var(--foreground)',
+                      }}>
+                      {t === 'company' ? 'Company' : 'Individual'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Field label={form.payeeType === 'company' ? 'Company Name' : 'Full Name'} required error={errors.name}>
                 <input value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setErrors(x => ({ ...x, name: '' })) }}
                   className={cn(inputCls, errors.name && 'border-red-400')} style={inputStyle} />
               </Field>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Company">
-                  <input value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))} className={inputCls} style={inputStyle} />
-                </Field>
-                <Field label="Contact Person">
-                  <input value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} style={inputStyle} />
-                </Field>
+                {form.payeeType === 'company' && (
+                  <Field label="Contact Person">
+                    <input value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} className={inputCls} style={inputStyle} />
+                  </Field>
+                )}
                 <Field label="Contact Number" error={errors.contactNumber}>
                   <input value={form.contactNumber} onChange={e => { setForm(f => ({ ...f, contactNumber: e.target.value })); setErrors(x => ({ ...x, contactNumber: '' })) }}
                     inputMode="tel" className={cn(inputCls, errors.contactNumber && 'border-red-400')} style={inputStyle} />
@@ -209,7 +241,7 @@ export function Payees() {
                     type="email" className={cn(inputCls, errors.email && 'border-red-400')} style={inputStyle} />
                 </Field>
               </div>
-              <Field label="Company Address">
+              <Field label={form.payeeType === 'company' ? 'Company Address' : 'Address'}>
                 <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className={inputCls} style={inputStyle} />
               </Field>
               <Field label="Notes">

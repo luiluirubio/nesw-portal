@@ -30,7 +30,10 @@ function nextAccountNumber(list: Payee[]): string {
   return `PAY-${year}-${String(countThisYear + 1).padStart(4, '0')}`
 }
 
-export type PayeeInput = Omit<Payee, 'id' | 'accountNumber' | 'createdAt' | 'updatedAt'>
+export type PayeeInput = Omit<Payee, 'id' | 'accountNumber' | 'createdAt' | 'updatedAt'> & {
+  // payeeType is required on the input even though older stored records may lack it
+  payeeType: Payee['payeeType']
+}
 
 export function createPayee(input: PayeeInput): Payee {
   const list = loadPayees()

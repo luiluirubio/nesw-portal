@@ -82,6 +82,7 @@ export interface ExpenseDraft extends BaseDraft {
   amount:        number
   category:      string
   paymentMethod: string
+  paidToAccount?: string
   usedFor:       string
   projectName:   string
   status:        string

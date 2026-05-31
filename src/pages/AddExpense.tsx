@@ -12,7 +12,7 @@ import { loadPayees, createPayee, updatePayee, uploadPayeeId } from '@/lib/payee
 import { PayeeSelector } from '@/components/PayeeSelector'
 import { saveDraftCloud, fetchDraft, deleteDraftCloud, generateExpenseDraftId } from '@/lib/drafts'
 import type { ExpenseDraft } from '@/types/draft'
-import type { Payee } from '@/types/payee'
+import type { Payee, PayeeType } from '@/types/payee'
 import {
   CATEGORY_LABELS, METHOD_LABELS, USED_FOR_LABELS,
   type Expense, type ExpenseCategory, type PaymentMethod, type ExpenseStatus, type ExpenseUsedFor,
@@ -114,12 +114,13 @@ export function AddExpense() {
   const [selectedPayee, setSelectedPayee] = useState<Payee | null>(null)
   const [payeeId, setPayeeId]             = useState<string>('')
   const [accountNumber, setAccountNumber] = useState<string>('')   // read-only, master-data assigned
-  const [pName,    setPName]    = useState('')
+  const [payeeType, setPayeeType] = useState<PayeeType>('company')
+  const [pName,    setPName]    = useState('')   // company name OR individual full name
   const [pCompany, setPCompany] = useState('')
-  const [pContact, setPContact] = useState('')   // contact person
+  const [pContact, setPContact] = useState('')   // contact person (company only)
   const [pNumber,  setPNumber]  = useState('')   // contact number
   const [pEmail,   setPEmail]   = useState('')
-  const [pAddress, setPAddress] = useState('')   // company address
+  const [pAddress, setPAddress] = useState('')   // company / individual address
   // ID attachment
   const [idFile, setIdFile]       = useState<File | null>(null)
   const [idName, setIdName]       = useState<string | undefined>()
@@ -131,6 +132,7 @@ export function AddExpense() {
   const [category,      setCategory]      = useState<ExpenseCategory>('marketing')
   const [amount,        setAmount]        = useState<number>(0)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
+  const [paidToAccount, setPaidToAccount] = useState('')
   const [usedFor,       setUsedFor]       = useState<ExpenseUsedFor>('office')
   const [projectName,   setProjectName]   = useState('')
   const [status,        setStatus]        = useState<ExpenseStatus>('pending')
@@ -163,6 +165,7 @@ export function AddExpense() {
     setCategory(found.category)
     setAmount(found.amount)
     setPaymentMethod(found.paymentMethod)
+    setPaidToAccount(found.paidToAccount ?? '')
     setUsedFor(found.usedFor)
     setProjectName(found.projectName ?? '')
     setStatus(found.status)
@@ -191,6 +194,7 @@ export function AddExpense() {
         setCategory((d.category as ExpenseCategory) || 'marketing')
         setAmount(d.amount || 0)
         setPaymentMethod((d.paymentMethod as PaymentMethod) || 'cash')
+        setPaidToAccount(d.paidToAccount || '')
         setUsedFor((d.usedFor as ExpenseUsedFor) || 'office')
         setProjectName(d.projectName || '')
         setStatus((d.status as ExpenseStatus) || 'pending')
@@ -207,10 +211,10 @@ export function AddExpense() {
       id: draftId, agentId: user.id, agentName: user.name,
       draftType: 'expense', savedAt: new Date().toISOString(),
       lastStep: step,
-      payeeId, payee: pName, date, amount, category, paymentMethod, usedFor, projectName, status, notes,
+      payeeId, payee: pName, date, amount, category, paymentMethod, paidToAccount, usedFor, projectName, status, notes,
       receiptName,
     })
-  }, [draftId, user, isEdit, submitted, loadingDraft, step, payeeId, pName, date, amount, category, paymentMethod, usedFor, projectName, status, notes, receiptName])
+  }, [draftId, user, isEdit, submitted, loadingDraft, step, payeeId, pName, date, amount, category, paymentMethod, paidToAccount, usedFor, projectName, status, notes, receiptName])
 
   useEffect(() => {
     if (isEdit || submitted || loadingDraft) return
@@ -226,6 +230,7 @@ export function AddExpense() {
   function fillFromPayee(p: Payee) {
     setPayeeId(p.id)
     setAccountNumber(p.accountNumber)
+    setPayeeType(p.payeeType ?? 'company')
     setPName(p.name)
     setPCompany(p.company ?? '')
     setPContact(p.contactPerson ?? '')
@@ -243,7 +248,7 @@ export function AddExpense() {
 
   function clearPayeeFields() {
     setSelectedPayee(null)
-    setPayeeId(''); setAccountNumber('')
+    setPayeeId(''); setAccountNumber(''); setPayeeType('company')
     setPName(''); setPCompany(''); setPContact(''); setPNumber(''); setPEmail(''); setPAddress('')
     setIdFile(null); setIdName(undefined); setIdUrl(undefined)
     if (idPreview) URL.revokeObjectURL(idPreview)
@@ -289,7 +294,7 @@ export function AddExpense() {
   // ── Validation ────────────────────────────────────────────────────────────
   function validatePayeeDetails(): boolean {
     const e: Record<string, string> = {}
-    if (!pName.trim()) e.pName = 'Payee name is required'
+    if (!pName.trim()) e.pName = payeeType === 'company' ? 'Company name is required' : 'Full name is required'
     if (pEmail.trim() && !isValidEmail(pEmail.trim())) e.pEmail = 'Enter a valid email address'
     if (pNumber.trim() && !isValidPhone(pNumber.trim())) e.pNumber = 'Enter a valid contact number'
     setErrors(e)
@@ -332,7 +337,10 @@ export function AddExpense() {
       if (idFile) finalIdUrl = await uploadPayeeId(idFile)
 
       const payeeFields = {
-        name: pName.trim(), company: pCompany.trim(), contactPerson: pContact.trim(),
+        payeeType,
+        name: pName.trim(),
+        company: payeeType === 'company' ? pCompany.trim() : '',
+        contactPerson: payeeType === 'company' ? pContact.trim() : '',
         contactNumber: pNumber.trim(), email: pEmail.trim(), address: pAddress.trim(),
         idName, idUrl: finalIdUrl, status: 'active' as const,
       }
@@ -352,7 +360,7 @@ export function AddExpense() {
       const payload = {
         date, category, amount: Number(amount),
         payeeId: resolvedPayeeId, payee: pName.trim(),
-        paymentMethod, usedFor,
+        paymentMethod, paidToAccount: paidToAccount.trim() || undefined, usedFor,
         projectName: usedFor === 'project' ? projectName.trim() : undefined,
         status, notes,
         receiptName, receiptUrl: finalReceiptUrl, receiptDataUrl,
@@ -429,35 +437,77 @@ export function AddExpense() {
                 </p>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Name" required error={errors.pName}>
-                  <input value={pName} onChange={e => { setPName(e.target.value); setErrors(x => ({ ...x, pName: '' })) }}
-                    placeholder="Payee / vendor name"
-                    className={cn(inputCls, errors.pName && 'border-red-400')} style={inputStyle} />
-                </Field>
-                <Field label="Company">
-                  <input value={pCompany} onChange={e => setPCompany(e.target.value)}
-                    placeholder="Company name" className={inputCls} style={inputStyle} />
-                </Field>
-                <Field label="Contact Person">
-                  <input value={pContact} onChange={e => setPContact(e.target.value)}
-                    placeholder="Contact person" className={inputCls} style={inputStyle} />
-                </Field>
-                <Field label="Contact Number" error={errors.pNumber}>
-                  <input value={pNumber} onChange={e => { setPNumber(e.target.value); setErrors(x => ({ ...x, pNumber: '' })) }}
-                    placeholder="e.g. 0917 123 4567" inputMode="tel"
-                    className={cn(inputCls, errors.pNumber && 'border-red-400')} style={inputStyle} />
-                </Field>
-                <Field label="Email" error={errors.pEmail}>
-                  <input value={pEmail} onChange={e => { setPEmail(e.target.value); setErrors(x => ({ ...x, pEmail: '' })) }}
-                    placeholder="name@example.com" type="email"
-                    className={cn(inputCls, errors.pEmail && 'border-red-400')} style={inputStyle} />
-                </Field>
-                <Field label="Company Address">
-                  <input value={pAddress} onChange={e => setPAddress(e.target.value)}
-                    placeholder="Address" className={inputCls} style={inputStyle} />
-                </Field>
+              {/* Company / Individual toggle */}
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>Payee Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['company', 'individual'] as PayeeType[]).map(t => (
+                    <button key={t} type="button" onClick={() => setPayeeType(t)}
+                      className="px-3 py-2 rounded-lg text-sm font-medium border transition-colors"
+                      style={{
+                        borderColor: payeeType === t ? 'var(--primary)' : 'var(--border)',
+                        backgroundColor: payeeType === t ? 'var(--primary)' : 'var(--background)',
+                        color: payeeType === t ? 'var(--primary-foreground)' : 'var(--foreground)',
+                      }}>
+                      {t === 'company' ? 'Company' : 'Individual'}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {payeeType === 'company' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Company Name" required error={errors.pName}>
+                    <input value={pName} onChange={e => { setPName(e.target.value); setErrors(x => ({ ...x, pName: '' })) }}
+                      placeholder="Registered company name"
+                      className={cn(inputCls, errors.pName && 'border-red-400')} style={inputStyle} />
+                  </Field>
+                  <Field label="Contact Person">
+                    <input value={pContact} onChange={e => setPContact(e.target.value)}
+                      placeholder="Authorized representative" className={inputCls} style={inputStyle} />
+                  </Field>
+                  <Field label="Contact Number" error={errors.pNumber}>
+                    <input value={pNumber} onChange={e => { setPNumber(e.target.value); setErrors(x => ({ ...x, pNumber: '' })) }}
+                      placeholder="e.g. 0917 123 4567" inputMode="tel"
+                      className={cn(inputCls, errors.pNumber && 'border-red-400')} style={inputStyle} />
+                  </Field>
+                  <Field label="Email" error={errors.pEmail}>
+                    <input value={pEmail} onChange={e => { setPEmail(e.target.value); setErrors(x => ({ ...x, pEmail: '' })) }}
+                      placeholder="company@example.com" type="email"
+                      className={cn(inputCls, errors.pEmail && 'border-red-400')} style={inputStyle} />
+                  </Field>
+                  <div className="sm:col-span-2">
+                    <Field label="Company Address">
+                      <input value={pAddress} onChange={e => setPAddress(e.target.value)}
+                        placeholder="Business address" className={inputCls} style={inputStyle} />
+                    </Field>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Full Name" required error={errors.pName}>
+                    <input value={pName} onChange={e => { setPName(e.target.value); setErrors(x => ({ ...x, pName: '' })) }}
+                      placeholder="First and last name"
+                      className={cn(inputCls, errors.pName && 'border-red-400')} style={inputStyle} />
+                  </Field>
+                  <Field label="Mobile / Contact Number" error={errors.pNumber}>
+                    <input value={pNumber} onChange={e => { setPNumber(e.target.value); setErrors(x => ({ ...x, pNumber: '' })) }}
+                      placeholder="e.g. 0917 123 4567" inputMode="tel"
+                      className={cn(inputCls, errors.pNumber && 'border-red-400')} style={inputStyle} />
+                  </Field>
+                  <Field label="Email" error={errors.pEmail}>
+                    <input value={pEmail} onChange={e => { setPEmail(e.target.value); setErrors(x => ({ ...x, pEmail: '' })) }}
+                      placeholder="name@example.com" type="email"
+                      className={cn(inputCls, errors.pEmail && 'border-red-400')} style={inputStyle} />
+                  </Field>
+                  <div className="sm:col-span-2">
+                    <Field label="Address">
+                      <input value={pAddress} onChange={e => setPAddress(e.target.value)}
+                        placeholder="Home / personal address" className={inputCls} style={inputStyle} />
+                    </Field>
+                  </div>
+                </div>
+              )}
 
               {/* ID attachment */}
               <Field label="ID Attached">
@@ -511,6 +561,10 @@ export function AddExpense() {
                     {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </Field>
+                <Field label="Account Number (paid / sent to)">
+                  <input value={paidToAccount} onChange={e => setPaidToAccount(e.target.value)}
+                    placeholder="Bank / e-wallet account no." className={inputCls} style={inputStyle} />
+                </Field>
                 <Field label="Used For" required>
                   <select value={usedFor} onChange={e => setUsedFor(e.target.value as ExpenseUsedFor)} className={inputCls} style={inputStyle}>
                     {Object.entries(USED_FOR_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -537,24 +591,79 @@ export function AddExpense() {
             </section>
           )}
 
-          {/* ── STEP 4: Receipt & Review ──────────────────────────────────── */}
+          {/* ── STEP 4: Review & Receipt ──────────────────────────────────── */}
           {step === 4 && (
             <div className="space-y-6">
-              <section className="rounded-xl border p-5 space-y-4" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-                <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--foreground)' }}>Receipt</h2>
+
+              {/* Amount headline */}
+              <section className="rounded-xl border p-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Total Amount</p>
+                    <p className="text-2xl font-bold mt-0.5" style={{ color: 'var(--primary)' }}>{formatPHP(Number(amount) || 0)}</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{
+                      backgroundColor: status === 'paid' ? '#dcfce7' : status === 'cancelled' ? '#fee2e2' : '#fef3c7',
+                      color:           status === 'paid' ? '#15803d' : status === 'cancelled' ? '#dc2626' : '#b45309',
+                    }}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </span>
+                </div>
+              </section>
+
+              {/* Review — Payee */}
+              <section className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <div className="px-5 py-2.5 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--accent)' }}>
+                  <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Payee</h2>
+                </div>
+                <div className="px-5 py-2 divide-y" style={{ borderColor: 'var(--border)' }}>
+                  <ReviewRow label="Type" value={payeeType === 'company' ? 'Company' : 'Individual'} />
+                  <ReviewRow label={payeeType === 'company' ? 'Company Name' : 'Full Name'} value={pName || '—'} />
+                  {accountNumber && <ReviewRow label="Payee Account No." value={accountNumber} />}
+                  {payeeType === 'company' && pContact && <ReviewRow label="Contact Person" value={pContact} />}
+                  {pNumber && <ReviewRow label="Contact Number" value={pNumber} />}
+                  {pEmail && <ReviewRow label="Email" value={pEmail} />}
+                  {pAddress && <ReviewRow label="Address" value={pAddress} />}
+                  <ReviewRow label="ID Attached" value={idName || 'None'} />
+                </div>
+              </section>
+
+              {/* Review — Expense */}
+              <section className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <div className="px-5 py-2.5 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--accent)' }}>
+                  <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Expense</h2>
+                </div>
+                <div className="px-5 py-2 divide-y" style={{ borderColor: 'var(--border)' }}>
+                  <ReviewRow label="Date" value={formatDate(date)} />
+                  <ReviewRow label="Category" value={CATEGORY_LABELS[category]} />
+                  <ReviewRow label="Payment Method" value={METHOD_LABELS[paymentMethod]} />
+                  {paidToAccount && <ReviewRow label="Account No. (paid to)" value={paidToAccount} />}
+                  <ReviewRow label="Used For" value={usedFor === 'project' && projectName ? `${USED_FOR_LABELS[usedFor]}: ${projectName}` : USED_FOR_LABELS[usedFor]} />
+                  {notes && <ReviewRow label="Notes" value={notes} />}
+                </div>
+              </section>
+
+              {/* Attachment — below the review */}
+              <section className="rounded-xl border p-5 space-y-3" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
+                <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Receipt Attachment</h2>
                 {hasReceipt ? (
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-center gap-4 rounded-lg border p-3" style={{ borderColor: 'var(--border)' }}>
                     {isImagePreview ? (
-                      <img src={previewUrl} alt={receiptName} className="max-h-40 rounded-lg border object-contain" style={{ borderColor: 'var(--border)' }} />
+                      <img src={previewUrl} alt={receiptName} className="w-20 h-20 rounded-lg border object-cover shrink-0" style={{ borderColor: 'var(--border)' }} />
                     ) : existingImage ? (
-                      <img src={receiptUrl || receiptDataUrl} alt={receiptName} className="max-h-40 rounded-lg border object-contain" style={{ borderColor: 'var(--border)' }} />
+                      <img src={receiptUrl || receiptDataUrl} alt={receiptName} className="w-20 h-20 rounded-lg border object-cover shrink-0" style={{ borderColor: 'var(--border)' }} />
                     ) : (
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
-                        <Paperclip size={14} /> {receiptName || 'receipt'}
+                      <div className="w-20 h-20 rounded-lg border flex items-center justify-center shrink-0" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--accent)' }}>
+                        <Paperclip size={20} style={{ color: 'var(--muted-foreground)' }} />
                       </div>
                     )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--foreground)' }}>{receiptName || 'receipt'}</p>
+                      <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Attached</p>
+                    </div>
                     <button type="button" onClick={clearReceipt}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors hover:bg-red-50"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors hover:bg-red-50 shrink-0"
                       style={{ borderColor: 'var(--border)', color: '#dc2626' }}>
                       <Trash2 size={13} /> Remove
                     </button>
@@ -568,23 +677,6 @@ export function AddExpense() {
                       onChange={e => { handleReceiptChange(e.target.files?.[0]); e.target.value = '' }} />
                   </label>
                 )}
-              </section>
-
-              <section className="rounded-xl border p-5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--background)' }}>
-                <h2 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--foreground)' }}>Review</h2>
-                <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                  <ReviewRow label="Payee" value={pName || '—'} />
-                  {pCompany && <ReviewRow label="Company" value={pCompany} />}
-                  {accountNumber && <ReviewRow label="Account No." value={accountNumber} />}
-                  <ReviewRow label="Date" value={formatDate(date)} />
-                  <ReviewRow label="Amount" value={formatPHP(Number(amount) || 0)} />
-                  <ReviewRow label="Category" value={CATEGORY_LABELS[category]} />
-                  <ReviewRow label="Payment Method" value={METHOD_LABELS[paymentMethod]} />
-                  <ReviewRow label="Used For" value={usedFor === 'project' && projectName ? `${USED_FOR_LABELS[usedFor]}: ${projectName}` : USED_FOR_LABELS[usedFor]} />
-                  <ReviewRow label="Status" value={status.charAt(0).toUpperCase() + status.slice(1)} />
-                  <ReviewRow label="Receipt" value={hasReceipt ? (receiptName || 'Attached') : 'None'} />
-                  {notes && <ReviewRow label="Notes" value={notes} />}
-                </div>
               </section>
             </div>
           )}

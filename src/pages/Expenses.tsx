@@ -125,6 +125,7 @@ function ExpenseDetailPanel({
               <Detail label="Category" value={CATEGORY_LABELS[expense.category]} />
               <Detail label="Used For" value={usedForLabel(expense)} />
               <Detail label="Payment Method" value={METHOD_LABELS[expense.paymentMethod]} />
+              {expense.paidToAccount && <Detail label="Account No. (paid to)" value={expense.paidToAccount} />}
               <Detail label="Payee" value={expense.payee || '—'} />
               <Detail label="Recorded By" value={expense.agentName || '—'} />
             </div>

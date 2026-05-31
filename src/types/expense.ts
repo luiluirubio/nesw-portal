@@ -24,6 +24,7 @@ export interface Expense {
   payeeId?:      string         // links to Payee master data when picked from lookup
   payee:         string         // vendor / who was paid (name)
   paymentMethod: PaymentMethod
+  paidToAccount?: string        // account number the expense was sent/paid to
   usedFor:       ExpenseUsedFor  // cost center: what the expense was for
   projectName?:  string         // free text, only when usedFor === 'project'
   status:        ExpenseStatus
