@@ -66,12 +66,12 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET_STAGING }}
 
       - name: Deploy with Serverless Framework
-        run: npx serverless deploy --stage staging --verbose
+        run: npx serverless deploy --stage staging --verbose --force
         env:
           FRONTEND_URL:         https://staging-portal.neswcorp.com
           JWT_SECRET:           ${{ secrets.JWT_SECRET_STAGING }}
-          XENDIT_SECRET_KEY:    ${{ secrets.XENDIT_SECRET_KEY }}
-          XENDIT_WEBHOOK_TOKEN: ${{ secrets.XENDIT_WEBHOOK_TOKEN }}
+          XENDIT_SECRET_KEY:    ${{ secrets.XENDIT_SECRET_KEY_STAGING }}
+          XENDIT_WEBHOOK_TOKEN: ${{ secrets.XENDIT_WEBHOOK_TOKEN_STAGING }}
 
       - name: Get API Gateway URL
         id: api_url
