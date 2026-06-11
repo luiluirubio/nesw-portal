@@ -177,12 +177,12 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET_PROD }}
 
       - name: Deploy with Serverless Framework
-        run: npx serverless deploy --stage production --verbose
+        run: npx serverless deploy --stage production --verbose --force
         env:
           FRONTEND_URL:         https://portal.neswcorp.com
           JWT_SECRET:           ${{ secrets.JWT_SECRET_PROD }}
-          XENDIT_SECRET_KEY:    ${{ secrets.XENDIT_SECRET_KEY }}
-          XENDIT_WEBHOOK_TOKEN: ${{ secrets.XENDIT_WEBHOOK_TOKEN }}
+          XENDIT_SECRET_KEY:    ${{ secrets.XENDIT_SECRET_KEY_PROD }}
+          XENDIT_WEBHOOK_TOKEN: ${{ secrets.XENDIT_WEBHOOK_TOKEN_PROD }}
 
       - name: Get API Gateway URL
         id: api_url
