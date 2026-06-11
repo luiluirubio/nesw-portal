@@ -37,4 +37,12 @@ export interface Billing {
   paymentQrId?:     string
   paymentQrString?: string
   paymentStatus?:   'unpaid' | 'paid' | 'expired'
+  paymentDetails?: {
+    method?:     string
+    channel?:    string
+    paidAmount?: number
+    paidAt?:     string
+    payerEmail?: string
+    paymentId?:  string
+  }
 }

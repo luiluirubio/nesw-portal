@@ -96,23 +96,21 @@ router.post('/xendit-webhook', async (req: Request, res: Response) => {
       }))
       const billing = scan.Items?.[0]
       if (billing) {
+        const paymentDetails = {
+          method:     event.payment_method as string | undefined,
+          channel:    event.payment_channel as string | undefined,
+          paidAmount: event.paid_amount as number | undefined,
+          paidAt:     event.paid_at as string | undefined,
+          payerEmail: event.payer_email as string | undefined,
+          paymentId:  event.payment_id as string | undefined,
+        }
         await db.send(new UpdateCommand({
           TableName: Tables.billings,
           Key: { id: billing.id },
-          UpdateExpression: 'SET paymentStatus = :s, #ua = :ua',
-          ExpressionAttributeNames:  { '#ua': 'updatedAt' },
-          ExpressionAttributeValues: { ':s': status, ':ua': new Date().toISOString() },
+          UpdateExpression: 'SET paymentStatus = :s, #st = :st, paymentDetails = :pd, #ua = :ua',
+          ExpressionAttributeNames:  { '#st': 'status', '#ua': 'updatedAt' },
+          ExpressionAttributeValues: { ':s': status, ':st': 'paid', ':pd': paymentDetails, ':ua': new Date().toISOString() },
         }))
-        // Also mark billing status as paid
-        if (status === 'paid') {
-          await db.send(new UpdateCommand({
-            TableName: Tables.billings,
-            Key: { id: billing.id },
-            UpdateExpression: 'SET #st = :st',
-            ExpressionAttributeNames:  { '#st': 'status' },
-            ExpressionAttributeValues: { ':st': 'paid' },
-          }))
-        }
       }
     } else if (event?.status === 'PAID' && event?.external_id?.startsWith('rentals-billing-')) {
       // Forward to nesw-rentals — same Xendit account, separate webhook handler

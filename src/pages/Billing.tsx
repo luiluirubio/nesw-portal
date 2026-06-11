@@ -26,6 +26,66 @@ const STATUS_COLORS: Record<BillingStatus, { bg: string; text: string }> = {
   cancelled: { bg: '#fee2e2', text: '#dc2626' },
 }
 
+// ── Payment Details Dialog ────────────────────────────────────────────────────
+function PaymentDetailsDialog({
+  open,
+  onClose,
+  details,
+}: {
+  open: boolean
+  onClose: () => void
+  details?: Billing['paymentDetails']
+}) {
+  if (!open) return null
+
+  const rows: { label: string; value: string }[] = [
+    { label: 'Method',      value: details?.method ?? '—' },
+    { label: 'Channel',     value: details?.channel ?? '—' },
+    { label: 'Amount Paid', value: details?.paidAmount != null ? formatPHP(details.paidAmount) : '—' },
+    {
+      label: 'Paid At',
+      value: details?.paidAt
+        ? new Date(details.paidAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+        : '—',
+    },
+    { label: 'Payer Email', value: details?.payerEmail ?? '—' },
+    { label: 'Reference',   value: details?.paymentId ?? '—' },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
+      <div className="w-full max-w-sm rounded-2xl shadow-2xl flex flex-col"
+        style={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0"
+          style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-2">
+            <Eye size={15} style={{ color: 'var(--primary)' }} />
+            <h2 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>Payment Details</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--accent)]"
+            style={{ color: 'var(--muted-foreground)' }}>
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4">
+          {rows.map(({ label, value }) => (
+            <div key={label} className="flex justify-between items-baseline gap-3 py-1.5 border-b last:border-b-0"
+              style={{ borderColor: 'var(--border)' }}>
+              <span className="text-xs font-medium" style={{ color: 'var(--muted-foreground)' }}>{label}</span>
+              <span className="text-sm font-semibold text-right" style={{ color: 'var(--foreground)' }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Slide-in Billing Detail Panel ─────────────────────────────────────────────
 function BillingDetailPanel({
   billing,
@@ -39,6 +99,7 @@ function BillingDetailPanel({
   onEdit: (b: Billing) => void
 }) {
   const [emailOpen, setEmailOpen] = useState(false)
+  const [paymentDetailsOpen, setPaymentDetailsOpen] = useState(false)
   const sc = STATUS_COLORS[billing.status]
 
   const billingEmailBody = `Dear ${billing.clientName},\n\nPlease find attached your Statement of Account from NESW Realty Corporation.\n\nKindly settle your account on or before the due date.\n\nBest regards,\nNESW Realty Corporation\n\n---\nThis is a system-generated email. Please do not reply to this message.`
@@ -73,6 +134,12 @@ function BillingDetailPanel({
         subject={`Statement of Account ${billing.billingNo} – NESW Realty Corporation`}
         initialBody={billingEmailBody}
         onSend={handleSendEmail}
+      />
+
+      <PaymentDetailsDialog
+        open={paymentDetailsOpen}
+        onClose={() => setPaymentDetailsOpen(false)}
+        details={billing.paymentDetails}
       />
 
       {/* Backdrop */}
@@ -110,6 +177,14 @@ function BillingDetailPanel({
             </p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {billing.paymentStatus === 'paid' && billing.paymentDetails && (
+              <button onClick={() => setPaymentDetailsOpen(true)}
+                title="View Payment Details"
+                className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
+                style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+                <Eye size={14} /> Payment
+              </button>
+            )}
             <button onClick={() => onEdit(billing)}
               title="Edit"
               className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] text-xs flex items-center gap-1.5 font-medium border"
