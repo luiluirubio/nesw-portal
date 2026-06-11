@@ -26,7 +26,7 @@ async function createXenditInvoice(
 
   try {
     const body = {
-      external_id:          `billing-${billingNo}`,
+      external_id:          `service-billing-${billingNo}`,
       amount:               Math.round(amount * 100) / 100,
       description:          description || `Billing ${billingNo}`,
       payer_email:          'client@neswcorp.com',
@@ -55,6 +55,24 @@ async function createXenditInvoice(
   }
 }
 
+// Expire a Xendit Invoice — best-effort, used when a billing's amount changes
+async function expireXenditInvoice(invoiceId: string): Promise<void> {
+  const secret = process.env.XENDIT_SECRET_KEY
+  if (!secret) return
+
+  try {
+    const res = await fetch(`https://api.xendit.co/invoices/${invoiceId}/expire`, {
+      method:  'POST',
+      headers: { 'Authorization': `Basic ${Buffer.from(`${secret}:`).toString('base64')}` },
+    })
+    if (!res.ok) {
+      console.error('Xendit Invoice expire error:', res.status, await res.text())
+    }
+  } catch (err) {
+    console.error('Xendit Invoice expire exception:', err)
+  }
+}
+
 // POST /api/billing/xendit-webhook — Xendit payment callback (no auth required)
 router.post('/xendit-webhook', async (req: Request, res: Response) => {
   try {
@@ -66,7 +84,7 @@ router.post('/xendit-webhook', async (req: Request, res: Response) => {
 
     const event = req.body
     // Invoice payment completion event
-    if (event?.status === 'PAID' && event?.external_id?.startsWith('billing-')) {
+    if (event?.status === 'PAID' && event?.external_id?.startsWith('service-billing-')) {
       const invoiceId = event.id as string
       const status    = 'paid'
 
@@ -94,6 +112,23 @@ router.post('/xendit-webhook', async (req: Request, res: Response) => {
             ExpressionAttributeNames:  { '#st': 'status' },
             ExpressionAttributeValues: { ':st': 'paid' },
           }))
+        }
+      }
+    } else if (event?.status === 'PAID' && event?.external_id?.startsWith('rentals-billing-')) {
+      // Forward to nesw-rentals — same Xendit account, separate webhook handler
+      const url = process.env.RENTALS_WEBHOOK_URL
+      if (url) {
+        try {
+          await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-callback-token': req.headers['x-callback-token'] as string ?? '',
+            },
+            body: JSON.stringify(event),
+          })
+        } catch (err) {
+          console.error('Forward to nesw-rentals webhook failed:', err)
         }
       }
     }
@@ -205,6 +240,11 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       res.status(403).json({ error: 'Forbidden' }); return
     }
 
+    const AMOUNT_FIELDS = ['items', 'discount', 'subtotal', 'total']
+    if (existing.Item.paymentStatus === 'paid' && AMOUNT_FIELDS.some(k => req.body[k] !== undefined)) {
+      res.status(400).json({ error: 'Cannot edit amounts on a paid billing' }); return
+    }
+
     const allowed = [
       'status', 'clientName', 'clientCompany', 'clientAddress', 'propertyAddress', 'servicePurpose',
       'items', 'discount', 'subtotal', 'total', 'terms', 'dateIssued', 'dueDate',
@@ -225,6 +265,24 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Total changed on an unpaid billing with an existing QR — expire the stale
+    // invoice and issue a new one so the QR amount matches the updated total
+    const newTotal = values[':total'] !== undefined ? Number(values[':total']) : Number(existing.Item.total ?? 0)
+    if (newTotal !== Number(existing.Item.total ?? 0) && existing.Item.paymentQrId && existing.Item.paymentStatus !== 'paid') {
+      await expireXenditInvoice(existing.Item.paymentQrId as string)
+      const clientName     = (values[':clientName'] as string)    ?? existing.Item.clientName as string
+      const servicePurpose = (values[':servicePurpose'] as string) ?? existing.Item.servicePurpose as string
+      const desc = `${servicePurpose || 'Professional Services'} — ${clientName}`
+      const qr = await createXenditInvoice(existing.Item.billingNo as string, existing.Item.paymentToken as string, clientName, desc, newTotal)
+      if (qr) {
+        exprParts.push('#paymentQrId = :paymentQrId', '#paymentQrString = :paymentQrString')
+        names['#paymentQrId']     = 'paymentQrId'
+        names['#paymentQrString'] = 'paymentQrString'
+        values[':paymentQrId']     = qr.invoiceId
+        values[':paymentQrString'] = qr.invoiceUrl
+      }
+    }
+
     await db.send(new UpdateCommand({
       TableName: Tables.billings,
       Key: { id },
@@ -232,7 +290,12 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       ExpressionAttributeNames:  names,
       ExpressionAttributeValues: values,
     }))
-    res.json({ ...existing.Item, ...req.body, updatedAt: values[':ua'] })
+    res.json({
+      ...existing.Item,
+      ...req.body,
+      updatedAt: values[':ua'],
+      ...(values[':paymentQrId'] ? { paymentQrId: values[':paymentQrId'], paymentQrString: values[':paymentQrString'] } : {}),
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to update billing' })
