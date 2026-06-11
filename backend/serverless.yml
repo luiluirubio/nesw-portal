@@ -7,6 +7,10 @@ custom:
   frontendUrl:
     staging:    https://staging-portal.neswcorp.com
     production: https://portal.neswcorp.com
+  # nesw-rentals' Xendit webhook endpoint, used to forward "rentals-billing-*" invoice.paid events
+  rentalsWebhookUrl:
+    staging:    https://cd40538g1j.execute-api.ap-southeast-1.amazonaws.com/staging/api/billing/xendit-webhook
+    production: https://zwu70ktcsa.execute-api.ap-southeast-1.amazonaws.com/production/api/billing/xendit-webhook
 
 provider:
   name: aws
@@ -23,6 +27,7 @@ provider:
     COGNITO_CLIENT_ID:       ${env:COGNITO_CLIENT_ID, ''}
     XENDIT_SECRET_KEY:       ${env:XENDIT_SECRET_KEY, ''}
     XENDIT_WEBHOOK_TOKEN:    ${env:XENDIT_WEBHOOK_TOKEN, ''}
+    RENTALS_WEBHOOK_URL:     ${env:RENTALS_WEBHOOK_URL, '${self:custom.rentalsWebhookUrl.${self:provider.stage}}'}
   iam:
     role:
       statements:
