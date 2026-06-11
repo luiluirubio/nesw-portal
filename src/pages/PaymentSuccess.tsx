@@ -29,10 +29,30 @@ export function PaymentSuccess() {
   useEffect(() => {
     if (!token) { setStatus('error'); return }
 
-    fetch(`${API}/billing/public/verify?token=${encodeURIComponent(token)}`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then((d: VerifyResult) => { setData(d); setStatus('success') })
-      .catch(() => setStatus('error'))
+    let cancelled = false
+    const MAX_ATTEMPTS = 5
+    const RETRY_DELAY_MS = 2000
+
+    const verify = (attempt: number) => {
+      fetch(`${API}/billing/public/verify?token=${encodeURIComponent(token)}`)
+        .then(async r => {
+          if (cancelled) return
+          if (r.ok) {
+            const d = await r.json() as VerifyResult
+            setData(d); setStatus('success')
+            return
+          }
+          if (r.status === 404 && attempt < MAX_ATTEMPTS) {
+            setTimeout(() => verify(attempt + 1), RETRY_DELAY_MS)
+            return
+          }
+          setStatus('error')
+        })
+        .catch(() => { if (!cancelled) setStatus('error') })
+    }
+
+    verify(1)
+    return () => { cancelled = true }
   }, [token])
 
   return (
